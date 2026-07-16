@@ -99,6 +99,8 @@ interface SettingsViewProps {
   onUpdateSettings: (settings: AppSettings) => void;
   isAdmin: boolean;
   dbState?: any;
+  currentUser?: any;
+  onUpdateUser?: (user: any) => void;
 }
 
 // Map settings IDs to human readable pages
@@ -114,7 +116,7 @@ type ActivePageId =
   // Print & Templates
   | 'invoice_templates' | 'quotation_templates' | 'receipt_templates' | 'purchase_templates' | 'lab_report_templates' | 'sample_label_templates' | 'print_layout_settings'
   // Application
-  | 'date_time_settings' | 'currency_number_settings' | 'theme_layout_settings' | 'notifications_settings' | 'backup_export_settings' | 'admin_profile_settings' | 'change_password_settings';
+  | 'date_time_settings' | 'currency_number_settings' | 'theme_layout_settings' | 'notifications_settings' | 'backup_export_settings' | 'admin_profile_settings';
 
 interface NavigationItem {
   id: ActivePageId;
@@ -133,7 +135,9 @@ export default function SettingsView({
   settings,
   onUpdateSettings,
   isAdmin,
-  dbState
+  dbState,
+  currentUser,
+  onUpdateUser
 }: SettingsViewProps) {
   const [activePage, setActivePage] = useState<ActivePageId>('company_details');
   const [localSettings, setLocalSettings] = useState<AppSettings>({ ...settings });
@@ -145,6 +149,11 @@ export default function SettingsView({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
+  });
+  const [profileState, setProfileState] = useState({
+    full_name: currentUser?.full_name || '',
+    designation: currentUser?.designation || '',
+    mobile: currentUser?.mobile || ''
   });
   const [showPasswords, setShowPasswords] = useState(false);
   const [numberingType, setNumberingType] = useState<keyof AppSettings['numbering']>('invoice');
@@ -224,9 +233,46 @@ export default function SettingsView({
     });
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateSettings(localSettings);
+    
+    // Also save user profile if we're on the admin profile page
+    if (activePage === 'admin_profile_settings' && currentUser && onUpdateUser) {
+      try {
+        const payload: any = {
+          full_name: profileState.full_name,
+          designation: profileState.designation,
+          mobile: profileState.mobile,
+        };
+        
+        if (passwordState.newPassword) {
+          if (passwordState.newPassword !== passwordState.confirmPassword) {
+            alert('New passwords do not match');
+            return;
+          }
+          payload.password = passwordState.newPassword;
+        }
+
+        const res = await fetch('/api/auth/me', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          onUpdateUser(data.user);
+          if (passwordState.newPassword) {
+            alert('Password changed successfully.');
+            setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to update user profile:', err);
+      }
+    }
+
     setHasChanges(false);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -239,19 +285,6 @@ export default function SettingsView({
     }
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passwordState.currentPassword || !passwordState.newPassword) {
-      alert('Please fill out all password fields.');
-      return;
-    }
-    if (passwordState.newPassword !== passwordState.confirmPassword) {
-      alert('New password and confirmation do not match.');
-      return;
-    }
-    alert('Security PIN / Password has been changed successfully for this user session.');
-    setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  };
 
   const runBackup = () => {
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
@@ -390,8 +423,7 @@ export default function SettingsView({
         { id: 'theme_layout_settings', label: 'Theme & Layout', desc: 'Sidebar modes, compact table layout options', icon: Sliders },
         { id: 'notifications_settings', label: 'Notifications Setup', desc: 'Email and in-app system triggers', icon: Bell },
         { id: 'backup_export_settings', label: 'Backup & JSON Export', desc: 'Download state database archives & reset', icon: Download },
-        { id: 'admin_profile_settings', label: 'Admin Profile', desc: 'Administrative user details', icon: Users },
-        { id: 'change_password_settings', label: 'Change PIN / Password', desc: 'Update system security authorization codes', icon: Lock }
+        { id: 'admin_profile_settings', label: 'Admin Profile', desc: 'Administrative user details', icon: Users }
       ]
     }
   ];
@@ -709,14 +741,13 @@ export default function SettingsView({
                       }`} />
                     </button>
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Tax Registration Type</label>
+                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Corporate Tax Scheme</label>
                       <select
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.tax.gstRegistrationType}
-                        onChange={(e) => handleFieldChange('tax', 'gstRegistrationType', e.target.value)}
+                        value={localSettings.tax.gstType}
+                        onChange={(e) => handleFieldChange('tax', 'gstType', e.target.value)}
                       >
                         <option value="Registered">Registered (Regular Corporate Scheme)</option>
                         <option value="Composite">Composite Taxpayer</option>
@@ -836,7 +867,7 @@ export default function SettingsView({
                               : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                           }`}
                         >
-                          {type}
+                          {type.replace(/_/g, ' ')}
                         </button>
                       ))}
                     </div>
@@ -912,16 +943,6 @@ export default function SettingsView({
                         }`} />
                       </button>
                     </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Standard Terms & Bank Instructions (Invoice footer)</label>
-                      <textarea
-                        rows={3}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-medium resize-none"
-                        value={localSettings.invoice.terms}
-                        onChange={(e) => handleFieldChange('invoice', 'terms', e.target.value)}
-                      />
-                    </div>
                     <div className="sm:col-span-2">
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Default Signatory Label Stamp</label>
                       <input
@@ -984,11 +1005,10 @@ export default function SettingsView({
                         }`} />
                       </button>
                     </div>
-
                     <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-200">
                       <div>
-                        <p className="text-xs font-bold text-slate-700">Include Supplier Registered GST Column</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Enforce inbound vendor tax breakdown logging.</p>
+                        <p className="text-xs font-bold text-slate-700">Display Supplier GST Column</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Toggle external GST registry visibility in the ledger.</p>
                       </div>
                       <button
                         type="button"
@@ -1401,15 +1421,6 @@ export default function SettingsView({
                                 >
                                   Full Size
                                 </button>
-                                {isSelected ? (
-                                  <span className="text-[9px] font-black text-blue-600 uppercase flex items-center space-x-0.5">
-                                    <span>✔</span> <span>Active</span>
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] font-black text-slate-400 uppercase group-hover:text-slate-600 transition">
-                                    Use
-                                  </span>
-                                )}
                               </div>
                             </div>
                           );
@@ -1858,11 +1869,10 @@ export default function SettingsView({
                         }`} />
                       </button>
                     </div>
-
                     <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-200">
                       <div>
-                        <p className="text-xs font-bold text-slate-700">Display Context Help Texts</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Show help hints underneath system form headers.</p>
+                        <p className="text-xs font-bold text-slate-700">Display Help Tips Overlay</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Toggle context help tooltips system wide.</p>
                       </div>
                       <button
                         type="button"
@@ -1901,17 +1911,6 @@ export default function SettingsView({
                         }`} />
                       </button>
                     </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Due Invoice Reminder threshold (Days)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-bold focus:outline-none focus:border-blue-500"
-                        value={localSettings.notification.reminderDaysBeforeDue}
-                        onChange={(e) => handleFieldChange('notification', 'reminderDaysBeforeDue', Number(e.target.value))}
-                      />
-                    </div>
                   </div>
                 </div>
               )}
@@ -1934,128 +1933,136 @@ export default function SettingsView({
                         <span>Run Full Database Backup</span>
                       </button>
                     </div>
-
-                    <div className="p-4 bg-red-50 rounded-xl border border-red-150 flex flex-col justify-between h-40">
-                      <div>
-                        <h4 className="font-extrabold text-red-950 text-sm">Database Factory Reset</h4>
-                        <p className="text-[11px] text-red-700 mt-1">Permanently scrub all local transaction data, custom ledgers and LIMS worksheets to reboot back to factory settings.</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={runFactoryReset}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition self-start flex items-center space-x-1.5 cursor-pointer"
-                      >
-                        <ShieldAlert size={13} />
-                        <span>Perform Factory Reset</span>
-                      </button>
-                    </div>
                   </div>
-
-                  {backupLog.length > 0 && (
-                    <div className="bg-slate-900 text-slate-300 p-4 rounded-xl border border-slate-800 font-mono text-[10px] space-y-1.5 max-h-48 overflow-y-auto">
-                      <p className="text-blue-400 font-bold border-b border-slate-800 pb-1 mb-1">// ACTIVE WORKSPACE SYSTEM BACKUP LOGS</p>
-                      {backupLog.map((log, idx) => (
-                        <p key={idx}>{log}</p>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 
               {/* AA. ADMIN PROFILE */}
               {activePage === 'admin_profile_settings' && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center space-x-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center font-black text-white text-base">
-                      DA
+                    <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center font-black text-white text-base uppercase">
+                      {profileState.full_name?.substring(0, 2) || 'DA'}
                     </div>
                     <div>
-                      <h4 className="font-extrabold text-slate-800">Dr. Dev Anand</h4>
-                      <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">Super Administrator (HQ License)</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">ID: u1 • Active session boundary since April 2026</p>
+                      <h4 className="font-extrabold text-slate-800">{profileState.full_name || 'Dr. Dev Anand'}</h4>
+                      <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">{profileState.designation || 'Super Administrator'}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">ID: {currentUser?.id || 'u1'} • Email: {currentUser?.email}</p>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* BB. CHANGE PASSWORD */}
-              {activePage === 'change_password_settings' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Current Authorized Password / PIN</label>
-                      <input
-                        type={showPasswords ? 'text' : 'password'}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={passwordState.currentPassword}
-                        onChange={(e) => setPasswordState({ ...passwordState, currentPassword: e.target.value })}
-                      />
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-800 border-b border-slate-200 pb-2">Profile Details</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                          value={profileState.full_name}
+                          onChange={(e) => {
+                            setProfileState({ ...profileState, full_name: e.target.value });
+                            setHasChanges(true);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Designation</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                          value={profileState.designation}
+                          onChange={(e) => {
+                            setProfileState({ ...profileState, designation: e.target.value });
+                            setHasChanges(true);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Mobile Number</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                          value={profileState.mobile}
+                          onChange={(e) => {
+                            setProfileState({ ...profileState, mobile: e.target.value });
+                            setHasChanges(true);
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-end">
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-800">Update System Credentials</h4>
                       <button
                         type="button"
                         onClick={() => setShowPasswords(!showPasswords)}
-                        className="flex items-center space-x-1.5 px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 font-bold"
+                        className="flex items-center space-x-1.5 px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 font-bold text-[10px] uppercase tracking-wider"
                       >
                         {showPasswords ? <EyeOff size={13} /> : <Eye size={13} />}
-                        <span>{showPasswords ? 'Mask PIN codes' : 'Reveal PIN codes'}</span>
+                        <span>{showPasswords ? 'Mask Passwords' : 'Reveal Passwords'}</span>
                       </button>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">New PIN / Password</label>
-                      <input
-                        type={showPasswords ? 'text' : 'password'}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={passwordState.newPassword}
-                        onChange={(e) => setPasswordState({ ...passwordState, newPassword: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Confirm New PIN</label>
-                      <input
-                        type={showPasswords ? 'text' : 'password'}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={passwordState.confirmPassword}
-                        onChange={(e) => setPasswordState({ ...passwordState, confirmPassword: e.target.value })}
-                      />
-                    </div>
-                    <div className="sm:col-span-2 pt-2">
-                      <button
-                        type="button"
-                        onClick={handlePasswordChange}
-                        className="px-4 py-2.5 bg-slate-900 hover:bg-slate-850 text-white font-bold rounded-lg text-xs shadow-xs transition"
-                      >
-                        Change security code
-                      </button>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Current Password / PIN</label>
+                        <input
+                          type={showPasswords ? 'text' : 'password'}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                          value={passwordState.currentPassword}
+                          onChange={(e) => {
+                            setPasswordState({ ...passwordState, currentPassword: e.target.value });
+                            setHasChanges(true);
+                          }}
+                        />
+                      </div>
+                      <div className="hidden sm:block"></div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">New Password / PIN</label>
+                        <input
+                          type={showPasswords ? 'text' : 'password'}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                          value={passwordState.newPassword}
+                          onChange={(e) => {
+                            setPasswordState({ ...passwordState, newPassword: e.target.value });
+                            setHasChanges(true);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Confirm New Password / PIN</label>
+                        <input
+                          type={showPasswords ? 'text' : 'password'}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                          value={passwordState.confirmPassword}
+                          onChange={(e) => {
+                            setPasswordState({ ...passwordState, confirmPassword: e.target.value });
+                            setHasChanges(true);
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
-
             </div>
-
-            {/* Sticky Form Footer (Always visible) */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center shrink-0">
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
               <button
                 type="button"
-                onClick={handleReset}
-                className="flex items-center space-x-1.5 px-3.5 py-2 border border-slate-200 text-slate-500 hover:bg-slate-100 rounded-xl transition font-bold cursor-pointer"
+                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold rounded-lg text-xs transition"
               >
-                <RotateCcw size={13} />
-                <span>Revert Changes</span>
+                Cancel Changes
               </button>
-              
               <button
                 type="submit"
-                disabled={!hasChanges}
-                className={`flex items-center space-x-1.5 px-5 py-2 rounded-xl text-xs font-black uppercase text-white shadow-md transition cursor-pointer ${
-                  hasChanges
-                    ? 'bg-blue-600 hover:bg-blue-700 animate-pulse'
-                    : 'bg-slate-300 cursor-not-allowed opacity-80'
-                }`}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center space-x-1.5 cursor-pointer"
               >
-                <Save size={13} />
-                <span>Save configurations</span>
+                <Save size={14} />
+                <span>Save All Settings</span>
               </button>
             </div>
           </form>

@@ -3,12 +3,12 @@ import {
   getInitialState,
   loadState,
   saveState,
-  getDemoData,
   logAudit,
   notify,
   AppState
 } from './data';
 import { Party, Item, Quotation, Invoice, Sample, Expense, Payment, LabReport, SampleStatus, SamplePriority, ParameterResult, LabReportStatus } from './types';
+import { listenToAuthChanges, signOutUser } from './services/authService';
 
 // Visual Components imports
 import Sidebar from './components/Sidebar';
@@ -28,8 +28,10 @@ import NotificationsView from './components/NotificationsView';
 import SettingsView from './components/SettingsView';
 import EquipmentView from './components/EquipmentView';
 
-// Icons for login gate
-import { Shield, Lock, FlaskConical, Users, ArrowRight, Database } from 'lucide-react';
+// Auth Components
+import LoginView from './components/auth/LoginView';
+import OtpVerifyView from './components/auth/OtpVerifyView';
+import OnboardingView from './components/auth/OnboardingView';
 
 export default function App() {
   // 1. Core database state loaded from LocalStorage or generated defaults
@@ -39,9 +41,11 @@ export default function App() {
   });
 
   // 2. Authentication states
-  const [currentUser, setCurrentUser] = useState<{ name: string; isAdmin: boolean } | null>(null);
-  const [loginUsername, setLoginUsername] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authStep, setAuthStep] = useState<'login' | 'otp' | 'onboarding' | 'dashboard'>('login');
+  const [emailToVerify, setEmailToVerify] = useState('');
+  const [isLoadingAuth, setIsLoadingAuth] = useState(false);
 
   // 3. Navigation states
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -52,54 +56,130 @@ export default function App() {
     saveState(db);
   }, [db]);
 
-  // Handle standard login form submit
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginUsername) {
-      alert('Please enter your username / authorized email.');
-      return;
+  // Check auth session
+  useEffect(() => {
+    const unsubscribe = listenToAuthChanges(async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken();
+          const res = await fetch('/api/auth/firebase', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setCurrentUser(data.user);
+            if (data.user.onboarding_completed) {
+              setAuthStep('dashboard');
+            } else {
+              setAuthStep('onboarding');
+            }
+          } else {
+            setCurrentUser(null);
+            setAuthStep('login');
+          }
+        } catch (error) {
+          setCurrentUser(null);
+          setAuthStep('login');
+        } finally {
+          setIsAuthChecking(false);
+        }
+      } else {
+        setCurrentUser(null);
+        setAuthStep('login');
+        setIsAuthChecking(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleEmailSubmit = async (email: string) => {
+    setIsLoadingAuth(true);
+    try {
+      const res = await fetch('/api/auth/otp/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        setEmailToVerify(email);
+        setAuthStep('otp');
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to request OTP');
+      }
+    } catch (e) {
+      alert('Network error');
+    } finally {
+      setIsLoadingAuth(false);
     }
-    const userSession = {
-      name: loginUsername.split('@')[0].toUpperCase(),
-      isAdmin: true
-    };
-    setCurrentUser(userSession);
-    setDb((prev) => {
-      const logged = { ...prev, currentUser: { id: 'u-user', username: loginUsername, name: userSession.name, email: loginUsername, isAdmin: userSession.isAdmin, isActive: true } };
-      const audited = logAudit(logged, 'User Login', 'Auth', 'user', userSession.name);
-      return notify(audited, 'Authentication Clear', `Logged in as Admin: ${userSession.name}`, 'success');
-    });
   };
 
-  // Instant simulation login triggers
-  const handleSimulationLogin = (isAdmin: boolean, name: string) => {
-    const userSession = { name, isAdmin };
-    setCurrentUser(userSession);
-    setDb((prev) => {
-      const logged = { ...prev, currentUser: { id: `u-${Date.now()}`, username: name.toLowerCase().replace(/\s/g, ''), name, email: `${name.toLowerCase().replace(/\s/g, '')}@labbiz.in`, isAdmin, isActive: true } };
-      const audited = logAudit(logged, 'User Login', 'Auth', 'user', name);
-      return notify(audited, `Cleared: ${isAdmin ? 'Admin' : 'Staff'}`, `Security viewpoint verified as ${name}.`, 'success');
-    });
+  const handleVerifyOtp = async (otp: string) => {
+    setIsLoadingAuth(true);
+    try {
+      const res = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailToVerify, otp })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentUser(data.user);
+        if (data.user.onboarding_completed) {
+          setAuthStep('dashboard');
+        } else {
+          setAuthStep('onboarding');
+        }
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Invalid OTP');
+      }
+    } catch (e) {
+      alert('Network error');
+    } finally {
+      setIsLoadingAuth(false);
+    }
   };
 
-  const handleLogout = () => {
-    if (!currentUser) return;
-    const oldName = currentUser.name;
+  const handleGoogleSuccess = async (user: any) => {
+    // Auth observer will handle redirect
+  };
+
+  const handleSaveOnboarding = async (userData: any, companyData: any) => {
+    const res = await fetch('/api/auth/onboarding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...userData })
+    });
+    if (!res.ok) throw new Error('Failed to complete onboarding');
+    
+    const data = await res.json();
+    setCurrentUser(data.user);
+
+    // Save company to local DB
+    setDb(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        company: {
+          ...prev.settings.company,
+          ...companyData
+        }
+      }
+    }));
+
+    setAuthStep('dashboard');
+  };
+
+  const handleLogout = async () => {
+    await signOutUser();
+    await fetch('/api/auth/logout', { method: 'POST' });
     setCurrentUser(null);
-    setLoginUsername('');
-    setLoginPassword('');
+    setAuthStep('login');
     setActiveTab('dashboard');
-    setDb((prev) => {
-      return logAudit(prev, 'User Logout', 'Auth', 'user', oldName);
-    });
-  };
-
-  // Seed / Reset demo database trigger
-  const handleResetDemoData = () => {
-    if (confirm('Are you sure you want to overwrite all changes and reload original laboratory sample demo datasets?')) {
-      const freshData = getDemoData(db);
-      setDb(freshData);
-    }
   };
 
   // --------------------------------------------------------
@@ -738,161 +818,45 @@ export default function App() {
   // CONDITIONAL RENDER AREA
   // --------------------------------------------------------
 
-  // If user is not logged in, render the gorgeous Corporate Access Gate
-  if (!currentUser) {
+  if (isAuthChecking) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-6 relative overflow-hidden">
-        {/* Abstract background graphics */}
-        <div className="absolute top-0 left-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
-
-        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden relative z-10 animate-fade-in animate-duration-300">
-          {/* Left panel: Product Pitch */}
-          <div className="col-span-1 md:col-span-5 bg-gradient-to-br from-slate-900 to-slate-950 p-8 flex flex-col justify-between text-white border-r border-slate-800">
-            <div className="space-y-6">
-              <div className="flex items-center space-x-2">
-                <div className="bg-[#2563EB] text-white p-2.5 rounded-xl font-black text-sm tracking-widest shadow-lg shadow-blue-500/20">
-                  LB
-                </div>
-                <div>
-                  <h1 className="font-extrabold text-base tracking-wider uppercase">LabBiz ERP</h1>
-                  <p className="text-[9px] text-slate-400 font-bold tracking-widest">PRIVATE LABORATORY ENTERPRISE</p>
-                </div>
-              </div>
-
-              <div className="space-y-4 pt-6">
-                <h2 className="text-xl font-black text-white leading-tight tracking-tight">
-                  Complete Labbiz Billing & LIMS Suite
-                </h2>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Consolidates diagnostic custody, chemical stock safety thresholds, GST sales invoicing, and audited ledger sheets into a single workspace.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-6 border-t border-slate-800/60">
-              <div className="flex items-center space-x-2 text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-                <Shield size={13} className="text-teal-400 animate-pulse" />
-                <span>NABL ISO 17025 Certified ERP Gate</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right panel: Login credentials & presets */}
-          <div className="col-span-1 md:col-span-7 p-8 bg-slate-950 flex flex-col justify-center text-xs">
-            <div className="space-y-5">
-              <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-wider">Authorized Officer Gate</h3>
-                <p className="text-[11px] text-slate-400 mt-1">Provide credentials or pick a simulation preset below.</p>
-              </div>
-
-              {/* Login Form */}
-              <form onSubmit={handleLoginSubmit} className="space-y-3.5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Corporate Email</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. director@labbiz.in"
-                      value={loginUsername}
-                      onChange={(e) => setLoginUsername(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Security PIN</label>
-                    <input
-                      type="password"
-                      placeholder="••••"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer"
-                >
-                  <span>Authenticate Securely</span>
-                  <ArrowRight size={13} />
-                </button>
-              </form>
-
-              {/* Separation line */}
-              <div className="relative my-4 flex py-1.5 items-center">
-                <div className="flex-grow border-t border-slate-800/80"></div>
-                <span className="flex-shrink mx-3 text-[9px] text-slate-500 uppercase tracking-wider font-extrabold">Demo Clearance Presets</span>
-                <div className="flex-grow border-t border-slate-800/80"></div>
-              </div>
-
-              {/* Clearance Presets Grid */}
-              <div className="space-y-2">
-                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest text-center">Select Role Perspective</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    onClick={() => handleSimulationLogin(true, 'Dr. J. N. Rao')}
-                    className="p-2 bg-slate-900/60 border border-slate-800 hover:border-blue-500 hover:bg-slate-900 rounded-lg text-left transition group cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-slate-200 group-hover:text-blue-400">Dr. J. N. Rao</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Admin</p>
-                  </button>
-                  <button
-                    onClick={() => handleSimulationLogin(true, 'Savitha Gowda')}
-                    className="p-2 bg-slate-900/60 border border-slate-800 hover:border-blue-500 hover:bg-slate-900 rounded-lg text-left transition group cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-slate-200 group-hover:text-blue-400">Savitha G.</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Admin</p>
-                  </button>
-                  <button
-                    onClick={() => handleSimulationLogin(false, 'Ramesh Kumar')}
-                    className="p-2 bg-slate-900/60 border border-slate-800 hover:border-blue-500 hover:bg-slate-900 rounded-lg text-left transition group cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-slate-200 group-hover:text-blue-400">Ramesh K.</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Staff</p>
-                  </button>
-                  <button
-                    onClick={() => handleSimulationLogin(false, 'Vikas Deshmukh')}
-                    className="p-2 bg-slate-900/60 border border-slate-800 hover:border-blue-500 hover:bg-slate-900 rounded-lg text-left transition group cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-slate-200 group-hover:text-blue-400">Vikas D.</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Staff</p>
-                  </button>
-                  <button
-                    onClick={() => handleSimulationLogin(false, 'Dr. Anil Mehta')}
-                    className="p-2 bg-slate-900/60 border border-slate-800 hover:border-blue-500 hover:bg-slate-900 rounded-lg text-left transition group cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-slate-200 group-hover:text-blue-400">Dr. Anil M.</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Staff</p>
-                  </button>
-                  <button
-                    onClick={() => handleSimulationLogin(false, 'Priya Sharma')}
-                    className="p-2 bg-slate-900/60 border border-slate-800 hover:border-blue-500 hover:bg-slate-900 rounded-lg text-left transition group cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-slate-200 group-hover:text-blue-400">Priya S.</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Staff</p>
-                  </button>
-                  <button
-                    onClick={() => handleSimulationLogin(false, 'Sandeep Patil')}
-                    className="p-2 bg-slate-900/60 border border-slate-800 hover:border-blue-500 hover:bg-slate-900 rounded-lg text-left transition group cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-slate-200 group-hover:text-blue-400">Sandeep P.</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Staff</p>
-                  </button>
-                  <button
-                    onClick={handleResetDemoData}
-                    className="p-2 bg-slate-900/30 border border-dashed border-red-800/60 hover:border-red-500 hover:bg-slate-900 rounded-lg text-left transition cursor-pointer"
-                  >
-                    <p className="text-[10px] font-bold text-red-400">Reset DB</p>
-                    <p className="text-[8px] text-slate-500 mt-0.5 uppercase tracking-wide">Seed Demo</p>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F7FB]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
+    );
+  }
+
+  if (authStep === 'login' || !currentUser) {
+    return (
+      <LoginView
+        onEmailSubmit={handleEmailSubmit}
+        onGoogleSuccess={handleGoogleSuccess}
+        isLoading={isLoadingAuth}
+      />
+    );
+  }
+
+  if (authStep === 'otp') {
+    return (
+      <OtpVerifyView
+        email={emailToVerify}
+        onVerify={handleVerifyOtp}
+        onResend={() => handleEmailSubmit(emailToVerify)}
+        onChangeEmail={() => {
+          setAuthStep('login');
+          setEmailToVerify('');
+        }}
+        isLoading={isLoadingAuth}
+      />
+    );
+  }
+
+  if (authStep === 'onboarding') {
+    return (
+      <OnboardingView
+        user={currentUser}
+        onSave={handleSaveOnboarding}
+      />
     );
   }
 
@@ -912,8 +876,7 @@ export default function App() {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header (Toolbar, notification center, audit swappers) */}
         <Header
-          isAdmin={currentUser.isAdmin}
-          onAdminChange={handleAdminChange}
+          currentUser={currentUser}
           notifications={db.notifications}
           onMarkNotificationRead={handleMarkRead}
           onMarkAllRead={handleMarkAllRead}
@@ -1085,6 +1048,8 @@ export default function App() {
               onUpdateSettings={handleUpdateSettings}
               isAdmin={currentUser.isAdmin}
               dbState={db}
+              currentUser={currentUser}
+              onUpdateUser={setCurrentUser}
             />
           )}
 

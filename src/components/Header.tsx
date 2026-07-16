@@ -12,8 +12,7 @@ import {
 import { AppNotification } from '../types';
 
 interface HeaderProps {
-  isAdmin: boolean;
-  onAdminChange: (isAdmin: boolean) => void;
+  currentUser: any;
   notifications: AppNotification[];
   onMarkNotificationRead: (id: string) => void;
   onMarkAllRead: () => void;
@@ -24,8 +23,7 @@ interface HeaderProps {
 }
 
 export default function Header({
-  isAdmin,
-  onAdminChange,
+  currentUser,
   notifications,
   onMarkNotificationRead,
   onMarkAllRead,
@@ -38,6 +36,8 @@ export default function Header({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const userName = currentUser?.full_name || currentUser?.email?.split('@')[0] || 'User';
+  const initials = userName.substring(0, 2).toUpperCase();
 
   const getBreadcrumb = () => {
     switch (activeTab) {
@@ -116,19 +116,6 @@ export default function Header({
 
       {/* Control Actions / Switchers */}
       <div className="flex items-center space-x-3">
-        {/* Admin Clearance Switcher */}
-        <button
-          onClick={() => onAdminChange(!isAdmin)}
-          className={`flex items-center space-x-1.5 px-2.5 py-1 border rounded-md text-[11px] font-semibold transition cursor-pointer ${
-            isAdmin
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
-              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Sliders size={12} className={isAdmin ? "text-emerald-700 animate-pulse" : "text-slate-500"} />
-          <span>Clearance: {isAdmin ? 'Admin' : 'Staff'}</span>
-        </button>
-
         {/* Notifications Dispatch */}
         <div className="relative">
           <button
@@ -201,12 +188,16 @@ export default function Header({
             onClick={() => setShowProfileMenu(!showProfileMenu)}
             className="flex items-center space-x-2.5 p-1.5 hover:bg-slate-100 rounded-lg transition"
           >
-            <div className="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-bold font-mono">
-              DA
-            </div>
+            {currentUser?.profile_photo ? (
+              <img src={currentUser.profile_photo} alt={userName} className="h-7 w-7 rounded-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-bold font-mono">
+                {initials}
+              </div>
+            )}
             <div className="text-left hidden lg:block">
-              <p className="text-xs font-bold text-slate-800 leading-3">Dr. Dev Anand</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">superadmin</p>
+              <p className="text-xs font-bold text-slate-800 leading-3">{userName}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{currentUser?.designation || 'Staff'}</p>
             </div>
           </button>
 
@@ -216,17 +207,8 @@ export default function Header({
               <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1">
                 <div className="px-4 py-2 border-b border-slate-100">
                   <p className="text-xs font-bold text-slate-800">Logged in as</p>
-                  <p className="text-[11px] text-slate-500 font-mono">dev@labbiz.in</p>
+                  <p className="text-[11px] text-slate-500 font-mono break-all">{currentUser?.email}</p>
                 </div>
-                <button
-                  onClick={() => {
-                    alert("Profile management is under Settings.");
-                    setShowProfileMenu(false);
-                  }}
-                  className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                >
-                  My Profile
-                </button>
                 <button
                   onClick={() => {
                     onLogout();
