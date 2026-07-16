@@ -1,0 +1,186 @@
+import React from 'react';
+import {
+  LayoutDashboard,
+  Users,
+  Package,
+  FileSpreadsheet,
+  FileText,
+  ShoppingBag,
+  CreditCard,
+  TrendingDown,
+  Droplet,
+  FlaskConical,
+  CheckSquare,
+  FileSignature,
+  Boxes,
+  Activity,
+  UserCheck,
+  Bell,
+  History,
+  Settings,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+interface SidebarProps {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
+  isAdmin: boolean;
+}
+
+export default function Sidebar({
+  activeTab,
+  setActiveTab,
+  collapsed,
+  setCollapsed,
+  isAdmin
+}: SidebarProps) {
+  // Check permission of current role for sidebar tabs
+  const hasAccess = (tab: string): boolean => {
+    if (isAdmin) return true;
+    // Staff (non-admin) has access to everything except sensitive system, settings, staff and financial reports
+    return ![
+      'settings', 'audit_logs', 'staff', 'accounts', 'expenses', 'reports'
+    ].includes(tab);
+  };
+
+  const menuGroups = [
+    {
+      title: 'OVERVIEW',
+      items: [
+        { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard }
+      ]
+    },
+    {
+      title: 'BUSINESS',
+      items: [
+        { id: 'parties', name: 'Parties (Clients/Vendors)', icon: Users },
+        { id: 'items', name: 'Items & Services', icon: Package },
+        { id: 'quotations', name: 'Quotations', icon: FileSpreadsheet },
+        { id: 'sales', name: 'Sales & Invoices', icon: FileText },
+        { id: 'purchases', name: 'Purchases & Stock In', icon: ShoppingBag },
+        { id: 'payments', name: 'Payments', icon: CreditCard },
+        { id: 'expenses', name: 'Expenses', icon: TrendingDown }
+      ]
+    },
+    {
+      title: 'LAB MANAGEMENT',
+      items: [
+        { id: 'samples', name: 'Samples Inbound', icon: Droplet },
+        { id: 'lab_tests', name: 'Technician Worklist', icon: FlaskConical },
+        { id: 'lab_reports', name: 'Laboratory Reports', icon: FileSignature }
+      ]
+    },
+    {
+      title: 'INVENTORY & INFRASTRUCTURE',
+      items: [
+        { id: 'equipment', name: 'Equipment Registers', icon: Activity }
+      ]
+    },
+    {
+      title: 'FINANCE',
+      items: [
+        { id: 'accounts', name: 'Cash & Bank Accounts', icon: Boxes },
+        { id: 'reports', name: 'Business Reports', icon: FileText }
+      ]
+    },
+    {
+      title: 'SYSTEM',
+      items: [
+        { id: 'staff', name: 'Staff & Roles', icon: UserCheck },
+        { id: 'notifications', name: 'Notifications', icon: Bell },
+        { id: 'audit_logs', name: 'Audit Logs', icon: History },
+        { id: 'settings', name: 'Settings & DB Demo', icon: Settings }
+      ]
+    }
+  ];
+
+  return (
+    <aside
+      id="sidebar-container"
+      className={`bg-[#102A43] text-slate-100 flex flex-col h-screen sticky top-0 transition-all duration-300 border-r border-[#173F63] shrink-0 select-none z-30 ${
+        collapsed ? 'w-16' : 'w-60'
+      }`}
+    >
+      {/* Brand Header */}
+      <div className="h-[60px] flex items-center justify-between px-4 border-b border-[#173F63] bg-[#102A43]">
+        {!collapsed && (
+          <div className="flex items-center space-x-2">
+            <div className="bg-[#2563EB] text-white px-2 py-0.5 rounded font-black flex items-center justify-center text-xs tracking-wider shadow">
+              LB
+            </div>
+            <div>
+              <h1 className="font-extrabold text-[15px] tracking-wide text-white">LABBIZ</h1>
+              <p className="text-[9px] text-[#2563EB] font-bold tracking-widest uppercase">ERP & LIMS</p>
+            </div>
+          </div>
+        )}
+        {collapsed && (
+          <div className="mx-auto bg-[#2563EB] text-white p-1.5 rounded font-bold text-[11px]">
+            LB
+          </div>
+        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-[#173F63] focus:outline-none"
+          title={collapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+      </div>
+
+      {/* Menu Area */}
+      <div className="flex-1 overflow-y-auto py-3.5 scrollbar-thin scrollbar-thumb-slate-800">
+        {menuGroups.map((group, groupIdx) => {
+          // Filter items based on active role permissions
+          const allowedItems = group.items.filter((item) => hasAccess(item.id));
+          if (allowedItems.length === 0) return null;
+
+          return (
+            <div key={groupIdx} className="mb-3">
+              {!collapsed && (
+                <p className="px-4 text-[9px] font-bold text-slate-500 tracking-wider mb-1">
+                  {group.title}
+                </p>
+              )}
+              <nav className="space-y-0.5 px-2">
+                {allowedItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`w-full flex items-center rounded-md px-2.5 py-1.5 text-[11.5px] font-medium transition-colors duration-150 ${
+                        isActive
+                           ? 'bg-[#173F63] text-white shadow-sm font-semibold'
+                           : 'text-slate-300 opacity-80 hover:opacity-100 hover:bg-[#173F63]/50 hover:text-white'
+                      }`}
+                      title={collapsed ? item.name : undefined}
+                    >
+                      <Icon size={14} className={`${collapsed ? 'mx-auto' : 'mr-2.5'} shrink-0`} />
+                      {!collapsed && <span className="truncate">{item.name}</span>}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Role Indicator Footer */}
+      <div className="p-2 border-t border-[#173F63] bg-[#102A43] text-center">
+        {!collapsed ? (
+          <div className="bg-[#173F63]/40 py-1.5 px-2 rounded">
+            <p className="text-[9px] text-slate-400">Clearance Status</p>
+            <p className="text-[11px] font-bold text-amber-400 truncate mt-0.5">{isAdmin ? 'Admin' : 'Staff'}</p>
+          </div>
+        ) : (
+          <div className="h-3 w-3 bg-amber-400 rounded-full mx-auto" title={`Clearance: ${isAdmin ? 'Admin' : 'Staff'}`} />
+        )}
+      </div>
+    </aside>
+  );
+}
