@@ -16,6 +16,14 @@ export const signInWithGoogle = async () => {
   } catch (error: any) {
     if (error.code === 'auth/popup-closed-by-user') {
       console.warn('User closed the Google sign-in popup.');
+      return null;
+    } else if (error.code === 'auth/network-request-failed') {
+      console.error('Network request failed. This may be due to an ad-blocker, VPN, or network restrictions.', error);
+      alert('Network request failed. Please check your internet connection or disable ad-blockers.');
+    } else if (error.code === 'auth/unauthorized-domain') {
+      const currentDomain = window.location.hostname;
+      console.error(`Unauthorized domain: ${currentDomain}. Please add this domain to the Authorized Domains list in Firebase Console.`, error);
+      alert(`This domain (${currentDomain}) is not authorized for Firebase Auth. Please add it in your Firebase Console under Authentication > Settings > Authorized domains.`);
     } else {
       console.error('Google sign-in error:', error);
     }

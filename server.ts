@@ -8,12 +8,24 @@ import jwt from 'jsonwebtoken';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
-// Initialize Firebase Admin (without credential file, defaults to Application Default Credentials if in production, or unauthenticated/mock if no creds)
-// In a real production deployment, set GOOGLE_APPLICATION_CREDENTIALS or use a service account key.
+import fs from 'fs';
+
+// Load config for fallback
+let fallbackConfig: any = { projectId: 'spark-vy' };
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    fallbackConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  }
+} catch (e) {
+  console.error('Failed to load fallback config:', e);
+}
+
+// Initialize Firebase Admin
 if (!getApps().length) {
   try {
     initializeApp({
-      projectId: 'spark-vy'
+      projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || fallbackConfig.projectId
     });
   } catch (error) {
     console.error('Firebase Admin init error', error);
@@ -36,11 +48,15 @@ const otpRateLimit = new Map<string, { count: number, resetTime: number }>();
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'localhost',
   port: parseInt(process.env.EMAIL_PORT || '1025'),
-  secure: process.env.EMAIL_USE_TLS === 'true',
+  secure: process.env.EMAIL_PORT === '465', // Port 465 uses SSL/TLS (secure: true), others use STARTTLS (secure: false)
   auth: process.env.EMAIL_HOST_USER ? {
     user: process.env.EMAIL_HOST_USER,
     pass: process.env.EMAIL_HOST_PASSWORD,
   } : undefined,
+  tls: {
+    // Do not fail on invalid certs (common for dev/internal smtp servers)
+    rejectUnauthorized: false
+  }
 });
 
 app.post('/api/auth/otp/request', async (req, res) => {
