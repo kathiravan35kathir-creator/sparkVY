@@ -5,9 +5,10 @@ import cookieParser from 'cookie-parser';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { initializeApp, getApps } from 'firebase-admin/app';
+import * as admin from 'firebase-admin';
+import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-
+import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 
 // Load config for fallback
@@ -22,14 +23,23 @@ try {
 }
 
 // Initialize Firebase Admin
+let db;
 if (!getApps().length) {
   try {
-    initializeApp({
+    const app = initializeApp({
+      credential: applicationDefault(),
       projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || fallbackConfig.projectId
     });
+    db = getFirestore(app);
   } catch (error) {
     console.error('Firebase Admin init error', error);
   }
+} else {
+  db = getFirestore();
+}
+
+if (db && fallbackConfig.firestoreDatabaseId) {
+    db.settings({ databaseId: fallbackConfig.firestoreDatabaseId });
 }
 
 const app = express();
@@ -122,12 +132,12 @@ app.post('/api/auth/otp/verify', (req, res) => {
 
   let user = users.get(normalizedEmail);
   if (!user) {
-    user = { id: crypto.randomUUID(), email: normalizedEmail, onboarding_completed: false, isAdmin: true };
+    user = { id: crypto.randomUUID(), email: normalizedEmail, onboardingCompleted: false, isAdmin: true };
     users.set(normalizedEmail, user);
   }
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-  res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 24 * 3600 * 1000 });
+  res.cookie('auth_token', token, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 7 * 24 * 3600 * 1000, path: '/' });
   
   res.json({ success: true, user });
 });
@@ -145,11 +155,11 @@ app.post('/api/auth/firebase', async (req, res) => {
     let user = users.get(normalizedEmail);
     if (!user) {
       user = { 
-        id: crypto.randomUUID(), 
+        id: decodedToken.uid, 
         email: normalizedEmail, 
         full_name: decodedToken.name || '', 
         profile_photo: decodedToken.picture || '',
-        onboarding_completed: false,
+        onboardingCompleted: false,
         isAdmin: true
       };
       users.set(normalizedEmail, user);
@@ -159,7 +169,7 @@ app.post('/api/auth/firebase', async (req, res) => {
     }
 
     const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('auth_token', sessionToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('auth_token', sessionToken, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 7 * 24 * 3600 * 1000, path: '/' });
     
     res.json({ success: true, user });
   } catch (err) {
@@ -206,22 +216,35 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/auth/onboarding', (req, res) => {
+app.post('/api/auth/onboarding', async (req, res) => {
+  console.log("[DEBUG] /api/auth/onboarding started");
   const token = req.cookies.auth_token;
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
+  if (!token) {
+    console.log("[DEBUG] /api/auth/onboarding: No token");
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
   try {
     const payload = jwt.verify(token, JWT_SECRET) as any;
+    console.log("[DEBUG] /api/auth/onboarding: User payload:", payload);
     const user = users.get(payload.email);
-    if (!user) return res.status(401).json({ error: 'User not found' });
+    if (!user) {
+        console.log("[DEBUG] /api/auth/onboarding: User not found in map", payload.email);
+        return res.status(401).json({ error: 'User not found' });
+    }
 
     // Mark as completed
-    user.onboarding_completed = true;
+    user.onboardingCompleted = true;
     user.full_name = req.body.full_name || user.full_name;
-    // other fields can be saved here, but mainly we just mark onboarding completed
+    
+    // Update Firestore
+    console.log("[DEBUG] /api/auth/onboarding: Firestore setDoc started");
+    await db.collection('users').doc(payload.userId).set({ onboardingCompleted: true }, { merge: true });
+    console.log("[DEBUG] /api/auth/onboarding: Firestore setDoc finished");
     
     res.json({ success: true, user });
   } catch (err) {
-    res.status(401).json({ error: 'Invalid token' });
+    console.error("[DEBUG] /api/auth/onboarding error:", err);
+    res.status(500).json({ error: 'Internal server error: ' + err });
   }
 });
 

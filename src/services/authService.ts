@@ -12,7 +12,23 @@ const googleProvider = new GoogleAuthProvider();
 export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
+    const token = await result.user.getIdToken();
+    
+    const response = await fetch('/api/auth/firebase', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to authenticate with backend');
+    }
+
+    const data = await response.json();
+    return data.user;
   } catch (error: any) {
     if (error.code === 'auth/popup-closed-by-user') {
       console.warn('User closed the Google sign-in popup.');

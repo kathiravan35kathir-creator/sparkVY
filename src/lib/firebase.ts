@@ -18,15 +18,17 @@ const config = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfig.measurementId,
 };
 
+console.log("[DEBUG] measurementId:", config.measurementId);
+
 const app = getApps().length ? getApp() : initializeApp(config);
 
 const auth = getAuth(app);
-const db = getFirestore(app, import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId || "(default)");
+const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 const storage = getStorage(app);
 
 let analytics: any = null;
 
-if (typeof window !== "undefined" && config.measurementId) {
+if (typeof window !== "undefined" && config.measurementId && typeof config.measurementId === 'string' && config.measurementId.trim() !== "") {
   isSupported()
     .then((supported) => {
       if (supported) {
@@ -49,4 +51,4 @@ console.log("[FIREBASE] App Initialized:", !!app);
 console.log("[FIREBASE] Auth Initialized:", !!auth);
 console.log("[FIREBASE] Firestore Initialized:", !!db);
 
-export { app, auth, db, storage, analytics };
+export { app, auth, db as firestoreDb, storage, analytics };
