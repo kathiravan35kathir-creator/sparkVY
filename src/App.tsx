@@ -383,7 +383,21 @@ export default function App() {
       const updatedList = prev.parties.map((p) => (p.id === id ? { ...p, ...partyPayload, updatedAt: new Date().toISOString() } : p));
       const edited = updatedList.find((p) => p.id === id)!;
 
-      const newState = { ...prev, parties: updatedList };
+      // Propagate client/vendor name changes to all transactions & records for data integrity
+      const name = edited.name;
+      const updatedQuotations = prev.quotations?.map((q) => q.partyId === id ? { ...q, partyName: name } : q) || [];
+      const updatedInvoices = prev.invoices?.map((inv) => inv.partyId === id ? { ...inv, partyName: name } : inv) || [];
+      const updatedSamples = prev.samples?.map((s) => s.partyId === id ? { ...s, partyName: name } : s) || [];
+      const updatedLabReports = prev.labReports?.map((r) => r.partyId === id ? { ...r, partyName: name } : r) || [];
+
+      const newState = {
+        ...prev,
+        parties: updatedList,
+        quotations: updatedQuotations,
+        invoices: updatedInvoices,
+        samples: updatedSamples,
+        labReports: updatedLabReports
+      };
       const audited = logAudit(newState, 'Edit Party', 'Parties', id, edited.name);
       return notify(audited, 'Party Updated', `Client profile for ${edited.name} was successfully modified.`, 'success');
     });
@@ -460,6 +474,17 @@ export default function App() {
       const newState = { ...prev, quotations: [...prev.quotations, newQuote] };
       const audited = logAudit(newState, 'Create Quotation', 'Quotations', newQuote.id, newQuote.quotationNumber);
       return notify(audited, 'Proposal Sent', `Quotation ${newQuote.quotationNumber} is issued successfully.`, 'success');
+    });
+  };
+
+  const handleEditQuotation = (id: string, quotePayload: Partial<Quotation>) => {
+    setDb((prev) => {
+      const updatedQuotations = prev.quotations.map((q) => (q.id === id ? { ...q, ...quotePayload } : q));
+      const edited = updatedQuotations.find((q) => q.id === id)!;
+
+      const newState = { ...prev, quotations: updatedQuotations };
+      const audited = logAudit(newState, 'Edit Quotation', 'Quotations', id, edited.quotationNumber);
+      return notify(audited, 'Quotation Updated', `Quotation ${edited.quotationNumber} details are updated.`, 'success');
     });
   };
 
@@ -1044,6 +1069,7 @@ export default function App() {
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         isAdmin={currentUser.isAdmin}
+        settings={db.settings}
       />
 
       {/* 2. MAIN WORKING CANVAS */}
@@ -1075,6 +1101,7 @@ export default function App() {
               accounts={db.accounts}
               onQuickAction={(actionId) => setActiveTab(actionId)}
               onNavigateToTab={(tabId) => setActiveTab(tabId)}
+              currentUser={currentUser}
             />
           )}
 
@@ -1107,7 +1134,7 @@ export default function App() {
               parties={db.parties}
               items={db.items}
               onAddQuotation={handleAddQuotation}
-              onEditQuotation={() => {}}
+              onEditQuotation={handleEditQuotation}
               onConvertToInvoice={handleConvertToInvoice}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}

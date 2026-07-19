@@ -178,7 +178,11 @@ export default function ItemsView({
       instructions
     };
 
-    onAddItem(payload); // Handles add or edit depending on internal handler logic in App
+    if (isEditMode && selectedItemId) {
+      onEditItem(selectedItemId, payload);
+    } else {
+      onAddItem(payload);
+    }
     setIsOpenForm(false);
     resetForm();
   };

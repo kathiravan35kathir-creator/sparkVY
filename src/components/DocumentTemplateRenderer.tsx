@@ -184,7 +184,21 @@ export default function DocumentTemplateRenderer({
     sampleLabel: settings.print.sampleLabelTemplate || 'sample_label'
   };
 
-  const docTemplateId = customizationOverride?.templateId || defaultTemplateMap[normType];
+  let docTemplateId = customizationOverride?.templateId || defaultTemplateMap[normType];
+  if (docTemplateId && docTemplateId.startsWith('custom_')) {
+    try {
+      const saved = localStorage.getItem('labbiz_duplicated_templates');
+      if (saved) {
+        const customTemplates = JSON.parse(saved);
+        const match = customTemplates.find((t: any) => t.id === docTemplateId);
+        if (match && match.baseId) {
+          docTemplateId = match.baseId;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to resolve custom template baseId:', e);
+    }
+  }
   const printSettings = settings.print;
 
   // Customization fields (merging global print settings with override if present)

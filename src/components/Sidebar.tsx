@@ -27,6 +27,7 @@ interface SidebarProps {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
   isAdmin: boolean;
+  settings?: any;
 }
 
 export default function Sidebar({
@@ -34,7 +35,8 @@ export default function Sidebar({
   setActiveTab,
   collapsed,
   setCollapsed,
-  isAdmin
+  isAdmin,
+  settings
 }: SidebarProps) {
   // Check permission of current role for sidebar tabs
   const hasAccess = (tab: string): boolean => {
@@ -107,18 +109,20 @@ export default function Sidebar({
       <div className="h-[60px] flex items-center justify-between px-4 border-b border-[#173F63] bg-[#102A43]">
         {!collapsed && (
           <div className="flex items-center space-x-2">
-            <div className="bg-[#2563EB] text-white px-2 py-0.5 rounded font-black flex items-center justify-center text-xs tracking-wider shadow">
-              LB
+            <div className="bg-[#2563EB] text-white px-2 py-0.5 rounded font-black flex items-center justify-center text-xs tracking-wider shadow shrink-0">
+              {settings?.company?.displayLabName ? settings.company.displayLabName.substring(0, 2).toUpperCase() : 'LB'}
             </div>
-            <div>
-              <h1 className="font-extrabold text-[15px] tracking-wide text-white">LABBIZ</h1>
-              <p className="text-[9px] text-[#2563EB] font-bold tracking-widest uppercase">ERP & LIMS</p>
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-[13px] tracking-tight text-white truncate max-w-[130px]" title={settings?.company?.displayLabName || settings?.company?.labName || 'LABBIZ'}>
+                {settings?.company?.displayLabName || settings?.company?.labName || 'LABBIZ'}
+              </h1>
+              <p className="text-[8px] text-blue-400 font-bold tracking-wider uppercase">ERP & LIMS</p>
             </div>
           </div>
         )}
         {collapsed && (
-          <div className="mx-auto bg-[#2563EB] text-white p-1.5 rounded font-bold text-[11px]">
-            LB
+          <div className="mx-auto bg-[#2563EB] text-white p-1.5 rounded font-bold text-[11px] uppercase">
+            {settings?.company?.displayLabName ? settings.company.displayLabName.substring(0, 2).toUpperCase() : 'LB'}
           </div>
         )}
         <button

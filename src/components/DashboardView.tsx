@@ -43,6 +43,7 @@ interface DashboardViewProps {
   accounts: CashBankAccount[];
   onQuickAction: (actionId: string) => void;
   onNavigateToTab: (tabId: string) => void;
+  currentUser?: any;
 }
 
 export default function DashboardView({
@@ -56,7 +57,8 @@ export default function DashboardView({
   equipment,
   accounts,
   onQuickAction,
-  onNavigateToTab
+  onNavigateToTab,
+  currentUser
 }: DashboardViewProps) {
   // 1. Calculations for Business KPIs
   const todayStr = '2026-07-14'; // Mock today from system metadata
@@ -137,7 +139,7 @@ export default function DashboardView({
             <span className="text-[11px] text-teal-400 font-mono">● Safe Mode</span>
           </div>
           <h2 className="text-xl md:text-2xl font-black tracking-tight text-white mt-1">
-            Welcome Back, Dr. Dev Anand
+            Welcome Back, {currentUser?.full_name || currentUser?.name || 'Dr. Dev Anand'}
           </h2>
           <p className="text-xs text-slate-300 mt-1 max-w-xl">
             You are currently viewing LabBiz under simulated{' '}

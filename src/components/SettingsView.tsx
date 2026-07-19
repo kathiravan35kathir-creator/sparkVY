@@ -34,6 +34,7 @@ import {
   Eye,
   EyeOff,
   Share2,
+  X,
   Calendar,
   Grid,
   FileCheck
@@ -170,6 +171,54 @@ export default function SettingsView({
     }
   });
   const [previewTemplateModal, setPreviewTemplateModal] = useState<any | null>(null);
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateDesc, setNewTemplateDesc] = useState('');
+  const [newTemplateBaseId, setNewTemplateBaseId] = useState('');
+  const [newTemplatePaper, setNewTemplatePaper] = useState('A4');
+
+  const handleCreateCustomTemplate = () => {
+    if (!newTemplateName.trim()) {
+      alert('Please enter a valid name for your custom template.');
+      return;
+    }
+
+    const newTpl = {
+      id: `custom_${Date.now()}`,
+      name: newTemplateName,
+      desc: newTemplateDesc || `Custom cloned version based on ${newTemplateBaseId}`,
+      baseId: newTemplateBaseId,
+      paper: newTemplatePaper || 'A4',
+      badge: 'Custom Cloned',
+      docType: activeDocType
+    };
+
+    const updatedClones = [...duplicatedTemplates, newTpl];
+    setDuplicatedTemplates(updatedClones);
+    localStorage.setItem('labbiz_duplicated_templates', JSON.stringify(updatedClones));
+
+    // Automatically set as active template for this activeDocType
+    const field = activeDocType === 'invoice' ? 'invoiceTemplate' :
+                  activeDocType === 'quotation' ? 'quotationTemplate' :
+                  activeDocType === 'purchase' ? 'purchaseTemplate' :
+                  activeDocType === 'receipt' ? 'receiptTemplate' :
+                  activeDocType === 'labReport' ? 'labReportTemplate' : 'sampleLabelTemplate';
+    
+    setLocalSettings((prev) => {
+      const updated = {
+        ...prev,
+        print: {
+          ...prev.print,
+          [field]: newTpl.id
+        }
+      };
+      setHasChanges(true);
+      return updated;
+    });
+
+    setIsCreatingTemplate(false);
+    alert(`Successfully cloned and registered "${newTemplateName}" into your template bank.`);
+  };
 
   useEffect(() => {
     const typeMap: any = {
@@ -1341,6 +1390,27 @@ export default function SettingsView({
                         </span>
                       </div>
                     </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const field = activeDocType === 'invoice' ? 'invoiceTemplate' :
+                                        activeDocType === 'quotation' ? 'quotationTemplate' :
+                                        activeDocType === 'purchase' ? 'purchaseTemplate' :
+                                        activeDocType === 'receipt' ? 'receiptTemplate' :
+                                        activeDocType === 'labReport' ? 'labReportTemplate' : 'sampleLabelTemplate';
+                          const selectedId = localSettings.print[field as keyof AppSettings['print']] || '';
+                          setNewTemplateBaseId(selectedId || 'tally_modern');
+                          setNewTemplateName(`Custom ${activeDocType.charAt(0).toUpperCase() + activeDocType.slice(1)} Template`);
+                          setNewTemplateDesc(`Custom modified layout cloned from reference ${selectedId || 'standard'}`);
+                          setIsCreatingTemplate(true);
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black tracking-wide transition uppercase flex items-center space-x-1.5 cursor-pointer shadow-md"
+                      >
+                        <span>Clone / Create Template</span>
+                      </button>
+                    </div>
                   </div>
                   {/* MINIATURE HIGH-FIDELITY LAYOUT THUMBNAIL GALLERY */}
                   <div className="space-y-2">
@@ -1417,10 +1487,31 @@ export default function SettingsView({
                                     e.stopPropagation();
                                     setPreviewTemplateModal(tpl);
                                   }}
-                                  className="text-[9px] font-bold text-slate-500 hover:text-blue-600 transition"
+                                  className="text-[9px] font-bold text-slate-500 hover:text-blue-600 transition font-sans"
                                 >
                                   Full Size
                                 </button>
+                                {tpl.badge === 'Custom Cloned' && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (confirm(`Are you sure you want to delete your custom template "${tpl.name}"?`)) {
+                                        const filtered = duplicatedTemplates.filter(item => item.id !== tpl.id);
+                                        setDuplicatedTemplates(filtered);
+                                        localStorage.setItem('labbiz_duplicated_templates', JSON.stringify(filtered));
+                                        
+                                        // Reset selected template if deleted
+                                        if (selectedId === tpl.id) {
+                                          handlePrintChange(field, tpl.baseId || 'tally_modern');
+                                        }
+                                      }
+                                    }}
+                                    className="text-[9px] font-bold text-rose-500 hover:text-rose-700 transition font-sans"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );
@@ -1726,6 +1817,113 @@ export default function SettingsView({
                           />
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* CUSTOM TEMPLATE CREATION MODAL */}
+              {isCreatingTemplate && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 text-xs font-sans">
+                  <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+                    <div className="bg-slate-950 text-white px-4 py-3 flex justify-between items-center shrink-0">
+                      <div className="flex items-center space-x-2">
+                        <span className="p-1 bg-blue-600 rounded">
+                          <Palette size={14} className="text-white" />
+                        </span>
+                        <h4 className="font-extrabold text-xs tracking-wider uppercase">
+                          Clone & Create Custom Template
+                        </h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingTemplate(false)}
+                        className="text-slate-400 hover:text-white transition cursor-pointer"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          Template Name
+                        </label>
+                        <input
+                          type="text"
+                          value={newTemplateName}
+                          onChange={(e) => setNewTemplateName(e.target.value)}
+                          placeholder="e.g. Premium Navy Clinical"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                          Description
+                        </label>
+                        <input
+                          type="text"
+                          value={newTemplateDesc}
+                          onChange={(e) => setNewTemplateDesc(e.target.value)}
+                          placeholder="e.g. Clean design with standard margins for outpatient billing"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[11px] font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            Reference Blueprint
+                          </label>
+                          <select
+                            value={newTemplateBaseId}
+                            onChange={(e) => setNewTemplateBaseId(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold text-slate-800 focus:outline-none"
+                          >
+                            <option value="tally_modern">Tally Modern</option>
+                            <option value="vyapar_modern">Vyapar Teal</option>
+                            <option value="corporate_blue">Corporate Blue</option>
+                            <option value="tally_classic">Tally Classic</option>
+                            <option value="tally_gst">Tally GST Retro</option>
+                            <option value="professional_orange">Professional Orange</option>
+                            <option value="premium_lab">Premium Lab Minimal</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            Standard Paper Size
+                          </label>
+                          <select
+                            value={newTemplatePaper}
+                            onChange={(e) => setNewTemplatePaper(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold text-slate-800 focus:outline-none"
+                          >
+                            <option value="A4">A4 Standard</option>
+                            <option value="A5">A5 Compact</option>
+                            <option value="Letter">Letter US</option>
+                            <option value="80mm">80mm Roll</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 px-4 py-3 border-t border-slate-150 flex justify-end space-x-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingTemplate(false)}
+                        className="px-3 py-1.5 border border-slate-250 hover:bg-slate-100 rounded-xl text-[11px] font-bold text-slate-600 transition font-sans cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCreateCustomTemplate}
+                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-extrabold transition shadow-sm font-sans cursor-pointer"
+                      >
+                        Create Template
+                      </button>
                     </div>
                   </div>
                 </div>
