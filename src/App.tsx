@@ -10,7 +10,7 @@ import {
 import { Party, Item, Quotation, Invoice, Sample, Expense, Payment, LabReport, SampleStatus, SamplePriority, ParameterResult, LabReportStatus } from './types';
 import { listenToAuthChanges, signOutUser } from './services/authService';
 import { auth, firestoreDb } from './lib/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 enum OperationType {
   CREATE = 'create',
@@ -111,10 +111,32 @@ export default function App() {
       if (firebaseUser) {
         try {
           const token = await firebaseUser.getIdToken();
+          
+          // Fetch onboardingCompleted status directly from client-side Firestore with a timeout fallback
+          let onboardingCompleted = false;
+          try {
+            const fetchWithTimeout = async () => {
+              const docSnap = await getDoc(doc(firestoreDb, "users", firebaseUser.uid));
+              if (docSnap.exists()) {
+                const data = docSnap.data();
+                return !!data.onboardingCompleted;
+              }
+              return false;
+            };
+
+            const timeoutPromise = new Promise<boolean>((_, reject) => 
+              setTimeout(() => reject(new Error('Firestore read timeout')), 2500)
+            );
+
+            onboardingCompleted = await Promise.race([fetchWithTimeout(), timeoutPromise]);
+          } catch (fsErr) {
+            console.warn("[DEBUG] Client failed or timed out fetching onboarding status from firestore, relying on backend API fallback:", fsErr);
+          }
+
           const res = await fetch('/api/auth/firebase', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token }),
+            body: JSON.stringify({ token, onboardingCompleted }),
             credentials: 'include'
           });
           if (res.ok) {
@@ -215,36 +237,54 @@ export default function App() {
           .map(([key, value]) => [key, value === null ? "" : value])
       );
 
-      const cleanUserData = {
+      const firestoreUserData = {
         ...sanitize(userData),
         onboardingCompleted: true,
         updatedAt: serverTimestamp(),
       };
       
-      const cleanCompanyData = {
+      const firestoreCompanyData = {
         ...sanitize(companyData),
         onboardingCompleted: true,
         updatedAt: serverTimestamp(),
       };
 
-      // Save to Firestore
-      console.log("[DEBUG] Starting Firestore save...");
-      try {
-        await Promise.all([
-            setDoc(doc(firestoreDb, "users", uid), { uid, ...cleanUserData }, { merge: true }),
-            setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, ...cleanCompanyData }, { merge: true })
-        ]);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `users/${uid} & companySettings/${uid}`);
-      }
-      console.log("[DEBUG] Firestore save successful.");
+      const apiUserData = {
+        ...sanitize(userData),
+        onboardingCompleted: true,
+        updatedAt: new Date().toISOString(),
+      };
 
-      // Mark completed in backend (only if Firestore save succeeds)
+      const apiCompanyData = {
+        ...sanitize(companyData),
+        onboardingCompleted: true,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Save to Firestore client-side with a timeout fallback (so slow connections/iframes never lock/freeze the user)
+      console.log("[DEBUG] Starting client-side Firestore save with timeout...");
+      try {
+        const clientSavePromise = Promise.all([
+          setDoc(doc(firestoreDb, "users", uid), { uid, ...firestoreUserData }, { merge: true }),
+          setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, ...firestoreCompanyData }, { merge: true })
+        ]);
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Firestore write timeout')), 2500)
+        );
+
+        await Promise.race([clientSavePromise, timeoutPromise]);
+        console.log("[DEBUG] Client-side Firestore save completed or timed out.");
+      } catch (error) {
+        console.warn("[DEBUG] Client-side Firestore save timed out or failed, proceeding with backend API call:", error);
+      }
+
+      // Mark completed in backend
       console.log("[DEBUG] Starting backend onboarding API call...");
       const res = await fetch('/api/auth/onboarding', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...userData }),
+            body: JSON.stringify({ userData: apiUserData, companyData: apiCompanyData }),
             credentials: 'include'
       });
       console.log("[DEBUG] Backend onboarding API call finished.");

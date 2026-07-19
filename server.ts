@@ -8,7 +8,7 @@ import jwt from 'jsonwebtoken';
 import * as admin from 'firebase-admin';
 import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import fs from 'fs';
 
 // Load config for fallback
@@ -165,22 +165,13 @@ app.post('/api/auth/firebase', async (req, res) => {
     
     const normalizedEmail = email.toLowerCase().trim();
     let user = users.get(normalizedEmail);
+    
+    // Check if onboarding completed status is provided by the client
+    const clientOnboardingCompleted = req.body.onboardingCompleted === true;
+
     if (!user) {
-      let onboardingCompleted = false;
-      if (db) {
-        try {
-          const docRef = db.collection('users').doc(decodedToken.uid);
-          const docSnap = await docRef.get();
-          if (docSnap.exists) {
-            const data = docSnap.data();
-            if (data && data.onboardingCompleted) {
-              onboardingCompleted = true;
-            }
-          }
-        } catch (firestoreErr) {
-          console.warn("[DEBUG] Failed to fetch user from Firestore on auth, defaulting onboardingCompleted=false:", firestoreErr);
-        }
-      }
+      const onboardingCompleted = clientOnboardingCompleted;
+      console.log("[DEBUG] /api/auth/firebase: Creating user in memory session with onboardingCompleted:", onboardingCompleted);
       user = { 
         id: decodedToken.uid, 
         email: normalizedEmail, 
@@ -193,6 +184,9 @@ app.post('/api/auth/firebase', async (req, res) => {
     } else {
       user.full_name = user.full_name || decodedToken.name;
       user.profile_photo = user.profile_photo || decodedToken.picture;
+      if (clientOnboardingCompleted) {
+        user.onboardingCompleted = true;
+      }
     }
 
     const sessionToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
@@ -259,22 +253,17 @@ app.post('/api/auth/onboarding', async (req, res) => {
         return res.status(401).json({ error: 'User not found' });
     }
 
-    // Mark as completed
+    // Handle both new { userData, companyData } body format AND fallback to direct request body
+    const userData = req.body.userData || req.body;
+    const companyData = req.body.companyData;
+
+    // Mark as completed in backend state
     user.onboardingCompleted = true;
-    user.full_name = req.body.full_name || user.full_name;
+    user.full_name = userData.full_name || user.full_name;
     
-    // Update Firestore
-    console.log("[DEBUG] /api/auth/onboarding: Firestore setDoc started");
-    if (db) {
-      try {
-        await db.collection('users').doc(payload.userId).set({ onboardingCompleted: true }, { merge: true });
-        console.log("[DEBUG] /api/auth/onboarding: Firestore setDoc finished");
-      } catch (firestoreErr) {
-        console.warn("[DEBUG] /api/auth/onboarding: Firestore setDoc failed (continuing onboarding):", firestoreErr);
-      }
-    } else {
-      console.warn("[DEBUG] /api/auth/onboarding: Firebase Admin db is not initialized, skipping admin Firestore write.");
-    }
+    // We do NOT write to Firestore server-side because the client-side Firebase SDK has already successfully written the data
+    // and the server-side container lacks direct IAM cross-project write access to the database.
+    console.log("[DEBUG] /api/auth/onboarding: Skipping server-side Firestore write because client handles it directly.");
     
     res.json({ success: true, user });
   } catch (err) {
