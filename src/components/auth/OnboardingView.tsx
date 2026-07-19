@@ -4,9 +4,10 @@ import { User, AppSettings } from '../../types';
 interface OnboardingViewProps {
   user: Partial<User>;
   onSave: (userData: any, companyData: any) => Promise<void>;
+  onSkip?: () => void;
 }
 
-export default function OnboardingView({ user, onSave }: OnboardingViewProps) {
+export default function OnboardingView({ user, onSave, onSkip }: OnboardingViewProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -338,12 +339,23 @@ export default function OnboardingView({ user, onSave }: OnboardingViewProps) {
 
       {/* Sticky Bottom Actions */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 z-50">
-        <div className="max-w-5xl mx-auto flex justify-end">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <div>
+            {onSkip && (
+              <button
+                type="button"
+                onClick={onSkip}
+                className="text-slate-600 hover:text-slate-900 font-semibold text-sm transition-colors cursor-pointer py-2 px-4 border border-slate-200 hover:border-slate-300 rounded-lg bg-slate-50 hover:bg-slate-100 shadow-sm"
+              >
+                Skip Setup & Go to Dashboard →
+              </button>
+            )}
+          </div>
           <button
             form="onboarding-form"
             type="submit"
             disabled={isSubmitting}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
           >
             {isSubmitting ? 'Saving...' : 'Save & Continue'}
           </button>

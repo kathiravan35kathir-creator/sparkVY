@@ -12,6 +12,53 @@ import { listenToAuthChanges, signOutUser } from './services/authService';
 import { auth, firestoreDb } from './lib/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 // Visual Components imports
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -159,9 +206,6 @@ export default function App() {
     }
 
     const { uid } = auth.currentUser;
-    const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Save operation timed out. Please try again.')), 60000)
-    );
 
     try {
       // Clean data
@@ -183,28 +227,26 @@ export default function App() {
         updatedAt: serverTimestamp(),
       };
 
-      // Save to Firestore with timeout
+      // Save to Firestore
       console.log("[DEBUG] Starting Firestore save...");
-      await Promise.race([
-        Promise.all([
-          setDoc(doc(firestoreDb, "users", uid), { uid, ...cleanUserData }, { merge: true }),
-          setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, ...cleanCompanyData }, { merge: true })
-        ]),
-        timeoutPromise
-      ]);
+      try {
+        await Promise.all([
+            setDoc(doc(firestoreDb, "users", uid), { uid, ...cleanUserData }, { merge: true }),
+            setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, ...cleanCompanyData }, { merge: true })
+        ]);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `users/${uid} & companySettings/${uid}`);
+      }
       console.log("[DEBUG] Firestore save successful.");
 
       // Mark completed in backend (only if Firestore save succeeds)
       console.log("[DEBUG] Starting backend onboarding API call...");
-      const res = await Promise.race([
-        fetch('/api/auth/onboarding', {
+      const res = await fetch('/api/auth/onboarding', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...userData }),
             credentials: 'include'
-        }),
-        timeoutPromise
-      ]) as Response;
+      });
       console.log("[DEBUG] Backend onboarding API call finished.");
 
       if (!res.ok) {
@@ -231,6 +273,37 @@ export default function App() {
     } catch (err: any) {
       console.error('Onboarding save error:', err);
       throw new Error(err.message || 'Failed to save setup data.');
+    }
+  };
+
+  const handleSkipOnboarding = async () => {
+    try {
+      console.log("[DEBUG] Skipping onboarding, transitioning to dashboard...");
+      setAuthStep('dashboard');
+
+      if (auth.currentUser) {
+        const { uid } = auth.currentUser;
+        
+        // Attempt to mark as completed in Firestore asynchronously
+        Promise.all([
+          setDoc(doc(firestoreDb, "users", uid), { uid, onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true }),
+          setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true })
+        ]).catch(err => {
+          console.warn("[DEBUG] Async Firestore onboarding skip save failed:", err);
+        });
+
+        // Inform backend API of skip asynchronously
+        fetch('/api/auth/onboarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ onboardingCompleted: true }),
+          credentials: 'include'
+        }).catch(err => {
+          console.warn("[DEBUG] Async backend onboarding skip failed:", err);
+        });
+      }
+    } catch (e) {
+      console.error('Failed to skip onboarding cleanly:', e);
     }
   };
 
@@ -916,6 +989,7 @@ export default function App() {
       <OnboardingView
         user={currentUser}
         onSave={handleSaveOnboarding}
+        onSkip={handleSkipOnboarding}
       />
     );
   }

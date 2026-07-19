@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document in Firestore",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "full_name": { "type": "string" },
+        "display_name": { "type": "string" },
+        "mobile_number": { "type": "string" },
+        "alternate_mobile_number": { "type": "string" },
+        "designation": { "type": "string" },
+        "preferred_language": { "type": "string" },
+        "timezone": { "type": "string" },
+        "onboardingCompleted": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "onboardingCompleted"]
+    },
+    "CompanySettings": {
+      "title": "CompanySettings",
+      "description": "Company and laboratory settings in Firestore",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "legalName": { "type": "string" },
+        "displayLabName": { "type": "string" },
+        "labName": { "type": "string" },
+        "businessType": { "type": "string" },
+        "industry_sector": { "type": "string" },
+        "address1": { "type": "string" },
+        "address2": { "type": "string" },
+        "city": { "type": "string" },
+        "district": { "type": "string" },
+        "state": { "type": "string" },
+        "postalCode": { "type": "string" },
+        "country": { "type": "string" },
+        "primaryPhone": { "type": "string" },
+        "alternatePhone": { "type": "string" },
+        "email": { "type": "string" },
+        "website": { "type": "string" },
+        "gstNumber": { "type": "string" },
+        "pan": { "type": "string" },
+        "cin": { "type": "string" },
+        "financialYearStartMonth": { "type": "string" },
+        "currency": { "type": "string" },
+        "timezone": { "type": "string" },
+        "defaultTax": { "type": "number" },
+        "onboardingCompleted": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "onboardingCompleted"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profile documents"
+    },
+    "/companySettings/{ownerId}": {
+      "schema": "CompanySettings",
+      "description": "Collection of company settings documents"
+    }
+  }
+}

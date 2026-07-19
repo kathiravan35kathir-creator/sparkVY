@@ -23,23 +23,35 @@ try {
 }
 
 // Initialize Firebase Admin
-let db;
-if (!getApps().length) {
-  try {
-    const app = initializeApp({
-      credential: applicationDefault(),
-      projectId: process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || fallbackConfig.projectId
-    });
-    db = getFirestore(app);
-  } catch (error) {
-    console.error('Firebase Admin init error', error);
-  }
-} else {
-  db = getFirestore();
+// CRITICAL: Force the correct project and database IDs in the environment so that
+// underlying gRPC / @google-cloud/firestore resolves to the user's correct database
+// instead of defaulting to the container's hosting project.
+const targetProjectId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || fallbackConfig.projectId;
+const targetDatabaseId = fallbackConfig.firestoreDatabaseId;
+
+if (targetProjectId) {
+  process.env.GOOGLE_CLOUD_PROJECT = targetProjectId;
+  process.env.GCLOUD_PROJECT = targetProjectId;
+}
+if (targetDatabaseId) {
+  process.env.FIRESTORE_DATABASE = targetDatabaseId;
 }
 
-if (db && fallbackConfig.firestoreDatabaseId) {
-    db.settings({ databaseId: fallbackConfig.firestoreDatabaseId });
+let db;
+try {
+  let adminApp;
+  if (!getApps().length) {
+    adminApp = initializeApp({
+      credential: applicationDefault(),
+      projectId: targetProjectId
+    });
+  } else {
+    adminApp = getApps()[0];
+  }
+  
+  db = targetDatabaseId ? getFirestore(adminApp, targetDatabaseId) : getFirestore(adminApp);
+} catch (error) {
+  console.error('Firebase Admin init error', error);
 }
 
 const app = express();
@@ -154,12 +166,27 @@ app.post('/api/auth/firebase', async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
     let user = users.get(normalizedEmail);
     if (!user) {
+      let onboardingCompleted = false;
+      if (db) {
+        try {
+          const docRef = db.collection('users').doc(decodedToken.uid);
+          const docSnap = await docRef.get();
+          if (docSnap.exists) {
+            const data = docSnap.data();
+            if (data && data.onboardingCompleted) {
+              onboardingCompleted = true;
+            }
+          }
+        } catch (firestoreErr) {
+          console.warn("[DEBUG] Failed to fetch user from Firestore on auth, defaulting onboardingCompleted=false:", firestoreErr);
+        }
+      }
       user = { 
         id: decodedToken.uid, 
         email: normalizedEmail, 
         full_name: decodedToken.name || '', 
         profile_photo: decodedToken.picture || '',
-        onboardingCompleted: false,
+        onboardingCompleted,
         isAdmin: true
       };
       users.set(normalizedEmail, user);
@@ -238,8 +265,16 @@ app.post('/api/auth/onboarding', async (req, res) => {
     
     // Update Firestore
     console.log("[DEBUG] /api/auth/onboarding: Firestore setDoc started");
-    await db.collection('users').doc(payload.userId).set({ onboardingCompleted: true }, { merge: true });
-    console.log("[DEBUG] /api/auth/onboarding: Firestore setDoc finished");
+    if (db) {
+      try {
+        await db.collection('users').doc(payload.userId).set({ onboardingCompleted: true }, { merge: true });
+        console.log("[DEBUG] /api/auth/onboarding: Firestore setDoc finished");
+      } catch (firestoreErr) {
+        console.warn("[DEBUG] /api/auth/onboarding: Firestore setDoc failed (continuing onboarding):", firestoreErr);
+      }
+    } else {
+      console.warn("[DEBUG] /api/auth/onboarding: Firebase Admin db is not initialized, skipping admin Firestore write.");
+    }
     
     res.json({ success: true, user });
   } catch (err) {
