@@ -28,18 +28,18 @@ interface DocumentPrintViewProps {
 const SHARE_PRESETS = [
   {
     id: 'polite_greeting',
-    name: 'Polite Greeting with Bill Details',
-    template: 'Dear {ClientName},\n\nWe hope you are doing well. Please find attached {DocumentType} No. {DocumentNumber} from {BusinessName} for your review.\n\n{BillDetails}\n\nThank you for choosing us!\n\nBest Regards,\n{BusinessName}'
+    name: 'Polite Greeting',
+    template: 'Dear {ClientName},\n\nWe hope you are doing well. Please find attached {DocumentType} No. {DocumentNumber} from {BusinessName} for your review.\n\nTotal Amount: {Amount}\n\nThank you for choosing us!\n\nBest Regards,\n{BusinessName}'
   },
   {
     id: 'due_reminder',
-    name: 'Due Reminder with Bill Details',
-    template: 'Dear {ClientName},\n\nThis is a friendly reminder that payment for {DocumentType} No. {DocumentNumber} from {BusinessName} is currently due.\n\n{BillDetails}\n\nPlease settle the payment at your earliest convenience.\n\nThank you,\n{BusinessName}'
+    name: 'Due Reminder',
+    template: 'Dear {ClientName},\n\nThis is a friendly reminder that payment for {DocumentType} No. {DocumentNumber} from {BusinessName} is currently due.\n\nAmount due: {Amount}\n\nPlease settle the payment at your earliest convenience.\n\nThank you,\n{BusinessName}'
   },
   {
     id: 'urgent_settlement',
-    name: 'Urgent Settlement with Bill Details',
-    template: 'URGENT: Outstanding Balance Reminder\n\nDear {ClientName},\n\nWe have not received payment for {DocumentType} No. {DocumentNumber} from {BusinessName}.\n\n{BillDetails}\n\nPlease process this payment urgently to avoid any service disruption.\n\nRegards,\nAccounts Team, {BusinessName}'
+    name: 'Urgent Settlement',
+    template: 'URGENT: Outstanding Balance Reminder\n\nDear {ClientName},\n\nWe have not received payment for {DocumentType} No. {DocumentNumber} from {BusinessName}.\n\nPending Amount: {Amount}\n\nPlease process this payment urgently to avoid any service disruption.\n\nRegards,\nAccounts Team, {BusinessName}'
   }
 ];
 
@@ -129,86 +129,12 @@ export default function DocumentPrintView({
 
     let bizName = settings.company.displayLabName || settings.company.labName || 'LabBiz ERP';
 
-    // Build the dynamic rich text breakdown of the bill/document details
-    let billDetailsStr = '';
-    const normType = documentType as string;
-
-    if (['invoice', 'quotation', 'purchase'].includes(normType) && data.items && Array.isArray(data.items)) {
-      billDetailsStr += '-------------------------------\n';
-      billDetailsStr += '📄 BILL / ITEM SUMMARY\n';
-      billDetailsStr += '-------------------------------\n';
-      data.items.forEach((it: any, idx: number) => {
-        const name = it.itemName || 'Assay Service';
-        const qty = it.quantity || 1;
-        const rate = it.rate !== undefined ? `₹${it.rate.toLocaleString()}` : '';
-        const amtVal = it.amount !== undefined ? `₹${it.amount.toLocaleString()}` : '';
-        billDetailsStr += `${idx + 1}. ${name} (Qty: ${qty} ${rate ? `@ ${rate}` : ''}) = ${amtVal}\n`;
-      });
-      billDetailsStr += '-------------------------------\n';
-      if (data.subtotal !== undefined) {
-        billDetailsStr += `Items Subtotal: ₹${data.subtotal.toLocaleString()}\n`;
-      }
-      if (data.discountAmount !== undefined && data.discountAmount > 0) {
-        billDetailsStr += `Discount: -₹${data.discountAmount.toLocaleString()}\n`;
-      }
-      if (data.taxAmount !== undefined && data.taxAmount > 0) {
-        billDetailsStr += `GST: +₹${data.taxAmount.toLocaleString()}\n`;
-      }
-      if (data.additionalCharges !== undefined && data.additionalCharges > 0) {
-        billDetailsStr += `Logistics/Other: +₹${data.additionalCharges.toLocaleString()}\n`;
-      }
-      billDetailsStr += `GRAND TOTAL: ${amt}\n`;
-      billDetailsStr += '-------------------------------';
-    } else if (normType === 'report' && data.testAssignments && Array.isArray(data.testAssignments)) {
-      billDetailsStr += '-------------------------------\n';
-      billDetailsStr += '🔬 CERTIFIED TEST PARAMETERS\n';
-      billDetailsStr += '-------------------------------\n';
-      data.testAssignments.forEach((test: any, tIdx: number) => {
-        billDetailsStr += `${tIdx + 1}. ${test.testName || 'Test'}\n`;
-        if (test.parameters && Array.isArray(test.parameters)) {
-          test.parameters.forEach((param: any) => {
-            const statusIndicator = (param.status === 'High' || param.status === 'Abnormal') ? '⚠️ ' : '';
-            billDetailsStr += `   - ${param.name || 'Analyte'}: ${statusIndicator}${param.result || 'Pending'} ${param.unit || ''} (Ref: ${param.referenceRange || 'N/A'})\n`;
-          });
-        }
-      });
-      billDetailsStr += '-------------------------------';
-    } else if (normType === 'receipt') {
-      billDetailsStr += '-------------------------------\n';
-      billDetailsStr += '🧾 PAYMENT RECEIPT SUMMARY\n';
-      billDetailsStr += '-------------------------------\n';
-      billDetailsStr += `Receipt No: ${docNum || 'N/A'}\n`;
-      billDetailsStr += `Receipt Date: ${data.paymentDate || 'N/A'}\n`;
-      billDetailsStr += `Payment Method: ${data.paymentMethod || 'N/A'}\n`;
-      billDetailsStr += `Amount Paid: ${amt}\n`;
-      billDetailsStr += '-------------------------------';
-    } else if (normType === 'sample_label') {
-      billDetailsStr += '-------------------------------\n';
-      billDetailsStr += '🏷️ SPECIMEN LABEL DETAIL\n';
-      billDetailsStr += '-------------------------------\n';
-      billDetailsStr += `Sample Code: ${data.sampleCode || 'N/A'}\n`;
-      billDetailsStr += `Sample Name: ${data.sampleName || 'N/A'}\n`;
-      billDetailsStr += `Sample Type: ${data.sampleType || 'N/A'}\n`;
-      if (data.relatedSampleCode) {
-        billDetailsStr += `Linked Batch: ${data.relatedSampleCode}\n`;
-      }
-      billDetailsStr += '-------------------------------';
-    }
-
-    let compiled = templateStr
+    return templateStr
       .replace(/{ClientName}/g, clientName)
       .replace(/{DocumentNumber}/g, docNum)
       .replace(/{Amount}/g, amt)
       .replace(/{DocumentType}/g, docTypeStr)
       .replace(/{BusinessName}/g, bizName);
-
-    if (compiled.includes('{BillDetails}')) {
-      compiled = compiled.replace(/{BillDetails}/g, billDetailsStr);
-    } else {
-      compiled = compiled + '\n\n' + billDetailsStr;
-    }
-
-    return compiled;
   };
 
   const compiledText = compileMessage(customMessageText);
