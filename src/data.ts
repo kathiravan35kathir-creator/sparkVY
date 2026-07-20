@@ -306,12 +306,14 @@ export function getInitialState(): AppState {
   };
 }
 
-export function saveState(state: AppState) {
-  localStorage.setItem('bizops_state', JSON.stringify(state));
+export function saveState(state: AppState, uid?: string) {
+  const key = uid ? `bizops_state_${uid}` : 'bizops_state';
+  localStorage.setItem(key, JSON.stringify(state));
 }
 
-export function loadState(): AppState {
-  const data = localStorage.getItem('bizops_state');
+export function loadState(uid?: string): AppState {
+  const key = uid ? `bizops_state_${uid}` : 'bizops_state';
+  const data = localStorage.getItem(key);
   if (data) {
     try {
       const parsed = JSON.parse(data);

@@ -381,23 +381,38 @@ export default function SettingsView({
             alert('New passwords do not match');
             return;
           }
-          payload.password = passwordState.newPassword;
+          // Note: Password update requires reauthentication if it's been a while,
+          // for simplicity we attempt it directly.
+          import('firebase/auth').then(({ getAuth, updatePassword }) => {
+            const auth = getAuth();
+            if (auth.currentUser) {
+              updatePassword(auth.currentUser, passwordState.newPassword)
+                .then(() => {
+                  alert('Password changed successfully.');
+                  setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                })
+                .catch(err => alert('Failed to change password: ' + err.message));
+            }
+          });
         }
 
-        const res = await fetch('/api/auth/me', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+        import('../lib/firebase').then(({ firestoreDb }) => {
+          import('firebase/firestore').then(({ doc, setDoc }) => {
+            if (currentUser?.id) {
+               setDoc(doc(firestoreDb, "users", currentUser.id), {
+                 full_name: payload.full_name,
+                 designation: payload.designation,
+                 mobile: payload.mobile
+               }, { merge: true }).then(() => {
+                 onUpdateUser && onUpdateUser({ ...currentUser, ...payload });
+                 alert("Profile updated.");
+               }).catch(e => {
+                 console.error(e);
+                 alert("Failed to update profile data in Firestore");
+               });
+            }
+          });
         });
-        
-        if (res.ok) {
-          const data = await res.json();
-          onUpdateUser(data.user);
-          if (passwordState.newPassword) {
-            alert('Password changed successfully.');
-            setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-          }
-        }
       } catch (err) {
         console.error('Failed to update user profile:', err);
       }

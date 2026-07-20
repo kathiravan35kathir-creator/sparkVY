@@ -79,7 +79,6 @@ import SettingsView from './components/SettingsView';
 import SecurityPinDialog from './components/SecurityPinDialog';
 // Auth Components
 import LoginView from './components/auth/LoginView';
-import OtpVerifyView from './components/auth/OtpVerifyView';
 import OnboardingView from './components/auth/OnboardingView';
 
 export default function App() {
@@ -103,8 +102,7 @@ export default function App() {
   // 2. Authentication states
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [authStep, setAuthStep] = useState<'login' | 'otp' | 'onboarding' | 'dashboard'>('login');
-  const [emailToVerify, setEmailToVerify] = useState('');
+  const [authStep, setAuthStep] = useState<'login' | 'onboarding' | 'dashboard'>('login');
   const [isLoadingAuth, setIsLoadingAuth] = useState(false);
 
   // 3. Navigation states
@@ -113,56 +111,64 @@ export default function App() {
 
   // Sync back to local storage whenever DB state is modified
   useEffect(() => {
-    saveState(db);
-  }, [db]);
+    saveState(db, currentUser?.id);
+  }, [db, currentUser?.id]);
 
   // Check auth session
   useEffect(() => {
     const unsubscribe = listenToAuthChanges(async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const token = await firebaseUser.getIdToken();
-          
-          // Fetch onboardingCompleted status directly from client-side Firestore with a timeout fallback
+          // Fetch user profile from Firestore directly
           let onboardingCompleted = false;
+          let userDocData: any = null;
           try {
-            const fetchWithTimeout = async () => {
-              const docSnap = await getDoc(doc(firestoreDb, "users", firebaseUser.uid));
-              if (docSnap.exists()) {
-                const data = docSnap.data();
-                return !!data.onboardingCompleted;
-              }
-              return false;
-            };
-
-            const timeoutPromise = new Promise<boolean>((_, reject) => 
-              setTimeout(() => reject(new Error('Firestore read timeout')), 2500)
-            );
-
-            onboardingCompleted = await Promise.race([fetchWithTimeout(), timeoutPromise]);
+            const docSnap = await getDoc(doc(firestoreDb, "users", firebaseUser.uid));
+            if (docSnap.exists()) {
+              userDocData = docSnap.data();
+              onboardingCompleted = !!userDocData.onboardingCompleted;
+            } else {
+              // Create initial profile for first-time user
+              const pendingFullName = localStorage.getItem(`pending_full_name_${firebaseUser.uid}`) || '';
+              const initialData = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || '',
+                full_name: firebaseUser.displayName || pendingFullName || '',
+                profile_photo: firebaseUser.photoURL || '',
+                provider: firebaseUser.providerData[0]?.providerId || 'password',
+                onboardingCompleted: false,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              };
+              await setDoc(doc(firestoreDb, "users", firebaseUser.uid), initialData, { merge: true });
+              userDocData = initialData;
+            }
           } catch (fsErr) {
-            console.warn("[DEBUG] Client failed or timed out fetching onboarding status from firestore, relying on backend API fallback:", fsErr);
+            console.warn("[DEBUG] Failed to fetch onboarding status from firestore:", fsErr);
+            // Ignore error, onboardingCompleted remains false
           }
 
-          const res = await fetch('/api/auth/firebase', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, onboardingCompleted }),
-            credentials: 'include'
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setCurrentUser(data.user);
-            if (data.user.onboardingCompleted) {
-              setAuthStep('dashboard');
-            } else {
-              setAuthStep('onboarding');
-            }
+          const pendingFullName = localStorage.getItem(`pending_full_name_${firebaseUser.uid}`) || '';
+          // Build a client-side user object since we bypass the backend
+          const userObj = {
+            id: firebaseUser.uid,
+            email: firebaseUser.email,
+            full_name: userDocData?.full_name || firebaseUser.displayName || pendingFullName || '',
+            profile_photo: userDocData?.profile_photo || firebaseUser.photoURL || '',
+            onboardingCompleted: onboardingCompleted,
+            isAdmin: true // Simplified for now
+          };
+
+          setCurrentUser(userObj);
+          setDb(loadState(firebaseUser.uid) || getInitialState());
+          
+          if (onboardingCompleted) {
+            setAuthStep('dashboard');
           } else {
-            setCurrentUser(null);
-            setAuthStep('login');
+            setAuthStep('onboarding');
           }
         } catch (error) {
+          console.error("Auth check error:", error);
           setCurrentUser(null);
           setAuthStep('login');
         } finally {
@@ -178,57 +184,6 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleEmailSubmit = async (email: string) => {
-    setIsLoadingAuth(true);
-    try {
-      const res = await fetch('/api/auth/otp/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        setEmailToVerify(email);
-        setAuthStep('otp');
-      } else {
-        const err = await res.json();
-        alert(err.error || 'Failed to request OTP');
-      }
-    } catch (e) {
-      alert('Network error');
-    } finally {
-      setIsLoadingAuth(false);
-    }
-  };
-
-  const handleVerifyOtp = async (otp: string) => {
-    setIsLoadingAuth(true);
-    try {
-      const res = await fetch('/api/auth/otp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: emailToVerify, otp }),
-        credentials: 'include'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentUser(data.user);
-        if (data.user.onboardingCompleted) {
-          setAuthStep('dashboard');
-        } else {
-          setAuthStep('onboarding');
-        }
-      } else {
-        const err = await res.json();
-        alert(err.error || 'Invalid OTP');
-      }
-    } catch (e) {
-      alert('Network error');
-    } finally {
-      setIsLoadingAuth(false);
-    }
-  };
-
   const handleGoogleSuccess = async (user: any) => {
     // Auth observer will handle redirect
   };
@@ -238,7 +193,7 @@ export default function App() {
       throw new Error('User not authenticated');
     }
 
-    const { uid } = auth.currentUser;
+    const { uid, email, displayName, photoURL } = auth.currentUser;
 
     try {
       // Clean data
@@ -250,6 +205,9 @@ export default function App() {
 
       const firestoreUserData = {
         ...sanitize(userData),
+        email: email || '',
+        full_name: displayName || userData?.full_name || '',
+        profile_photo: photoURL || '',
         onboardingCompleted: true,
         updatedAt: serverTimestamp(),
       };
@@ -260,55 +218,26 @@ export default function App() {
         updatedAt: serverTimestamp(),
       };
 
-      const apiUserData = {
-        ...sanitize(userData),
+      // Save to Firestore directly
+      console.log("[DEBUG] Saving onboarding data to Firestore...");
+      await Promise.all([
+        setDoc(doc(firestoreDb, "users", uid), { uid, ...firestoreUserData }, { merge: true }),
+        setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, ...firestoreCompanyData }, { merge: true })
+      ]);
+      console.log("[DEBUG] Firestore save completed.");
+
+      // Update local state
+      const newUserObj = {
+        id: uid,
+        email: email || '',
+        full_name: firestoreUserData.full_name,
+        profile_photo: firestoreUserData.profile_photo,
         onboardingCompleted: true,
-        updatedAt: new Date().toISOString(),
+        isAdmin: true
       };
+      setCurrentUser(newUserObj);
 
-      const apiCompanyData = {
-        ...sanitize(companyData),
-        onboardingCompleted: true,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Save to Firestore client-side with a timeout fallback (so slow connections/iframes never lock/freeze the user)
-      console.log("[DEBUG] Starting client-side Firestore save with timeout...");
-      try {
-        const clientSavePromise = Promise.all([
-          setDoc(doc(firestoreDb, "users", uid), { uid, ...firestoreUserData }, { merge: true }),
-          setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, ...firestoreCompanyData }, { merge: true })
-        ]);
-        
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Firestore write timeout')), 2500)
-        );
-
-        await Promise.race([clientSavePromise, timeoutPromise]);
-        console.log("[DEBUG] Client-side Firestore save completed or timed out.");
-      } catch (error) {
-        console.warn("[DEBUG] Client-side Firestore save timed out or failed, proceeding with backend API call:", error);
-      }
-
-      // Mark completed in backend
-      console.log("[DEBUG] Starting backend onboarding API call...");
-      const res = await fetch('/api/auth/onboarding', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userData: apiUserData, companyData: apiCompanyData }),
-            credentials: 'include'
-      });
-      console.log("[DEBUG] Backend onboarding API call finished.");
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to update user profile');
-      }
-      
-      const data = await res.json();
-      setCurrentUser(data.user);
-
-      // Save to local DB
+      // Save to local DB (for offline state fallback)
       setDb(prev => ({
         ...prev,
         settings: {
@@ -331,27 +260,26 @@ export default function App() {
     try {
       console.log("[DEBUG] Skipping onboarding, transitioning to dashboard...");
       setAuthStep('dashboard');
-
       if (auth.currentUser) {
-        const { uid } = auth.currentUser;
+        const { uid, email, displayName, photoURL } = auth.currentUser;
         
         // Attempt to mark as completed in Firestore asynchronously
         Promise.all([
-          setDoc(doc(firestoreDb, "users", uid), { uid, onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true }),
+          setDoc(doc(firestoreDb, "users", uid), { uid, email: email||'', full_name: displayName||'', profile_photo: photoURL||'', onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true }),
           setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true })
         ]).catch(err => {
           console.warn("[DEBUG] Async Firestore onboarding skip save failed:", err);
         });
 
-        // Inform backend API of skip asynchronously
-        fetch('/api/auth/onboarding', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ onboardingCompleted: true }),
-          credentials: 'include'
-        }).catch(err => {
-          console.warn("[DEBUG] Async backend onboarding skip failed:", err);
-        });
+        const newUserObj = {
+          id: uid,
+          email: email || '',
+          full_name: displayName || '',
+          profile_photo: photoURL || '',
+          onboardingCompleted: true,
+          isAdmin: true
+        };
+        setCurrentUser(newUserObj);
       }
     } catch (e) {
       console.error('Failed to skip onboarding cleanly:', e);
@@ -360,8 +288,8 @@ export default function App() {
 
   const handleLogout = async () => {
     await signOutUser();
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     setCurrentUser(null);
+    setDb(getInitialState());
     setAuthStep('login');
     setActiveTab('dashboard');
   };
@@ -1169,27 +1097,12 @@ export default function App() {
   if (authStep === 'login' || !currentUser) {
     return (
       <LoginView
-        onEmailSubmit={handleEmailSubmit}
         onGoogleSuccess={handleGoogleSuccess}
         isLoading={isLoadingAuth}
       />
     );
   }
 
-  if (authStep === 'otp') {
-    return (
-      <OtpVerifyView
-        email={emailToVerify}
-        onVerify={handleVerifyOtp}
-        onResend={() => handleEmailSubmit(emailToVerify)}
-        onChangeEmail={() => {
-          setAuthStep('login');
-          setEmailToVerify('');
-        }}
-        isLoading={isLoadingAuth}
-      />
-    );
-  }
 
   if (authStep === 'onboarding') {
     return (
@@ -1406,7 +1319,7 @@ export default function App() {
               settings={db.settings}
             />
           )}
-          {(activeTab === 'accounts' || activeTab === 'expenses') && (
+          {activeTab === 'expenses' && (
             <FinanceView
               expenses={db.expenses}
               payments={db.payments}

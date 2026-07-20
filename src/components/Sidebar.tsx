@@ -86,7 +86,6 @@ export default function Sidebar({
       items: [
         { id: 'payment_in', name: 'Payment In', icon: ArrowDownLeft },
         { id: 'payment_out', name: 'Payment Out', icon: ArrowUpRight },
-        { id: 'accounts', name: 'Cash & Bank Accounts', icon: Boxes },
         { id: 'expenses', name: 'Expenses', icon: TrendingDown }
       ]
     },
