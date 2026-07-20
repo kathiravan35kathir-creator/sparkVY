@@ -4,9 +4,6 @@ import {
   CreditCard,
   Users,
   Package,
-  Droplet,
-  FlaskConical,
-  CheckCircle,
   AlertTriangle,
   Clock,
   Briefcase,
@@ -24,10 +21,6 @@ import {
   Party,
   Item,
   Invoice,
-  Sample,
-  TestAssignment,
-  LabReport,
-  Equipment,
   CashBankAccount
 } from '../types';
 
@@ -36,10 +29,6 @@ interface DashboardViewProps {
   parties: Party[];
   items: Item[];
   invoices: Invoice[];
-  samples: Sample[];
-  testAssignments: TestAssignment[];
-  labReports: LabReport[];
-  equipment: Equipment[];
   accounts: CashBankAccount[];
   onQuickAction: (actionId: string) => void;
   onNavigateToTab: (tabId: string) => void;
@@ -51,10 +40,6 @@ export default function DashboardView({
   parties,
   items,
   invoices,
-  samples,
-  testAssignments,
-  labReports,
-  equipment,
   accounts,
   onQuickAction,
   onNavigateToTab,
@@ -80,7 +65,7 @@ export default function DashboardView({
 
   // Stock value
   const stockVal = items
-    .filter((it) => it.type !== 'Laboratory Service')
+    .filter((it) => it.type === 'Product')
     .reduce((sum, it) => sum + it.currentStock * it.purchasePrice, 0);
 
   // Account Balances
@@ -89,42 +74,15 @@ export default function DashboardView({
   const cashBalance = cashAcc ? cashAcc.currentBalance : 0;
   const bankBalance = bankAcc ? bankAcc.currentBalance : 0;
 
-  // 2. Calculations for Lab KPIs
-  const samplesReceivedToday = samples.filter((s) => s.receivedDate === todayStr).length;
-  const testsPending = testAssignments.filter((t) => t.status === 'Assigned' || t.status === 'Accepted').length;
-  const testsInProgress = testAssignments.filter((t) => t.status === 'Started' || t.status === 'Paused').length;
-  const reportsUnderReview = labReports.filter((r) => r.status === 'Under Review').length;
-  const reportsReady = labReports.filter((r) => r.status === 'Approved').length;
-  const samplesDelivered = samples.filter((s) => s.status === 'Delivered').length;
-
-  // Overdue tests: Assigned/InProgress with dueDate < today
-  const overdueTests = testAssignments.filter(
-    (t) =>
-      ['Assigned', 'Accepted', 'Started', 'Paused'].includes(t.status) &&
-      t.dueDate < todayStr
-  ).length;
-
-  // Alerts calculations
+  // 2. Alerts calculations
   const lowStockItems = items.filter(
-    (it) => it.type !== 'Laboratory Service' && it.currentStock <= it.minimumStock
-  );
-
-  const expiringChemicals = items.filter(
-    (it) =>
-      it.type === 'Chemical' &&
-      it.expiryTracking &&
-      it.openingStock > 0 // simple filter for mock
-  );
-
-  const calibrationDueEquipment = equipment.filter(
-    (eq) => eq.status === 'Calibration Due' || (eq.nextCalibrationDate && eq.nextCalibrationDate < todayStr)
+    (it) => it.currentStock <= it.minimumStock
   );
 
   const pendingDueInvoices = invoices.filter((i) => i.status === 'Unpaid' || i.status === 'Partially Paid');
 
   // Role based section filters
   const showFinance = isAdmin;
-  const showLabWorkflow = true;
   const showInventory = true;
 
   return (
@@ -139,21 +97,14 @@ export default function DashboardView({
             <span className="text-[11px] text-teal-400 font-mono">● Safe Mode</span>
           </div>
           <h2 className="text-xl md:text-2xl font-black tracking-tight text-white mt-1">
-            Welcome Back, {currentUser?.full_name || currentUser?.name || 'Dr. Dev Anand'}
+            Welcome Back, {currentUser?.full_name || currentUser?.name || 'BizOps Admin'}
           </h2>
           <p className="text-xs text-slate-300 mt-1 max-w-xl">
-            You are currently viewing LabBiz under simulated{' '}
-            <strong className="text-amber-400 font-mono font-bold">{isAdmin ? 'Admin' : 'Staff'}</strong> clearance. You can toggle your clearance level in the header toolbar to experience restricted dashboards.
+            You are currently viewing the system under simulated{' '}
+            <strong className="text-amber-400 font-mono font-bold">{isAdmin ? 'Admin' : 'Staff'}</strong> clearance.
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5 shrink-0">
-          <button
-            onClick={() => onQuickAction('register_sample')}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm transition flex items-center space-x-1.5"
-          >
-            <Droplet size={14} />
-            <span>Register Sample</span>
-          </button>
           <button
             onClick={() => onQuickAction('create_invoice')}
             className="bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm transition flex items-center space-x-1.5"
@@ -170,7 +121,7 @@ export default function DashboardView({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-extrabold text-slate-800 tracking-tight flex items-center space-x-1.5">
               <Briefcase size={15} className="text-slate-500" />
-              <span>Labbiz Business & Finance KPIs</span>
+              <span>Business Financial Overview</span>
             </h3>
             <button onClick={() => onNavigateToTab('reports')} className="text-xs text-blue-600 hover:underline flex items-center">
               <span>View Financial Reports</span>
@@ -218,9 +169,9 @@ export default function DashboardView({
             {/* KPI 7: Stock Value */}
             <div className="bg-white border border-slate-200 rounded-xl p-4.5 shadow-xs flex items-center justify-between col-span-2">
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Chemical & Product Stock Valuation</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Product Stock Valuation</p>
                 <p className="text-lg font-black text-[#163A5F] font-mono mt-1">₹ {stockVal.toLocaleString()}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Asset value in locked storage rooms</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Asset value in storage</p>
               </div>
               <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-lg">
                 <Package size={18} />
@@ -230,13 +181,13 @@ export default function DashboardView({
         </div>
       )}
 
-      {/* SECTION 3: VISUAL CHARTS AND TIMELINE WORKFLOW */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* SECTION 3: VISUAL CHARTS */}
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
         {/* Sales Trend Chart (Mock SVG - High Fidelity & Lightweight) */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">Sales & Operations Revenue Trend</h4>
+              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">Sales Trend</h4>
               <p className="text-[10px] text-slate-500 mt-0.5">Bi-weekly billing volume (INR)</p>
             </div>
             <span className="text-[10px] font-bold text-[#163A5F] bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-md flex items-center gap-1">
@@ -292,40 +243,10 @@ export default function DashboardView({
             </div>
           </div>
         </div>
-
-        {/* Workflow Summary / Active Status Strip */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">Sample Progression Map</h4>
-            <p className="text-[10px] text-slate-500 mt-0.5">Active LIMS chain-of-custody counts</p>
-          </div>
-
-          <div className="space-y-3.5 my-4">
-            {[
-              { label: '1. Inbound Received', count: samples.filter((s) => s.status === 'Received' || s.status === 'Registered').length, color: 'bg-slate-100 text-slate-700' },
-              { label: '2. Assigned to Plating', count: testAssignments.filter((t) => t.status === 'Assigned' || t.status === 'Accepted').length, color: 'bg-amber-100 text-amber-800' },
-              { label: '3. In Incubators/Plates', count: testAssignments.filter((t) => t.status === 'Started').length, color: 'bg-blue-100 text-blue-800' },
-              { label: '4. Results Drafted', count: testAssignments.filter((t) => t.status === 'Result Submitted').length, color: 'bg-purple-100 text-purple-800' },
-              { label: '5. Signed & Dispatched', count: labReports.filter((r) => r.status === 'Approved' || r.status === 'Delivered').length, color: 'bg-emerald-100 text-emerald-800' }
-            ].map((step, idx) => (
-              <div key={idx} className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-600">{step.label}</span>
-                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${step.color} font-mono`}>
-                  {step.count}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500">Average Turnaround (TAT)</span>
-            <span className="text-xs font-black text-teal-600 font-mono">2.8 Days</span>
-          </div>
-        </div>
       </div>
 
-      {/* SECTION 4: ALERTS GRID (Low stock, Equipment, Expiring reagents) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* SECTION 4: ALERTS GRID (Low stock) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Low stock alerts */}
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
@@ -335,7 +256,7 @@ export default function DashboardView({
             </span>
           </div>
           {lowStockItems.length === 0 ? (
-            <p className="text-xs text-slate-400 py-3 text-center">All chemical stock levels safe</p>
+            <p className="text-xs text-slate-400 py-3 text-center">All stock levels safe</p>
           ) : (
             <div className="space-y-2 max-h-36 overflow-y-auto">
               {lowStockItems.map((item) => (
@@ -344,48 +265,6 @@ export default function DashboardView({
                   <span className="font-mono text-red-600 font-bold">
                     {item.currentStock} {item.unit.split(' ')[0]} left
                   </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Expiring reagents */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Expiring Chemicals</span>
-            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-sm">Tracked</span>
-          </div>
-          {expiringChemicals.length === 0 ? (
-            <p className="text-xs text-slate-400 py-3 text-center">No chemical batches near expiry</p>
-          ) : (
-            <div className="space-y-2 max-h-36 overflow-y-auto">
-              {expiringChemicals.slice(0, 3).map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-xs border-b border-slate-50 pb-1.5">
-                  <span className="font-semibold text-slate-700 truncate max-w-[120px]">{item.name}</span>
-                  <span className="font-mono text-slate-500 text-[10px]">Batch AR-9</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Calibration alerts */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Calibration Schedules</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm ${calibrationDueEquipment.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-              {calibrationDueEquipment.length} due
-            </span>
-          </div>
-          {calibrationDueEquipment.length === 0 ? (
-            <p className="text-xs text-slate-400 py-3 text-center">All machines fully calibrated</p>
-          ) : (
-            <div className="space-y-2 max-h-36 overflow-y-auto">
-              {calibrationDueEquipment.map((eq) => (
-                <div key={eq.id} className="flex items-center justify-between text-xs border-b border-slate-50 pb-1.5">
-                  <span className="font-bold text-slate-700 truncate max-w-[120px]">{eq.name}</span>
-                  <span className="font-mono text-amber-600 font-bold">DUE</span>
                 </div>
               ))}
             </div>
@@ -413,71 +292,14 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* SECTION 5: RECENTS FEEDS (Recent Samples & Recent Invoices) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Samples */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">Recent Inbound Samples</h4>
-              <p className="text-[10px] text-slate-500 mt-0.5">Real-time custody tracking</p>
-            </div>
-            <button
-              onClick={() => onNavigateToTab('samples')}
-              className="text-xs text-[#2563EB] hover:underline font-bold"
-            >
-              Samples Inbound
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 text-[10px] text-slate-400 font-bold uppercase tracking-wider bg-slate-50">
-                  <th className="py-2.5 px-3">Sample Code</th>
-                  <th className="py-2.5 px-3">Customer</th>
-                  <th className="py-2.5 px-3">Assigned Tests</th>
-                  <th className="py-2.5 px-3 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {samples.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-xs text-slate-400">
-                      No samples logged in database
-                    </td>
-                  </tr>
-                ) : (
-                  samples.slice(0, 4).map((smp) => (
-                    <tr key={smp.id} className="hover:bg-slate-50/50 text-xs">
-                      <td className="py-2.5 px-3 font-mono font-bold text-slate-900">{smp.sampleCode}</td>
-                      <td className="py-2.5 px-3 font-medium text-slate-700 truncate max-w-[120px]">{smp.partyName}</td>
-                      <td className="py-2.5 px-3 text-slate-500">
-                        {smp.requiredTestIds.length} tests logged
-                      </td>
-                      <td className="py-2.5 px-3 text-right">
-                        <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                          smp.status === 'Report Ready' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                          smp.status === 'Result Entered' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                          'bg-amber-50 text-amber-700 border border-amber-100'
-                        }`}>
-                          {smp.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
+      {/* SECTION 5: RECENTS FEEDS (Recent Invoices) */}
+      <div className="grid grid-cols-1 gap-6">
         {/* Recent Transactions / Invoices */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">Recent Financial Sales Bills</h4>
-              <p className="text-[10px] text-slate-500 mt-0.5">Labbiz invoicing feed</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Invoicing feed</p>
             </div>
             <button
               onClick={() => onNavigateToTab('sales')}

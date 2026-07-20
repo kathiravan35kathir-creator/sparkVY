@@ -35,9 +35,12 @@ export default function PurchasesView({
 }: PurchasesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [printingPurchase, setPrintingPurchase] = useState<Purchase | null>(null);
+  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
 
   // Supplier list filter (Supplier or Both)
   const suppliers = parties.filter((p) => p.type === 'Supplier' || p.type === 'Both' && p.isActive);
@@ -169,7 +172,7 @@ export default function PurchasesView({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `LabBiz_Purchases_Ledger.csv`);
+    link.setAttribute('download', `BizOps_Purchases_Ledger.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -182,7 +185,8 @@ export default function PurchasesView({
       (p.supplierInvoiceNumber && p.supplierInvoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const matchesStatus = filterStatus === 'All' || p.paymentStatus === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesDate = (!startDate || p.purchaseDate >= startDate) && (!endDate || p.purchaseDate <= endDate);
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   if (isAdding) {
@@ -202,7 +206,7 @@ export default function PurchasesView({
               Record Supplier Purchase Bill & Inbound Stock
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Register inbound purchases, inventory chemicals, and handle accounts payable. This will automatically increase physical stock levels.
+              Register inbound purchases, inventory items, and handle accounts payable. This will automatically increase physical stock levels.
             </p>
           </div>
           <div>
@@ -484,9 +488,16 @@ export default function PurchasesView({
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-wrap justify-between items-center gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Suppliers Purchases & Stock Inbound</h2>
-          <p className="text-xs text-slate-500 mt-1">Book chemicals, reagents, and apparatus purchases. Auto-adds warehouse stock quantities.</p>
+          <p className="text-xs text-slate-500 mt-1">Book items, materials, and equipment purchases. Auto-adds warehouse stock quantities.</p>
         </div>
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setIsBulkPrinting(true)}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold shadow-xs hover:bg-slate-50 transition"
+          >
+            <Printer size={13} />
+            <span>Print All</span>
+          </button>
           <button
             onClick={handleExportCSV}
             className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition"
@@ -510,7 +521,7 @@ export default function PurchasesView({
           {/* List Table panel */}
           <div className="col-span-1 lg:col-span-8 bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between bg-slate-50/50">
-              <div className="relative max-w-xs w-full">
+              <div className="relative max-w-xs w-full flex-1">
                 <Search className="absolute left-2.5 top-2.5 text-slate-400" size={13} />
                 <input
                   type="text"
@@ -520,7 +531,25 @@ export default function PurchasesView({
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <div className="flex items-center space-x-2">
+
+              <div className="flex items-center space-x-2 border-l border-slate-200 pl-3">
+                <Calendar size={13} className="text-slate-400" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-700 font-medium focus:outline-none focus:border-blue-500"
+                />
+                <span className="text-slate-300">to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] text-slate-700 font-medium focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 border-l border-slate-200 pl-3">
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Status:</span>
                 <select
                   className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-600 focus:outline-none focus:border-blue-500 font-semibold"
@@ -541,7 +570,7 @@ export default function PurchasesView({
                 <div className="p-12 text-center">
                   <ShoppingBag className="mx-auto text-slate-300 mb-3" size={32} />
                   <p className="font-bold text-slate-500 text-sm">No inbound purchase bills registered</p>
-                  <p className="text-xs text-slate-400 mt-1">Click "Record Inbound Purchase" to log dynamic chemical stock increments.</p>
+                  <p className="text-xs text-slate-400 mt-1">Click "Record Inbound Purchase" to log inventory stock increments.</p>
                 </div>
               ) : (
                 <table className="w-full text-left border-collapse">
@@ -692,6 +721,35 @@ export default function PurchasesView({
           data={printingPurchase}
           settings={settings}
           onClose={() => setPrintingPurchase(null)}
+        />
+      )}
+
+      {isBulkPrinting && (
+        <DocumentPrintView
+          documentType="transaction_list"
+          data={{
+            title: 'Purchase Transaction Register',
+            dateRange: `${startDate || 'Start'} to ${endDate || 'End'}`,
+            columns: ['Date', 'Purchase #', 'Supplier', 'Total', 'Paid', 'Balance'],
+            rows: filteredPurchases.map(p => [
+              p.purchaseDate,
+              p.purchaseNumber,
+              p.partyName,
+              p.total,
+              p.amountPaid,
+              p.balanceDue
+            ]),
+            totals: [
+              '',
+              'TOTAL',
+              '',
+              filteredPurchases.reduce((sum, p) => sum + p.total, 0),
+              filteredPurchases.reduce((sum, p) => sum + p.amountPaid, 0),
+              filteredPurchases.reduce((sum, p) => sum + p.balanceDue, 0)
+            ]
+          }}
+          settings={settings}
+          onClose={() => setIsBulkPrinting(false)}
         />
       )}
     </div>

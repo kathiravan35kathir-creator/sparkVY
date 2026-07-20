@@ -7,7 +7,7 @@ import {
   notify,
   AppState
 } from './data';
-import { Party, Item, Quotation, Invoice, Sample, Expense, Payment, LabReport, SampleStatus, SamplePriority, ParameterResult, LabReportStatus } from './types';
+import { Party, Item, Quotation, Invoice, Expense, Payment, ProformaInvoice, ProformaStatus, ProcurementOrder, ProcurementStatus, SalesReturn, CreditNote, CreditNoteStatus, StockMovement, PaymentMethod, CommunicationLog } from './types';
 import { listenToAuthChanges, signOutUser } from './services/authService';
 import { auth, firestoreDb } from './lib/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -66,17 +66,17 @@ import DashboardView from './components/DashboardView';
 import PartiesView from './components/PartiesView';
 import ItemsView from './components/ItemsView';
 import QuotationsView from './components/QuotationsView';
+import ProformaInvoicesView from './components/ProformaInvoicesView';
 import SalesView from './components/SalesView';
-import LabCoreView from './components/LabCoreView';
-import FinanceView from './components/FinanceView';
-import StaffRolesView from './components/StaffRolesView';
+import SalesReturnsView from './components/SalesReturnsView';
+import CreditNotesView from './components/CreditNotesView';
+import ProcurementOrdersView from './components/ProcurementOrdersView';
 import PurchasesView from './components/PurchasesView';
+import PaymentsView from './components/PaymentsView';
+import FinanceView from './components/FinanceView';
 import ReportsView from './components/ReportsView';
-import AuditLogsView from './components/AuditLogsView';
-import NotificationsView from './components/NotificationsView';
 import SettingsView from './components/SettingsView';
-import EquipmentView from './components/EquipmentView';
-
+import SecurityPinDialog from './components/SecurityPinDialog';
 // Auth Components
 import LoginView from './components/auth/LoginView';
 import OtpVerifyView from './components/auth/OtpVerifyView';
@@ -88,6 +88,17 @@ export default function App() {
     const loaded = loadState();
     return loaded || getInitialState();
   });
+
+  // Security PIN State
+  const [pinAction, setPinAction] = useState<{ name: string; onConfirm: () => void } | null>(null);
+
+  const checkPin = (action: string, onConfirm: () => void) => {
+    if (db.settings.security.protectedActions.includes(action) && db.settings.security.transactionPinHash) {
+      setPinAction({ name: action, onConfirm });
+    } else {
+      onConfirm();
+    }
+  };
 
   // 2. Authentication states
   const [isAuthChecking, setIsAuthChecking] = useState(true);
@@ -355,9 +366,36 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
-  // --------------------------------------------------------
-  // DATA CONTROLLERS & ACTIONS (PASSED DOWN TO SUB-VIEWS)
-  // --------------------------------------------------------
+  // Helper to generate next document number
+  const generateDocumentNumber = (config: any) => {
+    const year = new Date().getFullYear().toString().substring(2);
+    const month = (new Date().getMonth() + 1).toString().padStart(2, '0');
+    const num = String(config.currentNumber).padStart(config.minDigitLength, '0');
+    
+    let result = config.prefix;
+    if (config.includeFinancialYear) result += `FY${year}/`;
+    if (config.includeMonth) result += `${month}/`;
+    result += num;
+    return result;
+  };
+
+  const addAuditLog = (module: string, action: string) => {
+    setDb(prev => {
+      const newState = logAudit(prev, action, module, 'system', currentUser?.name || 'User');
+      return newState;
+    });
+  };
+
+  const handleAddCommunicationLog = (log: Omit<CommunicationLog, 'id' | 'timestamp'>) => {
+    setDb((prev) => {
+      const newLog: CommunicationLog = {
+        ...log,
+        id: `com-${Date.now()}`,
+        timestamp: new Date().toISOString()
+      };
+      return { ...prev, communicationLogs: [newLog, ...prev.communicationLogs] };
+    });
+  };
 
   // Parties actions
   const handleAddParty = (partyPayload: Omit<Party, 'id' | 'code' | 'currentBalance' | 'createdAt' | 'updatedAt'>) => {
@@ -387,16 +425,12 @@ export default function App() {
       const name = edited.name;
       const updatedQuotations = prev.quotations?.map((q) => q.partyId === id ? { ...q, partyName: name } : q) || [];
       const updatedInvoices = prev.invoices?.map((inv) => inv.partyId === id ? { ...inv, partyName: name } : inv) || [];
-      const updatedSamples = prev.samples?.map((s) => s.partyId === id ? { ...s, partyName: name } : s) || [];
-      const updatedLabReports = prev.labReports?.map((r) => r.partyId === id ? { ...r, partyName: name } : r) || [];
 
       const newState = {
         ...prev,
         parties: updatedList,
         quotations: updatedQuotations,
-        invoices: updatedInvoices,
-        samples: updatedSamples,
-        labReports: updatedLabReports
+        invoices: updatedInvoices
       };
       const audited = logAudit(newState, 'Edit Party', 'Parties', id, edited.name);
       return notify(audited, 'Party Updated', `Client profile for ${edited.name} was successfully modified.`, 'success');
@@ -428,10 +462,7 @@ export default function App() {
   // Items actions
   const handleAddItem = (itemPayload: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => {
     setDb((prev) => {
-      const isService = itemPayload.type === 'Laboratory Service';
-      const code = isService
-        ? `LIMS-${String(prev.items.filter((it) => it.type === 'Laboratory Service').length + 101)}`
-        : `STK-${String(prev.items.filter((it) => it.type !== 'Laboratory Service').length + 101)}`;
+      const code = `STK-${String(prev.items.length + 101)}`;
 
       const newItem: Item = {
         ...itemPayload,
@@ -462,16 +493,31 @@ export default function App() {
 
   // Quotation actions
   const handleAddQuotation = (quotePayload: Omit<Quotation, 'id' | 'quotationNumber' | 'createdAt'>) => {
+    const config = quotePayload.stage === 'Estimate' ? db.settings.numbering.estimateQuotation : db.settings.numbering.quotation;
+    const generatedNumber = generateDocumentNumber(config);
+    const quotationNumber = quotePayload.stage === 'Estimate' ? `${generatedNumber} Rev 1` : generatedNumber;
+
     setDb((prev) => {
-      const quotationNumber = `QU-${String(prev.quotations.length + 1001)}`;
       const newQuote: Quotation = {
         ...quotePayload,
         id: `quote-${Date.now()}`,
         quotationNumber,
+        baseQuotationNumber: generatedNumber,
+        revisionNumber: quotePayload.stage === 'Estimate' ? 1 : undefined,
         createdAt: new Date().toISOString().slice(0, 10)
       };
 
-      const newState = { ...prev, quotations: [...prev.quotations, newQuote] };
+      const newState = { 
+        ...prev, 
+        quotations: [...prev.quotations, newQuote],
+        settings: {
+          ...prev.settings,
+          numbering: {
+            ...prev.settings.numbering,
+            [quotePayload.stage === 'Estimate' ? 'estimateQuotation' : 'quotation']: { ...config, currentNumber: config.currentNumber + 1 }
+          }
+        }
+      };
       const audited = logAudit(newState, 'Create Quotation', 'Quotations', newQuote.id, newQuote.quotationNumber);
       return notify(audited, 'Proposal Sent', `Quotation ${newQuote.quotationNumber} is issued successfully.`, 'success');
     });
@@ -485,6 +531,72 @@ export default function App() {
       const newState = { ...prev, quotations: updatedQuotations };
       const audited = logAudit(newState, 'Edit Quotation', 'Quotations', id, edited.quotationNumber);
       return notify(audited, 'Quotation Updated', `Quotation ${edited.quotationNumber} details are updated.`, 'success');
+    });
+  };
+
+  const handleReviseEstimate = (id: string) => {
+    setDb((prev) => {
+      const original = prev.quotations.find(q => q.id === id);
+      if (!original || original.stage !== 'Estimate') return prev;
+
+      const newRev = (original.revisionNumber || 1) + 1;
+      const baseNum = original.baseQuotationNumber || original.quotationNumber.split(' ')[0];
+
+      const newQuote: Quotation = {
+        ...original,
+        id: `quote-${Date.now()}`,
+        quotationNumber: `${baseNum} Rev ${newRev}`,
+        revisionNumber: newRev,
+        baseQuotationNumber: baseNum,
+        status: 'Draft', // Reset status
+        createdAt: new Date().toISOString().slice(0, 10)
+      };
+
+      const updatedOriginal = { ...original, isLocked: true }; // old revision gets locked
+      const updatedQuotations = prev.quotations.map(q => q.id === id ? updatedOriginal : q);
+
+      const newState = { ...prev, quotations: [...updatedQuotations, newQuote] };
+      const audited = logAudit(newState, 'Revise Estimate', 'Quotations', newQuote.id, newQuote.quotationNumber);
+      return notify(audited, 'Estimate Revised', `Created ${newQuote.quotationNumber}.`, 'success');
+    });
+  };
+
+  const handleConvertEstimateToFinal = (id: string) => {
+    setDb((prev) => {
+      const original = prev.quotations.find(q => q.id === id);
+      if (!original || original.stage !== 'Estimate') return prev;
+
+      const config = prev.settings.numbering.quotation;
+      const finalNumber = generateDocumentNumber(config);
+
+      const newQuote: Quotation = {
+        ...original,
+        id: `quote-${Date.now()}`,
+        stage: 'Final',
+        quotationNumber: finalNumber,
+        originalEstimateId: original.id,
+        status: 'Draft',
+        revisionNumber: undefined,
+        baseQuotationNumber: undefined,
+        createdAt: new Date().toISOString().slice(0, 10)
+      };
+
+      const updatedOriginal = { ...original, status: 'Converted' as const, isLocked: true };
+      const updatedQuotations = prev.quotations.map(q => q.id === id ? updatedOriginal : q);
+
+      const newState = { 
+        ...prev, 
+        quotations: [...updatedQuotations, newQuote],
+        settings: {
+          ...prev.settings,
+          numbering: {
+            ...prev.settings.numbering,
+            quotation: { ...config, currentNumber: config.currentNumber + 1 }
+          }
+        }
+      };
+      const audited = logAudit(newState, 'Convert Estimate to Final', 'Quotations', newQuote.id, newQuote.quotationNumber);
+      return notify(audited, 'Converted to Final Quote', `Created Final Quotation ${newQuote.quotationNumber}.`, 'success');
     });
   };
 
@@ -535,8 +647,9 @@ export default function App() {
 
   // Sales Invoice actions
   const handleAddInvoice = (invoicePayload: Omit<Invoice, 'id' | 'invoiceNumber' | 'isLocked' | 'createdAt' | 'updatedAt'>) => {
+    const config = db.settings.numbering.invoice;
+    const invoiceNumber = generateDocumentNumber(config);
     setDb((prev) => {
-      const invoiceNumber = `INV-${String(prev.invoices.length + 1001)}`;
       const newInvoice: Invoice = {
         ...invoicePayload,
         id: `inv-${Date.now()}`,
@@ -551,10 +664,248 @@ export default function App() {
         p.id === invoicePayload.partyId ? { ...p, currentBalance: p.currentBalance + invoicePayload.total } : p
       );
 
-      const newState = { ...prev, invoices: [...prev.invoices, newInvoice], parties: updatedParties };
+      // Update Stock Movements (Out)
+      const movements: StockMovement[] = newInvoice.items.map((item) => ({
+        id: `sm-out-${Date.now()}-${item.itemId}`,
+        itemId: item.itemId,
+        itemName: item.itemName,
+        type: 'Sale Out',
+        quantity: item.quantity,
+        referenceId: newInvoice.id,
+        referenceNumber: newInvoice.invoiceNumber,
+        user: currentUser?.name || 'System',
+        notes: `Sales Invoice to ${newInvoice.partyName}`,
+        timestamp: new Date().toISOString()
+      }));
+
+      // Update Items currentStock
+      const updatedItems = prev.items.map((it) => {
+        const line = newInvoice.items.find((li) => li.itemId === it.id);
+        if (line) {
+          return { ...it, currentStock: it.currentStock - line.quantity };
+        }
+        return it;
+      });
+
+      const newState = { 
+        ...prev, 
+        invoices: [newInvoice, ...prev.invoices], 
+        parties: updatedParties,
+        items: updatedItems,
+        stockMovements: [...movements, ...prev.stockMovements],
+        settings: {
+          ...prev.settings,
+          numbering: {
+            ...prev.settings.numbering,
+            invoice: { ...config, currentNumber: config.currentNumber + 1 }
+          }
+        }
+      };
       const audited = logAudit(newState, 'Create Invoice', 'Sales', newInvoice.id, newInvoice.invoiceNumber);
-      return notify(audited, 'Bill Registered', `Draft invoice ${newInvoice.invoiceNumber} generated.`, 'success');
+      return notify(audited, 'Bill Registered', `Invoice ${newInvoice.invoiceNumber} generated.`, 'success');
     });
+  };
+
+  const handleAddProformaInvoice = (proforma: Omit<ProformaInvoice, 'id' | 'proformaNumber' | 'createdAt' | 'updatedAt'>) => {
+    const config = db.settings.numbering.proformaInvoice;
+    const proformaNumber = generateDocumentNumber(config);
+    const newProforma: ProformaInvoice = {
+      ...proforma,
+      id: `pi-${Date.now()}`,
+      proformaNumber,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    setDb((prev) => ({
+      ...prev,
+      proformaInvoices: [newProforma, ...prev.proformaInvoices],
+      settings: {
+        ...prev.settings,
+        numbering: {
+          ...prev.settings.numbering,
+          proformaInvoice: { ...config, currentNumber: config.currentNumber + 1 }
+        }
+      }
+    }));
+    addAuditLog('Sales', `Generated Proforma Invoice ${proformaNumber}`);
+  };
+
+  const handleConvertProformaToInvoice = (proformaId: string) => {
+    const proforma = db.proformaInvoices.find(p => p.id === proformaId);
+    if (!proforma) return;
+
+    handleAddInvoice({
+      partyId: proforma.partyId,
+      partyName: proforma.partyName,
+      invoiceDate: new Date().toISOString().slice(0, 10),
+      dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      items: proforma.items,
+      subtotal: proforma.subtotal,
+      discountAmount: proforma.discountAmount,
+      taxAmount: proforma.taxAmount,
+      additionalCharges: proforma.additionalCharges,
+      roundOff: proforma.roundOff,
+      total: proforma.total,
+      amountPaid: 0,
+      balanceDue: proforma.total,
+      status: 'Unpaid',
+      notes: proforma.notes,
+      terms: proforma.terms
+    });
+
+    setDb(prev => ({
+      ...prev,
+      proformaInvoices: prev.proformaInvoices.map(p => p.id === proformaId ? { ...p, status: 'Converted' } : p)
+    }));
+    addAuditLog('Sales', `Converted Proforma ${proforma.proformaNumber} to Invoice`);
+  };
+
+  const handleAddProcurementOrder = (order: Omit<ProcurementOrder, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => {
+    const config = db.settings.numbering.procurementOrder;
+    const orderNumber = generateDocumentNumber(config);
+    const newOrder: ProcurementOrder = {
+      ...order,
+      id: `po-${Date.now()}`,
+      orderNumber,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    setDb((prev) => ({
+      ...prev,
+      procurementOrders: [newOrder, ...prev.procurementOrders],
+      settings: {
+        ...prev.settings,
+        numbering: {
+          ...prev.settings.numbering,
+          procurementOrder: { ...config, currentNumber: config.currentNumber + 1 }
+        }
+      }
+    }));
+    addAuditLog('Purchases', `Generated PO ${orderNumber}`);
+  };
+
+  const handleAddSalesReturn = (sr: Omit<SalesReturn, 'id' | 'returnNumber' | 'createdAt'>) => {
+    const config = db.settings.numbering.salesReturn;
+    const returnNumber = generateDocumentNumber(config);
+    const newReturn: SalesReturn = {
+      ...sr,
+      id: `sr-${Date.now()}`,
+      returnNumber,
+      createdAt: new Date().toISOString()
+    };
+
+    setDb((prev) => {
+      let next = {
+        ...prev,
+        salesReturns: [newReturn, ...prev.salesReturns],
+        settings: {
+          ...prev.settings,
+          numbering: {
+            ...prev.settings.numbering,
+            salesReturn: { ...config, currentNumber: config.currentNumber + 1 }
+          }
+        }
+      };
+
+      if (sr.creditNoteIssued) {
+        const cnConfig = prev.settings.numbering.creditNote;
+        const cnNumber = generateDocumentNumber(cnConfig);
+        const newCN: CreditNote = {
+          id: `cn-${Date.now()}`,
+          creditNoteNumber: cnNumber,
+          creditNoteDate: sr.returnDate,
+          partyId: sr.partyId,
+          partyName: sr.partyName,
+          originalInvoiceId: sr.originalInvoiceId,
+          originalInvoiceNumber: sr.originalInvoiceNumber,
+          salesReturnId: newReturn.id,
+          reason: sr.items.map(i => i.reason).join(', '),
+          items: sr.items,
+          subtotal: sr.items.reduce((a, b) => a + (b.returnQuantity * b.rate), 0),
+          taxAmount: sr.items.reduce((a, b) => a + (b.returnQuantity * b.rate * b.taxPercent / 100), 0),
+          total: sr.totalReturnAmount,
+          adjustedAmount: 0,
+          refundAmount: 0,
+          status: 'Issued',
+          notes: sr.notes,
+          createdAt: new Date().toISOString()
+        };
+        newReturn.creditNoteId = newCN.id;
+        next.creditNotes = [newCN, ...prev.creditNotes];
+        next.settings.numbering.creditNote.currentNumber += 1;
+      }
+
+      // Update Stock Movements (In)
+      const movements: StockMovement[] = sr.items.filter(i => i.restockOption).map((item) => ({
+        id: `sm-ret-${Date.now()}-${item.itemId}`,
+        itemId: item.itemId,
+        itemName: item.itemName,
+        type: 'Return',
+        quantity: item.returnQuantity,
+        referenceId: newReturn.id,
+        referenceNumber: newReturn.returnNumber,
+        user: currentUser?.name || 'System',
+        notes: `Sales Return from ${sr.partyName}`,
+        timestamp: new Date().toISOString()
+      }));
+
+      // Update Items currentStock
+      const updatedItems = prev.items.map((it) => {
+        const line = sr.items.find((li) => li.itemId === it.id && li.restockOption);
+        if (line) {
+          return { ...it, currentStock: it.currentStock + line.returnQuantity };
+        }
+        return it;
+      });
+
+      return {
+        ...next,
+        stockMovements: [...movements, ...prev.stockMovements],
+        items: updatedItems
+      };
+    });
+    addAuditLog('Sales', `Recorded Sales Return ${returnNumber}`);
+  };
+
+  const handleAddPayment = (payment: Omit<Payment, 'id' | 'paymentNumber' | 'createdAt'>) => {
+    const config = payment.paymentType === 'Payment In' ? db.settings.numbering.paymentReceipt : db.settings.numbering.paymentVoucher;
+    const paymentNumber = generateDocumentNumber(config);
+    const newPayment: Payment = {
+      ...payment,
+      id: `pay-${Date.now()}`,
+      paymentNumber,
+      createdAt: new Date().toISOString()
+    };
+
+    setDb((prev) => {
+      // Update Party Balance if applicable
+      let updatedParties = [...prev.parties];
+      if (payment.partyId) {
+        updatedParties = prev.parties.map(p => {
+          if (p.id === payment.partyId) {
+            const adjustment = payment.paymentType === 'Payment In' ? -payment.amount : payment.amount;
+            return { ...p, currentBalance: p.currentBalance + adjustment };
+          }
+          return p;
+        });
+      }
+
+      return {
+        ...prev,
+        payments: [newPayment, ...prev.payments],
+        parties: updatedParties,
+        settings: {
+          ...prev.settings,
+          numbering: {
+            ...prev.settings.numbering,
+            [payment.paymentType === 'Payment In' ? 'paymentReceipt' : 'paymentVoucher']: { ...config, currentNumber: config.currentNumber + 1 }
+          }
+        }
+      };
+    });
+    addAuditLog('Finance', `Recorded ${payment.paymentType} ${paymentNumber}`);
   };
 
   const handleFinaliseInvoice = (id: string) => {
@@ -566,7 +917,7 @@ export default function App() {
       let updatedItems = [...prev.items];
       target.items.forEach((line) => {
         updatedItems = updatedItems.map((it) => {
-          if (it.id === line.itemId && it.type !== 'Laboratory Service') {
+          if (it.id === line.itemId) {
             return { ...it, currentStock: Math.max(0, it.currentStock - line.quantity) };
           }
           return it;
@@ -646,162 +997,6 @@ export default function App() {
       const newState = { ...prev, invoices: updatedInvoices, parties: updatedParties };
       const audited = logAudit(newState, 'Cancel Invoice', 'Sales', id, inv.invoiceNumber);
       return notify(audited, 'Invoice Cancelled', `Sales invoice ${inv.invoiceNumber} has been revoked.`, 'warning');
-    });
-  };
-
-  // Lab Core (Samples) actions
-  const handleAddSample = (samplePayload: Omit<Sample, 'id' | 'sampleCode' | 'barcodeData' | 'status' | 'timeline' | 'createdAt'>) => {
-    setDb((prev) => {
-      const num = prev.samples.length + 1001;
-      const sampleCode = `SMP-${num}`;
-      const barcodeData = `BAR-${num}`;
-
-      const newSample: Sample = {
-        ...samplePayload,
-        id: `sample-${Date.now()}`,
-        sampleCode,
-        barcodeData,
-        status: 'Collected' as SampleStatus,
-        timeline: [
-          {
-            id: `cl-${Date.now()}`,
-            status: 'Received' as SampleStatus,
-            label: 'Intake Collected',
-            description: `Matrix received from customer in standard container.`,
-            user: currentUser?.name || 'Receptionist',
-            timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ')
-          }
-        ],
-        createdAt: new Date().toISOString().slice(0, 10)
-      };
-
-      // Also auto generate an Invoice draft if none exists for this diagnostic run
-      // Let's create an invoice immediately so receptionists can collect payments
-      const totalCost = samplePayload.requiredTestIds.reduce((sum, testId) => {
-        const itemObj = prev.items.find((it) => it.id === testId)!;
-        return sum + itemObj.sellingPrice;
-      }, 0);
-
-      const invoiceNumber = `INV-${String(prev.invoices.length + 1001)}`;
-      const associatedInvoice: Invoice = {
-        id: `inv-s-${Date.now()}`,
-        invoiceNumber,
-        partyId: samplePayload.partyId,
-        partyName: samplePayload.partyName,
-        invoiceDate: new Date().toISOString().slice(0, 10),
-        dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-        items: samplePayload.requiredTestIds.map((testId, idx) => {
-          const itemObj = prev.items.find((x) => x.id === testId)!;
-          return {
-            id: `invi-${Date.now()}-${idx}`,
-            itemId: itemObj.id,
-            itemName: itemObj.name,
-            itemCode: itemObj.code,
-            quantity: 1,
-            rate: itemObj.sellingPrice,
-            discountPercent: 0,
-            taxPercent: 18,
-            taxAmount: parseFloat((itemObj.sellingPrice * 0.18).toFixed(2)),
-            amount: parseFloat((itemObj.sellingPrice * 1.18).toFixed(2))
-          };
-        }),
-        subtotal: totalCost,
-        discountAmount: 0,
-        taxAmount: parseFloat((totalCost * 0.18).toFixed(2)),
-        additionalCharges: 0,
-        roundOff: 0,
-        total: parseFloat((totalCost * 1.18).toFixed(2)),
-        amountPaid: 0,
-        balanceDue: parseFloat((totalCost * 1.18).toFixed(2)),
-        status: 'Unpaid',
-        isLocked: false,
-        relatedSampleCode: sampleCode,
-        notes: 'LIMS linked diagnostic suite invoice',
-        terms: 'Balance due within 15 days of reporting.',
-        createdAt: new Date().toISOString().slice(0, 10),
-        updatedAt: new Date().toISOString().slice(0, 10)
-      };
-
-      // Increment customer outstanding
-      const updatedParties = prev.parties.map((p) =>
-        p.id === samplePayload.partyId ? { ...p, currentBalance: p.currentBalance + associatedInvoice.total } : p
-      );
-
-      const newState = {
-        ...prev,
-        samples: [...prev.samples, newSample],
-        invoices: [...prev.invoices, associatedInvoice],
-        parties: updatedParties
-      };
-
-      const audited = logAudit(newState, 'Sample Intake', 'Samples', newSample.id, newSample.sampleCode);
-      return notify(audited, 'Sample Registered', `Sample ${newSample.sampleCode} accepted. Invoiced as ${associatedInvoice.invoiceNumber}.`, 'success');
-    });
-  };
-
-  const handleUpdateSampleStatus = (id: string, status: SampleStatus, custodyNotes?: string) => {
-    setDb((prev) => {
-      const sample = prev.samples.find((x) => x.id === id)!;
-      const newLog = {
-        id: `cl-${Date.now()}`,
-        status,
-        label: `Status to: ${status}`,
-        description: custodyNotes || 'Custody sequence step complete.',
-        user: currentUser?.name || 'Lab Technician',
-        timestamp: new Date().toISOString().slice(0, 16).replace('T', ' ')
-      };
-
-      const updatedSamples = prev.samples.map((s) =>
-        s.id === id ? { ...s, status, timeline: [...s.timeline, newLog] } : s
-      );
-
-      const newState = { ...prev, samples: updatedSamples };
-      const audited = logAudit(newState, 'Update Custody', 'Samples', id, sample.sampleCode);
-      return notify(audited, 'Custody Step Complete', `Sample ${sample.sampleCode} is now ${status}.`, 'info');
-    });
-  };
-
-  const handleUpdateTestResults = (sampleId: string, testId: string, results: Partial<ParameterResult>[]) => {
-    // Simply post test observation to central timeline
-    setDb((prev) => {
-      const sampleObj = prev.samples.find((x) => x.id === sampleId)!;
-      return notify(prev, 'Worksheet Saved', `Saved observations results values for sample: ${sampleObj.sampleCode}`, 'success');
-    });
-  };
-
-  const handleApproveReport = (sampleId: string, reviewerName: string) => {
-    setDb((prev) => {
-      const s = prev.samples.find((x) => x.id === sampleId)!;
-      const newReport: LabReport = {
-        id: `rep-${Date.now()}`,
-        reportNumber: `REP-${String(prev.labReports.length + 1001)}`,
-        partyId: s.partyId,
-        partyName: s.partyName,
-        sampleId,
-        sampleCode: s.sampleCode,
-        sampleName: s.sampleName,
-        sampleType: s.sampleType,
-        receivedDate: s.receivedDate,
-        reportDate: new Date().toISOString().slice(0, 10),
-        reportTitle: 'MICROBIOLOGICAL TEST REPORT CERTIFICATE',
-        testAssignments: [],
-        disclaimer: 'NABL Iso accredited certification results apply exclusively to biological sample submitted.',
-        preparedBy: reviewerName,
-        reviewedBy: reviewerName,
-        approvedBy: reviewerName,
-        status: 'Approved' as LabReportStatus,
-        qrCodeData: `https://labbiz.in/verify/${s.sampleCode}`,
-        isLocked: true,
-        createdAt: new Date().toISOString().slice(0, 10),
-        updatedAt: new Date().toISOString().slice(0, 10)
-      };
-
-      // Set sample status to Report Ready
-      const updatedSamples = prev.samples.map((sm) => (sm.id === sampleId ? { ...sm, status: 'Report Ready' as SampleStatus } : sm));
-
-      const newState = { ...prev, labReports: [...prev.labReports, newReport], samples: updatedSamples };
-      const audited = logAudit(newState, 'Approve LIMS Report', 'Reports', newReport.id, newReport.reportNumber);
-      return notify(audited, 'NABL Certificate Approved', `Report certificate ${newReport.reportNumber} digitally sealed.`, 'success');
     });
   };
 
@@ -960,59 +1155,6 @@ export default function App() {
       return notify(audited, 'Purchase Recorded', `Material inventory increased and supplier invoice logged.`, 'success');
     });
   };
-
-  const handleAddEquipment = (equipPayload: any) => {
-    setDb((prev) => {
-      const equipmentCode = `EQP-${String(prev.equipment.length + 101)}`;
-      const newEquip: any = {
-        ...equipPayload,
-        id: `equip-${Date.now()}`,
-        equipmentCode,
-        lastCalibrationDate: new Date().toISOString().slice(0, 10),
-        nextCalibrationDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), // 6 months target
-        lastMaintenanceDate: new Date().toISOString().slice(0, 10),
-        nextMaintenanceDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) // 3 months target
-      };
-
-      const newState = {
-        ...prev,
-        equipment: [...prev.equipment, newEquip]
-      };
-
-      const audited = logAudit(newState, 'Register Equipment', 'Equipment', newEquip.id, equipmentCode);
-      return notify(audited, 'Asset Registered', `Analytical equipment ${newEquip.name} registered.`, 'success');
-    });
-  };
-
-  const handleUpdateEquipmentStatus = (id: string, status: any, notes?: string) => {
-    setDb((prev) => {
-      const updated = prev.equipment.map((eq) => {
-        if (eq.id === id) {
-          return {
-            ...eq,
-            status,
-            lastCalibrationDate: status === 'Available' ? new Date().toISOString().slice(0, 10) : eq.lastCalibrationDate,
-            nextCalibrationDate: status === 'Available' ? new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : eq.nextCalibrationDate,
-            notes: notes || eq.notes
-          };
-        }
-        return eq;
-      });
-
-      const matched = prev.equipment.find((x) => x.id === id);
-
-      const newState = {
-        ...prev,
-        equipment: updated
-      };
-
-      const audited = logAudit(newState, 'Update Calibration/Maintenance', 'Equipment', id, matched?.name || 'Asset');
-      return notify(audited, 'Asset Status Updated', `Instrument log updated successfully.`, 'success');
-    });
-  };
-
-
-  // --------------------------------------------------------
   // CONDITIONAL RENDER AREA
   // --------------------------------------------------------
 
@@ -1094,10 +1236,6 @@ export default function App() {
               parties={db.parties}
               items={db.items}
               invoices={db.invoices}
-              samples={db.samples}
-              testAssignments={db.testAssignments}
-              labReports={db.labReports}
-              equipment={db.equipment}
               accounts={db.accounts}
               onQuickAction={(actionId) => setActiveTab(actionId)}
               onNavigateToTab={(tabId) => setActiveTab(tabId)}
@@ -1136,11 +1274,26 @@ export default function App() {
               onAddQuotation={handleAddQuotation}
               onEditQuotation={handleEditQuotation}
               onConvertToInvoice={handleConvertToInvoice}
+              onReviseEstimate={handleReviseEstimate}
+              onConvertEstimateToFinal={handleConvertEstimateToFinal}
+              isAdmin={currentUser.isAdmin}
+              settings={db.settings}
+              onCheckPin={checkPin}
+              onLogCommunication={handleAddCommunicationLog}
+            />
+          )}
+          {activeTab === 'proforma' && (
+            <ProformaInvoicesView
+              proformaInvoices={db.proformaInvoices}
+              parties={db.parties}
+              items={db.items}
+              onAddProforma={handleAddProformaInvoice}
+              onUpdateProformaStatus={(id, status) => setDb(prev => ({ ...prev, proformaInvoices: prev.proformaInvoices.map(p => p.id === id ? { ...p, status } : p) }))}
+              onConvertToSalesInvoice={handleConvertProformaToInvoice}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
-
           {activeTab === 'sales' && (
             <SalesView
               invoices={db.invoices}
@@ -1149,12 +1302,80 @@ export default function App() {
               onAddInvoice={handleAddInvoice}
               onFinaliseInvoice={handleFinaliseInvoice}
               onRecordPayment={handleRecordPayment}
-              onCancelInvoice={handleCancelInvoice}
+              onCancelInvoice={(id) => checkPin('cancel_invoice', () => handleCancelInvoice(id))}
+              isAdmin={currentUser.isAdmin}
+              settings={db.settings}
+              onCheckPin={checkPin}
+              onLogCommunication={handleAddCommunicationLog}
+            />
+          )}
+          {activeTab === 'returns' && (
+            <SalesReturnsView
+              salesReturns={db.salesReturns}
+              parties={db.parties}
+              invoices={db.invoices}
+              onAddSalesReturn={handleAddSalesReturn}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
-
+          {activeTab === 'credit_notes' && (
+            <CreditNotesView
+              creditNotes={db.creditNotes}
+              parties={db.parties}
+              onIssueRefund={(id, amt, acc) => checkPin('record_refund', () => {
+                setDb(prev => ({
+                  ...prev,
+                  creditNotes: prev.creditNotes.map(cn => cn.id === id ? { ...cn, refundAmount: cn.refundAmount + amt, status: (cn.refundAmount + amt + cn.adjustedAmount >= cn.total) ? 'Fully Adjusted' : 'Issued' } : cn)
+                }));
+                addAuditLog('Finance', `Refunded ₹${amt} from Credit Note`);
+              })}
+              onAdjustAgainstInvoice={(id, invId, amt) => {
+                setDb(prev => ({
+                  ...prev,
+                  creditNotes: prev.creditNotes.map(cn => cn.id === id ? { ...cn, adjustedAmount: cn.adjustedAmount + amt, status: (cn.adjustedAmount + amt + cn.refundAmount >= cn.total) ? 'Fully Adjusted' : 'Issued' } : cn),
+                  invoices: prev.invoices.map(inv => inv.id === invId ? { ...inv, amountPaid: inv.amountPaid + amt, balanceDue: inv.balanceDue - amt, status: (inv.balanceDue - amt <= 0) ? 'Paid' : 'Partially Paid' } : inv)
+                }));
+                addAuditLog('Finance', `Adjusted ₹${amt} from Credit Note to Invoice`);
+              }}
+              isAdmin={currentUser.isAdmin}
+              settings={db.settings}
+            />
+          )}
+          {activeTab === 'procurement' && (
+            <ProcurementOrdersView
+              procurementOrders={db.procurementOrders}
+              parties={db.parties}
+              items={db.items}
+              onAddProcurement={handleAddProcurementOrder}
+              onUpdateProcurementStatus={(id, status) => setDb(prev => ({ ...prev, procurementOrders: prev.procurementOrders.map(o => o.id === id ? { ...o, status } : o) }))}
+              onConvertToPurchaseInvoice={(id) => {
+                const po = db.procurementOrders.find(p => p.id === id);
+                if (po) {
+                  handleAddPurchase({
+                    partyId: po.partyId,
+                    partyName: po.partyName,
+                    purchaseDate: new Date().toISOString().slice(0, 10),
+                    items: po.items,
+                    subtotal: po.subtotal,
+                    discountAmount: po.discountAmount,
+                    taxAmount: po.taxAmount,
+                    additionalCharges: po.additionalCharges,
+                    roundOff: po.roundOff,
+                    total: po.total,
+                    amountPaid: 0,
+                    balanceDue: po.total,
+                    status: 'Unpaid',
+                    notes: po.internalNotes || '',
+                    terms: po.termsAndConditions || ''
+                  });
+                  setDb(prev => ({ ...prev, procurementOrders: prev.procurementOrders.map(o => o.id === id ? { ...o, status: 'Fully Received' } : o) }));
+                }
+              }}
+              isAdmin={currentUser.isAdmin}
+              settings={db.settings}
+            />
+          )}
           {activeTab === 'purchases' && (
             <PurchasesView
               purchases={db.purchases}
@@ -1165,29 +1386,27 @@ export default function App() {
               settings={db.settings}
             />
           )}
-
-          {(activeTab === 'lims' || activeTab === 'samples' || activeTab === 'lab_tests' || activeTab === 'lab_reports') && (
-            <LabCoreView
-              samples={db.samples}
+          {activeTab === 'payment_in' && (
+            <PaymentsView
+              payments={db.payments}
               parties={db.parties}
-              items={db.items}
-              onAddSample={handleAddSample}
-              onUpdateSampleStatus={handleUpdateSampleStatus}
-              onUpdateTestResults={handleUpdateTestResults}
-              onApproveReport={handleApproveReport}
+              type="Payment In"
+              onAddPayment={handleAddPayment}
               isAdmin={currentUser.isAdmin}
-              initialTab={
-                activeTab === 'lab_tests'
-                  ? 'worksheets'
-                  : activeTab === 'lab_reports'
-                  ? 'reports'
-                  : 'samples'
-              }
               settings={db.settings}
             />
           )}
-
-          {(activeTab === 'finance' || activeTab === 'accounts' || activeTab === 'payments' || activeTab === 'expenses') && (
+          {activeTab === 'payment_out' && (
+            <PaymentsView
+              payments={db.payments}
+              parties={db.parties}
+              type="Payment Out"
+              onAddPayment={(pay) => checkPin('payment_out', () => handleAddPayment(pay))}
+              isAdmin={currentUser.isAdmin}
+              settings={db.settings}
+            />
+          )}
+          {(activeTab === 'accounts' || activeTab === 'expenses') && (
             <FinanceView
               expenses={db.expenses}
               payments={db.payments}
@@ -1195,22 +1414,10 @@ export default function App() {
               onAddExpense={handleAddExpense}
               onApproveExpense={handleApproveExpense}
               isAdmin={currentUser.isAdmin}
-              initialTab={
-                activeTab === 'expenses'
-                  ? 'expenses'
-                  : activeTab === 'payments'
-                  ? 'payments'
-                  : 'accounts'
-              }
-            />
-          )}
-
-          {activeTab === 'equipment' && (
-            <EquipmentView
-              equipment={db.equipment}
-              onAddEquipment={handleAddEquipment}
-              onUpdateEquipmentStatus={handleUpdateEquipmentStatus}
-              isAdmin={currentUser.isAdmin}
+              settings={db.settings}
+              initialTab={activeTab === 'expenses' ? 'expenses' : 'expenses'}
+              onCheckPin={checkPin}
+              onLogCommunication={handleAddCommunicationLog}
             />
           )}
 
@@ -1220,26 +1427,11 @@ export default function App() {
               purchases={db.purchases}
               expenses={db.expenses}
               payments={db.payments}
-              samples={db.samples}
               items={db.items}
               parties={db.parties}
+              quotations={db.quotations}
               isAdmin={currentUser.isAdmin}
-            />
-          )}
-
-          {activeTab === 'notifications' && (
-            <NotificationsView
-              notifications={db.notifications}
-              onMarkRead={handleMarkRead}
-              onMarkAllRead={handleMarkAllRead}
-              isAdmin={currentUser.isAdmin}
-            />
-          )}
-
-          {activeTab === 'audit_logs' && (
-            <AuditLogsView
-              auditLogs={db.auditLogs}
-              isAdmin={currentUser.isAdmin}
+              samples={[]}
             />
           )}
 
@@ -1253,11 +1445,19 @@ export default function App() {
               onUpdateUser={setCurrentUser}
             />
           )}
-
-          {activeTab === 'staff' && (
-            <StaffRolesView isAdmin={currentUser.isAdmin} />
-          )}
         </main>
+        <SecurityPinDialog
+          isOpen={!!pinAction}
+          onClose={() => setPinAction(null)}
+          onSuccess={() => {
+            if (pinAction) {
+              pinAction.onConfirm();
+              setPinAction(null);
+            }
+          }}
+          pinHash={db.settings.security.transactionPinHash}
+          actionName={pinAction?.name || ''}
+        />
       </div>
     </div>
   );

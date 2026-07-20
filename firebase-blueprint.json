@@ -25,8 +25,8 @@
       "properties": {
         "ownerUid": { "type": "string" },
         "legalName": { "type": "string" },
-        "displayLabName": { "type": "string" },
-        "labName": { "type": "string" },
+        "displayCompanyName": { "type": "string" },
+        "companyName": { "type": "string" },
         "businessType": { "type": "string" },
         "industry_sector": { "type": "string" },
         "address1": { "type": "string" },

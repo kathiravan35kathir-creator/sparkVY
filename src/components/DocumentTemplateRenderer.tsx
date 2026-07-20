@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export interface DocumentTemplateRendererProps {
-  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'labReport' | 'sampleLabel' | 'report' | 'sample_label';
+  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'transaction_list' | 'report' | 'sample_label' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher';
   data?: any; // The document object
   settings: AppSettings;
   customizationOverride?: any;
@@ -33,6 +33,13 @@ const getDemoData = (type: string, company: any) => {
   const dueStr = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   switch (type) {
+    case 'transaction_list':
+      return {
+        title: 'Transaction Register',
+        dateRange: 'Full History',
+        columns: ['Date', 'Number', 'Party', 'Total', 'Paid', 'Balance'],
+        rows: []
+      };
     case 'invoice':
       return {
         invoiceNumber: 'INV/2026/1024',
@@ -41,13 +48,12 @@ const getDemoData = (type: string, company: any) => {
         partyName: 'Apex Diagnostic Distributors Ltd',
         partyGst: '29AAACD4912K1Z9',
         partyAddress: 'Plot 42-C, Bidadi Industrial Area, Ramanagara, Karnataka - 562109',
-        relatedSampleCode: 'SMP/2026/0491',
         relatedQuotationNumber: 'QT/2026/0184',
         status: 'Unpaid',
         items: [
-          { id: '1', itemName: 'Water Potability Microbiological Test Suite', itemCode: 'SRV-001', hsn: '998346', quantity: 2, rate: 1500, discountPercent: 5, taxPercent: 18, taxAmount: 513, amount: 3363 },
-          { id: '2', itemName: 'Heavy Metals Contaminant Analysis (ICP-MS)', itemCode: 'SRV-024', hsn: '998346', quantity: 1, rate: 4500, discountPercent: 0, taxPercent: 18, taxAmount: 810, amount: 5310 },
-          { id: '3', itemName: 'NABL Sterile Sample Carrier Box (Small)', itemCode: 'EQ-044', hsn: '392310', quantity: 1, rate: 850, discountPercent: 10, taxPercent: 12, taxAmount: 91.8, amount: 856.8 }
+          { id: '1', itemName: 'Consulting Services Tier 1', itemCode: 'SRV-001', hsn: '998346', quantity: 2, rate: 1500, discountPercent: 5, taxPercent: 18, taxAmount: 513, amount: 3363 },
+          { id: '2', itemName: 'Business Strategy Workshop', itemCode: 'SRV-024', hsn: '998346', quantity: 1, rate: 4500, discountPercent: 0, taxPercent: 18, taxAmount: 810, amount: 5310 },
+          { id: '3', itemName: 'Office Equipment Lease (Small)', itemCode: 'EQ-044', hsn: '392310', quantity: 1, rate: 850, discountPercent: 10, taxPercent: 12, taxAmount: 91.8, amount: 856.8 }
         ],
         subtotal: 7650,
         discountAmount: 235,
@@ -57,28 +63,28 @@ const getDemoData = (type: string, company: any) => {
         amountPaid: 3000,
         balanceDue: 5979.8,
         terms: '1. Payment is due within 15 days of invoice date.\n2. Interest of 1.5% per month will be charged on overdue payments.\n3. Goods once sold cannot be returned.',
-        notes: 'Includes expedited lab courier logistics fees and custom sample preservation kit.'
+        notes: 'Includes expedited courier logistics fees.'
       };
     case 'quotation':
       return {
         quotationNumber: 'QT/2026/0184',
         quotationDate: dateStr,
         expiryDate: dueStr,
-        partyName: 'BioShield Pharma Solutions',
+        partyName: 'BioShield Solutions',
         partyGst: '29AAAPB8271M1Z5',
         partyAddress: 'Block F, Brigade Tech Park, Whitefield, Bangalore, KA - 560066',
         status: 'Sent',
         items: [
-          { id: '1', itemName: 'In-Vitro Biocompatibility Cytotoxicity Assay', itemCode: 'SRV-055', hsn: '998346', quantity: 1, rate: 12500, discountPercent: 10, taxPercent: 18, taxAmount: 2025, amount: 13275 },
-          { id: '2', itemName: 'Sterility Validation Testing (USP 71)', itemCode: 'SRV-091', hsn: '998346', quantity: 3, rate: 3500, discountPercent: 0, taxPercent: 18, taxAmount: 1890, amount: 12390 }
+          { id: '1', itemName: 'Enterprise Audit Assay', itemCode: 'SRV-055', hsn: '998346', quantity: 1, rate: 12500, discountPercent: 10, taxPercent: 18, taxAmount: 2025, amount: 13275 },
+          { id: '2', itemName: 'Business Validation Testing', itemCode: 'SRV-091', hsn: '998346', quantity: 3, rate: 3500, discountPercent: 0, taxPercent: 18, taxAmount: 1890, amount: 12390 }
         ],
         subtotal: 23000,
         discountAmount: 1250,
         taxAmount: 3915,
         additionalCharges: 400,
         total: 26065,
-        terms: '1. Quotation validity is exactly 30 days from document issue.\n2. 50% advance mobilization fee required prior to test worksheet setup.',
-        notes: 'Estimated turnaround time is 7 working days from sample intake validation.'
+        terms: '1. Quotation validity is exactly 30 days from document issue.\n2. 50% advance fee required prior to setup.',
+        notes: 'Estimated turnaround time is 7 working days.'
       };
     case 'receipt':
       return {
@@ -94,63 +100,20 @@ const getDemoData = (type: string, company: any) => {
       return {
         purchaseNumber: 'PUR/2026/0082',
         purchaseDate: dateStr,
-        partyName: 'HiMedia Reagents & Chemicals Pvt Ltd',
+        partyName: 'HiMedia Chemicals Pvt Ltd',
         partyGst: '27AAACH0291K1Z2',
         partyAddress: 'A-516, Swastik Chambers, Chembur, Mumbai, MH - 400071',
         status: 'Ordered',
         items: [
-          { id: '1', itemName: 'MacConkey Agar Media dehydrated (500g)', itemCode: 'RG-102', hsn: '382100', quantity: 5, rate: 1240, discountPercent: 15, taxPercent: 18, taxAmount: 948.6, amount: 6218.6 },
-          { id: '2', itemName: 'Disposable Sterile Petri Dishes 90mm (Box/500)', itemCode: 'RG-344', hsn: '392690', quantity: 2, rate: 2200, discountPercent: 10, taxPercent: 18, taxAmount: 712.8, amount: 4672.8 }
+          { id: '1', itemName: 'Office Supplies Bulk Pack', itemCode: 'RG-102', hsn: '382100', quantity: 5, rate: 1240, discountPercent: 15, taxPercent: 18, taxAmount: 948.6, amount: 6218.6 },
+          { id: '2', itemName: 'Consumables Kit (Box/500)', itemCode: 'RG-344', hsn: '392690', quantity: 2, rate: 2200, discountPercent: 10, taxPercent: 18, taxAmount: 712.8, amount: 4672.8 }
         ],
         subtotal: 10600,
         discountAmount: 1370,
         taxAmount: 1661.4,
         total: 10891.4,
         balanceDue: 10891.4,
-        terms: '1. Deliver only fresh stock with expiry date > 18 months.\n2. Supply technical validation certificates alongside MSDS data.'
-      };
-    case 'labReport':
-    case 'report':
-      return {
-        reportNumber: 'REP/2026/1209',
-        reportDate: dateStr,
-        sampleCode: 'SMP/2026/0491',
-        sampleName: 'Industrial Effluent Water Sample',
-        sampleType: 'Liquid Effluent',
-        partyName: 'Apex Diagnostic Distributors Ltd',
-        receivedDate: dateStr,
-        status: 'Approved',
-        preparedBy: 'Dr. Alan Turing (Senior Microbiologist)',
-        reviewedBy: 'Sarah Jenkins (Quality Manager)',
-        approvedBy: 'Dr. Dev Anand (Lab Director)',
-        disclaimer: 'This analytical report applies strictly to the sample collected and presented by the customer. Test certified under NABL ISO/IEC 17025 accredited standard protocols.',
-        testAssignments: [
-          {
-            testName: 'Microbiological Analysis Suite',
-            parameters: [
-              { name: 'Total Coliform Count', result: '180', unit: 'CFU/100ml', referenceRange: '< 50 (Standard Industrial)', status: 'High', method: 'IS 16225 Membrane Filtration' },
-              { name: 'Escherichia coli', result: 'Detected', unit: 'Presence/100ml', referenceRange: 'Absent (Standard Industrial)', status: 'Abnormal', method: 'IS 5887 Part 1' },
-              { name: 'Salmonella species', result: 'Absent', unit: 'Presence/250ml', referenceRange: 'Absent (Standard Industrial)', status: 'Normal', method: 'ISO 6579' }
-            ]
-          },
-          {
-            testName: 'Physico-Chemical Validation',
-            parameters: [
-              { name: 'pH Value at 25°C', result: '8.42', unit: 'pH Units', referenceRange: '6.50 - 8.50', status: 'Normal', method: 'APHA 4500-H+ B' },
-              { name: 'Total Dissolved Solids (TDS)', result: '1450', unit: 'mg/L', referenceRange: '< 2100 (Standard Industrial)', status: 'Normal', method: 'APHA 2540 C' }
-            ]
-          }
-        ]
-      };
-    case 'sampleLabel':
-    case 'sample_label':
-      return {
-        sampleCode: 'SMP/2026/0491',
-        sampleName: 'Industrial Effluent Water Sample',
-        sampleType: 'Liquid Effluent',
-        partyName: 'Apex Diagnostic Distributors Ltd',
-        receivedDate: dateStr,
-        barcodeData: 'SMP/2026/0491'
+        terms: '1. Deliver only fresh stock.\n2. Supply technical validation certificates.'
       };
     default:
       return {};
@@ -167,10 +130,7 @@ export default function DocumentTemplateRenderer({
   const company = settings.company;
   
   // Normalize types from other calling views
-  const normType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'labReport' | 'sampleLabel' = 
-    documentType === 'report' ? 'labReport' :
-    documentType === 'sample_label' ? 'sampleLabel' :
-    (documentType as any);
+  const normType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'transaction_list' = (documentType as any);
 
   const docData = data || getDemoData(normType, company);
 
@@ -180,14 +140,13 @@ export default function DocumentTemplateRenderer({
     quotation: settings.print.quotationTemplate || 'corporate_blue',
     receipt: settings.print.receiptTemplate || 'receipt_pro',
     purchase: settings.print.purchaseTemplate || 'tally_classic',
-    labReport: settings.print.labReportTemplate || 'premium_lab',
-    sampleLabel: settings.print.sampleLabelTemplate || 'sample_label'
+    transaction_list: 'professional_list'
   };
 
   let docTemplateId = customizationOverride?.templateId || defaultTemplateMap[normType];
   if (docTemplateId && docTemplateId.startsWith('custom_')) {
     try {
-      const saved = localStorage.getItem('labbiz_duplicated_templates');
+      const saved = localStorage.getItem('bizops_duplicated_templates');
       if (saved) {
         const customTemplates = JSON.parse(saved);
         const match = customTemplates.find((t: any) => t.id === docTemplateId);
@@ -297,8 +256,8 @@ export default function DocumentTemplateRenderer({
     if (docTemplateId === 'retail_invoice') documentTitle = 'Retail Cash Memo';
     if (docTemplateId === 'wholesale_invoice') documentTitle = 'Wholesale Tax Invoice';
   } else if (normType === 'quotation') {
-    documentTitle = 'Quotation Proposal';
-    if (docTemplateId === 'business_proposal') documentTitle = 'Business proposal';
+    documentTitle = docData.stage === 'Estimate' ? 'Estimate Quotation' : 'Final Quotation';
+    if (docTemplateId === 'business_proposal') documentTitle = 'Detailed Business Proposal';
     if (docTemplateId === 'corporate_estimate') documentTitle = 'Commercial Estimate';
   } else if (normType === 'receipt') {
     documentTitle = 'Official Payment Receipt';
@@ -306,74 +265,94 @@ export default function DocumentTemplateRenderer({
     documentTitle = 'Purchase Order';
     if (docTemplateId === 'supplier_copy') documentTitle = 'Purchase Order (Supplier Copy)';
     if (docTemplateId === 'warehouse_copy') documentTitle = 'Purchase Requisition (Warehouse Copy)';
-  } else if (normType === 'labReport') {
-    documentTitle = docData.reportTitle || 'Laboratory Test Report';
-    if (docTemplateId === 'research_report') documentTitle = 'Research & Technical Report';
-    if (docTemplateId === 'iso_format') documentTitle = 'NABL Accredited Certificate of Test';
-  } else if (normType === 'sampleLabel') {
-    documentTitle = 'LIMS Sample Specimen';
+  } else if (normType === 'transaction_list') {
+    documentTitle = docData.title || 'Transaction Register';
   }
 
   // -----------------------------------------------------------------
-  // SPECIFIC SUB-RENDERS FOR LAB LABELS (Thermal/Small format)
+  // RENDER TRANSACTION LIST (Report List)
   // -----------------------------------------------------------------
-  if (normType === 'sampleLabel') {
+  if (normType === 'transaction_list') {
     return (
       <div
         id="printed-document-root"
-        className={`bg-white border-2 border-slate-900 rounded-lg p-3 max-w-sm mx-auto flex flex-col items-center justify-between text-slate-900 font-mono text-center relative overflow-hidden`}
-        style={{ width: paperSize === '80mm' ? '280px' : '320px', minHeight: '180px' }}
+        className={`bg-white text-slate-800 shadow-sm relative border border-slate-100 ${fontClass} ${baseTextSize} ${marginClass} flex flex-col justify-between`}
+        style={{
+          width: '100%',
+          maxWidth: '820px',
+          minHeight: '1050px',
+          margin: '0 auto',
+        }}
       >
-        <div className="w-full border-b border-dashed border-slate-300 pb-1 mb-1 flex justify-between items-center text-[9px]">
-          <span className="font-black uppercase text-slate-500">LabBiz Specimen Label</span>
-          <span className="font-bold text-blue-600">{docData.receivedDate}</span>
+        <div>
+          <div className="border-b-2 border-slate-900 pb-4 mb-4 flex justify-between items-start">
+            <div>
+              <h1 className="font-extrabold text-base text-slate-900 tracking-wide uppercase">{company.companyName}</h1>
+              <p className="text-[10px] text-slate-500">{company.address}</p>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{documentTitle}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">Date Range</p>
+              <p className="text-xs font-bold text-slate-800 font-mono">{docData.dateRange}</p>
+              <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold">Printed: {new Date().toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-[9px] font-black uppercase text-slate-400 bg-slate-50 tracking-wider">
+                  <th className={`${tablePadding} w-8`}>#</th>
+                  {docData.columns.map((col: string) => (
+                    <th key={col} className={`${tablePadding}`}>{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-150 text-[10px]">
+                {docData.rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={docData.columns.length + 1} className="py-12 text-center text-slate-400 font-medium italic">
+                      No records found for the selected criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  docData.rows.map((row: any[], idx: number) => (
+                    <tr key={idx}>
+                      <td className={`${tablePadding} font-mono text-slate-400`}>{idx + 1}</td>
+                      {row.map((cell: any, cidx: number) => (
+                        <td key={cidx} className={`${tablePadding} ${typeof cell === 'number' ? 'text-right font-mono' : ''}`}>
+                          {typeof cell === 'number' ? `₹${cell.toLocaleString()}` : cell}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                ))}
+              </tbody>
+              {docData.totals && (
+                <tfoot>
+                  <tr className="bg-slate-50 border-t-2 border-slate-900 font-black text-slate-950">
+                    <td className={tablePadding}></td>
+                    {docData.totals.map((t: any, tidx: number) => (
+                      <td key={tidx} className={`${tablePadding} ${typeof t === 'number' ? 'text-right font-mono' : ''}`}>
+                        {typeof t === 'number' ? `₹${t.toLocaleString()}` : t}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
         </div>
 
-        <div className="font-sans font-black text-xs text-slate-800 break-words w-full px-1">
-          {docData.sampleName}
-        </div>
-        <div className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
-          Type: {docData.sampleType}
-        </div>
-
-        {/* Dynamic Template QR / Barcode style */}
-        <div className="my-1.5 flex flex-col items-center">
-          {docTemplateId === 'barcode_label' ? (
-            // Barcode Layout
-            <div className="flex items-center space-x-0.5 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
-              <div className="w-0.5 h-6 bg-slate-900" />
-              <div className="w-1 h-6 bg-slate-900" />
-              <div className="w-0.5 h-6 bg-slate-900" />
-              <div className="w-1.5 h-6 bg-slate-900" />
-              <div className="w-0.5 h-6 bg-slate-900" />
-              <div className="w-2 h-6 bg-slate-900" />
-              <div className="w-0.5 h-6 bg-slate-900" />
-              <div className="w-1 h-6 bg-slate-900" />
-              <div className="w-0.5 h-6 bg-slate-900" />
-            </div>
-          ) : docTemplateId === 'warehouse_label' ? (
-            <div className="flex items-center justify-between space-x-3 text-[9px] bg-amber-50 p-1.5 border border-amber-200 text-amber-800 rounded">
-              <AlertCircle size={14} className="text-amber-600 animate-pulse shrink-0" />
-              <span className="font-black uppercase tracking-wider">Storage Slot: COLD-ROOM 1A</span>
-            </div>
-          ) : (
-            // Default QR code Layout
-            <div className="p-1 bg-slate-50 rounded border border-slate-200">
-              <QrCode size={32} className="text-slate-800" />
-            </div>
-          )}
-          <span className="text-[10px] font-black tracking-widest mt-1 text-slate-800">{docData.sampleCode}</span>
-        </div>
-
-        <div className="text-[9px] text-slate-400 font-sans tracking-wide truncate max-w-full">
-          Ref: {docData.partyName}
+        <div className="text-center text-[9px] text-slate-400 mt-8 pt-2 border-t border-slate-100 uppercase tracking-wider font-semibold">
+          Generated via BizOps Cloud ERP • {company.legalName || company.companyName}
         </div>
       </div>
     );
   }
 
   // -----------------------------------------------------------------
-  // RENDER FULL SIZE DOCUMENTS (Invoices, Quotations, Lab Reports, etc.)
+  // RENDER FULL SIZE DOCUMENTS (Invoices, Quotations, etc.)
   // -----------------------------------------------------------------
   return (
     <div
@@ -394,12 +373,24 @@ export default function DocumentTemplateRenderer({
         </div>
       )}
 
+      {/* Estimate Watermark */}
+      {normType === 'quotation' && docData.stage === 'Estimate' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center opacity-[0.03] pointer-events-none z-0 overflow-hidden text-slate-900 rotate-[-45deg]">
+          <p className="text-[120px] font-black uppercase tracking-tighter leading-none">
+            ESTIMATE
+          </p>
+          <p className="text-[40px] font-bold uppercase tracking-widest leading-none mt-4">
+            Approximate Pricing Only
+          </p>
+        </div>
+      )}
+
       <div>
         {/* =========================================================================
             HEADER STYLE OVERRIDES FOR ALL 32 TEMPLATES
             ========================================================================= */}
         
-        {/* RETRO TALLY BOX LAYOUT (tally_classic / tally_gst) */}
+                /* RETRO TALLY BOX LAYOUT (tally_classic / tally_gst) */
         {(docTemplateId === 'tally_classic' || docTemplateId === 'tally_gst') ? (
           <div className="border-2 border-slate-900 p-4 mb-4 font-mono">
             <div className="text-center border-b border-slate-900 pb-2 mb-3">
@@ -408,7 +399,7 @@ export default function DocumentTemplateRenderer({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
               <div className="sm:col-span-7 space-y-1">
-                <h1 className="font-extrabold text-sm text-slate-950 uppercase">{company.legalName || company.labName}</h1>
+                <h1 className="font-extrabold text-sm text-slate-950 uppercase">{company.legalName || company.companyName}</h1>
                 {showAddress && <p className="text-[10px] text-slate-600 leading-tight">{company.address}</p>}
                 <div className="text-[10px] text-slate-500 pt-0.5">
                   {showPhone && <span>PHONE: {company.primaryPhone} </span>}
@@ -417,13 +408,10 @@ export default function DocumentTemplateRenderer({
                 </div>
               </div>
               <div className="sm:col-span-5 sm:border-l sm:border-slate-300 sm:pl-4 space-y-0.5 text-[10px]">
-                <p className="font-bold text-slate-950">Voucher No: <span className="text-xs">{docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber || docData.reportNumber}</span></p>
-                <p>Dated: <strong>{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate || docData.reportDate}</strong></p>
+                <p className="font-bold text-slate-950">Voucher No: <span className="text-xs">{docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}</span></p>
+                <p>Dated: <strong>{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
                 {(docData.dueDate || docData.expiryDate) && (
                   <p>Settlement Period: <strong>{docData.dueDate || docData.expiryDate}</strong></p>
-                )}
-                {docData.relatedSampleCode && (
-                  <p>LIMS Batch No: <strong className="text-blue-600">{docData.relatedSampleCode}</strong></p>
                 )}
               </div>
             </div>
@@ -433,7 +421,7 @@ export default function DocumentTemplateRenderer({
           <div className="border-b border-slate-200 pb-4 mb-5">
             <div className="flex flex-col sm:flex-row justify-between items-baseline mb-3">
               <h1 className="font-serif font-black text-xl tracking-tight text-slate-900 uppercase">
-                {company.displayLabName || company.labName}
+                {company.displayCompanyName || company.companyName}
               </h1>
               <span className="text-xs font-light tracking-widest text-slate-400 uppercase">
                 {documentTitle}
@@ -450,9 +438,9 @@ export default function DocumentTemplateRenderer({
               </div>
               <div className="sm:text-right space-y-0.5">
                 <p className="text-xs font-bold text-slate-900">
-                  REFERENCE: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber || docData.reportNumber}
+                  REFERENCE: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
                 </p>
-                <p>Issued: <span className="font-mono text-slate-700">{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate || docData.reportDate}</span></p>
+                <p>Issued: <span className="font-mono text-slate-700">{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</span></p>
               </div>
             </div>
           </div>
@@ -471,7 +459,7 @@ export default function DocumentTemplateRenderer({
                   />
                 )}
                 <div>
-                  <h1 className="font-black text-base tracking-wide uppercase text-slate-900">{company.displayLabName || company.labName}</h1>
+                  <h1 className="font-black text-base tracking-wide uppercase text-slate-900">{company.displayCompanyName || company.companyName}</h1>
                   <p className="text-[9px] font-black tracking-widest uppercase text-slate-400" style={primaryText}>
                     {company.businessType} • REG CO: {company.cin || 'U12000KA2026PTC'}
                   </p>
@@ -506,25 +494,25 @@ export default function DocumentTemplateRenderer({
                 {documentTitle}
               </span>
               <p className="font-mono font-bold text-slate-800 text-xs">
-                NO: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber || docData.reportNumber}
+                NO: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
               </p>
               <div className="text-[10px] text-slate-500 mt-1 font-mono">
-                <p>Dated: <strong>{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate || docData.reportDate}</strong></p>
+                <p>Dated: <strong>{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
               </div>
             </div>
           </div>
         ) : (
-          /* STANDARD HIGH CONTRAST MODERN HEADER (Vyapar, Professional Orange, GST Detailed, Lab Report etc) */
+          /* STANDARD HIGH CONTRAST MODERN HEADER (Vyapar, Professional Orange, GST Detailed, etc) */
           <div className="border-b-2 border-slate-900 pb-4 mb-4 flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
               <div className="flex items-center space-x-2">
                 <div className="text-white px-2.5 py-1 rounded-md font-black text-sm shrink-0 uppercase tracking-widest" style={primaryBg}>
-                  {company.labName?.slice(0, 2) || 'LB'}
+                  {company.companyName?.slice(0, 2) || 'BO'}
                 </div>
                 <div>
-                  <h1 className="font-extrabold text-base text-slate-900 tracking-wide uppercase">{company.labName}</h1>
+                  <h1 className="font-extrabold text-base text-slate-900 tracking-wide uppercase">{company.companyName}</h1>
                   <p className="text-[9px] text-slate-400 font-bold tracking-wider uppercase">
-                    LIMS CLINICAL SYSTEM {company.gstNumber ? `• GSTIN: ${company.gstNumber}` : ''}
+                    BIZOPS ENTERPRISE SYSTEM {company.gstNumber ? `• GSTIN: ${company.gstNumber}` : ''}
                   </p>
                 </div>
               </div>
@@ -537,10 +525,10 @@ export default function DocumentTemplateRenderer({
             <div className="sm:text-right mt-1 sm:mt-0">
               <h2 className="text-base font-black text-slate-950 tracking-wide uppercase" style={primaryText}>{documentTitle}</h2>
               <p className="text-[11px] font-bold text-slate-700 font-mono mt-0.5">
-                DOC ID: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber || docData.reportNumber}
+                DOC ID: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
               </p>
               <div className="text-[10px] text-slate-400 mt-1 font-medium font-mono">
-                <p>Date: <strong className="text-slate-800">{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate || docData.reportDate}</strong></p>
+                <p>Date: <strong className="text-slate-800">{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
               </div>
             </div>
           </div>
@@ -568,18 +556,9 @@ export default function DocumentTemplateRenderer({
 
             <div className="sm:col-span-5 p-3 bg-slate-50 rounded-lg border border-slate-200 flex flex-col justify-between">
               <div className="space-y-1 text-[10px] text-slate-600">
-                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">LIMS Reference Logs:</h4>
-                {docData.relatedSampleCode && (
-                  <p className="flex justify-between"><span>Linked Sample UID:</span> <strong className="font-mono text-slate-800">{docData.relatedSampleCode}</strong></p>
-                )}
+                <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">BIZOPS Reference Logs:</h4>
                 {docData.relatedQuotationNumber && (
                   <p className="flex justify-between"><span>Against Quotation Ref:</span> <strong className="font-mono text-slate-800">{docData.relatedQuotationNumber}</strong></p>
-                )}
-                {docData.sampleCode && (
-                  <p className="flex justify-between"><span>Sample Specimen UID:</span> <strong className="font-mono text-slate-800">{docData.sampleCode}</strong></p>
-                )}
-                {docData.sampleType && (
-                  <p className="flex justify-between"><span>Sample Physical Matrix:</span> <strong className="text-slate-800">{docData.sampleType}</strong></p>
                 )}
               </div>
               <div className="pt-2 text-right">
@@ -633,7 +612,7 @@ export default function DocumentTemplateRenderer({
               <thead>
                 <tr className="border-b border-slate-200 text-[9px] font-black uppercase text-slate-400 bg-slate-50 tracking-wider">
                   <th className={`${tablePadding} w-8`}>#</th>
-                  <th className={tablePadding}>Assay Service / Item Code</th>
+                  <th className={tablePadding}>Service / Item Description</th>
                   {showHsnSac && <th className={`${tablePadding} text-center w-20`}>HSN/SAC</th>}
                   <th className={`${tablePadding} text-center w-12`}>Qty</th>
                   <th className={`${tablePadding} text-right w-20`}>Rate</th>
@@ -664,62 +643,6 @@ export default function DocumentTemplateRenderer({
         )}
 
         {/* =========================================================================
-            TABLE OF CLINICAL ASSAYS (LAB REPORTS)
-            ========================================================================= */}
-        {normType === 'labReport' && docData.testAssignments && (
-          <div className="space-y-4 mb-5">
-            <div className="text-white px-3 py-1.5 rounded flex justify-between items-center text-[9px] font-black uppercase tracking-wider" style={primaryBg}>
-              <span>Chemical & Biological Parameter Results Certification</span>
-              <span className="text-blue-200 font-mono">NABL ISO/IEC 17025 Worksheets</span>
-            </div>
-
-            {docData.testAssignments.map((test: any, tIdx: number) => (
-              <div key={tIdx} className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-xs">
-                <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 flex justify-between items-center">
-                  <span className="font-extrabold text-xs text-slate-800 uppercase tracking-wide">{test.testName}</span>
-                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded font-black uppercase text-[8px] border border-emerald-200">
-                    NABL ACCREDITED PARAMETER
-                  </span>
-                </div>
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-[8px] font-black text-slate-400 uppercase bg-slate-50/50">
-                      <th className="py-1.5 px-3">#</th>
-                      <th className="py-1.5 px-3">Analyte Tested</th>
-                      <th className="py-1.5 px-3 text-center">Observed Value</th>
-                      <th className="py-1.5 px-3">Unit</th>
-                      <th className="py-1.5 px-3">Regulatory Reference Limits</th>
-                      <th className="py-1.5 px-3">Testing Standard Protocols</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-150 text-[10.5px] text-slate-700">
-                    {test.parameters.map((param: any, pIdx: number) => {
-                      const isHigh = param.status === 'High' || param.status === 'Abnormal';
-                      return (
-                        <tr key={pIdx}>
-                          <td className="py-1.5 px-3 font-mono text-[9px] text-slate-400">{pIdx + 1}</td>
-                          <td className="py-1.5 px-3 font-bold text-slate-900">{param.name}</td>
-                          <td className="py-1.5 px-3 text-center">
-                            <span className={`px-2 py-0.5 rounded font-bold font-mono ${
-                              isHigh ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-slate-50 text-slate-800'
-                            }`}>
-                              {param.result}
-                            </span>
-                          </td>
-                          <td className="py-1.5 px-3 font-medium text-slate-600">{param.unit}</td>
-                          <td className="py-1.5 px-3 font-semibold text-slate-500">{param.referenceRange}</td>
-                          <td className="py-1.5 px-3 text-slate-400 italic font-mono text-[9px]">{param.method}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* =========================================================================
             TOTAL CALCULATIONS CONTAINER (INVOICES / QUOTATIONS / PURCHASES)
             ========================================================================= */}
         {['invoice', 'quotation', 'purchase'].includes(normType) && (
@@ -728,10 +651,10 @@ export default function DocumentTemplateRenderer({
             <div className="flex-1 space-y-3 text-[11px] w-full">
               {showBankDetails && (
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1.5">
-                  <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest pb-1 border-b border-slate-150">LIMS Remittance Settlement Bank:</h5>
+                  <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest pb-1 border-b border-slate-150">Remittance Settlement Bank:</h5>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-slate-600 font-medium">
                     <p>Bank: <strong className="text-slate-800">{settings.bank?.bankName || 'HDFC Bank'}</strong></p>
-                    <p>Account Holder: <strong className="text-slate-800">{settings.bank?.accountHolderName || company.labName}</strong></p>
+                    <p>Account Holder: <strong className="text-slate-800">{settings.bank?.accountHolderName || company.companyName}</strong></p>
                     <p>A/C Number: <strong className="text-slate-800 font-mono">{settings.bank?.accountNumber || '50200049123849'}</strong></p>
                     <p>IFSC: <strong className="text-slate-800 font-mono">{settings.bank?.ifsc || 'HDFC0000140'}</strong></p>
                   </div>
@@ -829,7 +752,7 @@ export default function DocumentTemplateRenderer({
                 <div className="text-[9px] text-left">
                   <p className="font-black text-slate-800 uppercase tracking-wider">UPI SCAN TO PAY</p>
                   <p className="font-mono text-slate-500 font-bold">{settings.bank.upiId}</p>
-                  <p className="text-[8px] text-slate-400 font-bold">Acc: {settings.bank.upiDisplayName || company.labName}</p>
+                  <p className="text-[8px] text-slate-400 font-bold">Acc: {settings.bank.upiDisplayName || company.companyName}</p>
                 </div>
               </div>
             )}
@@ -851,11 +774,11 @@ export default function DocumentTemplateRenderer({
               <>
                 <div className="h-8 flex items-center justify-center">
                   <div className="border border-dashed border-blue-400/80 bg-blue-50/50 text-blue-600 rounded-sm font-black text-[8px] tracking-widest px-1.5 py-0.5 uppercase rotate-[-2deg]">
-                    ★ LabBiz Secured ★
+                    ★ BizOps Secured ★
                   </div>
                 </div>
                 <div className="border-t border-slate-300 w-full pt-1 text-[8.5px] text-slate-400 uppercase tracking-widest font-black">
-                  {normType === 'labReport' ? settings.report?.signatureText || 'Reviewing Scientist' : settings.invoice?.signatureText || 'Authorized Signatory'}
+                  {settings.invoice?.signatureText || 'Authorized Signatory'}
                 </div>
               </>
             )}

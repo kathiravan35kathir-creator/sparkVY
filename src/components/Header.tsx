@@ -57,14 +57,6 @@ export default function Header({
         return 'Business > Cash Payments';
       case 'expenses':
         return 'Business > Expenses Ledger';
-      case 'samples':
-        return 'Laboratory > Inbound Samples';
-      case 'lab_tests':
-        return 'Laboratory > Technician Worklist';
-      case 'lab_reports':
-        return 'Laboratory > Official Reports';
-      case 'equipment':
-        return 'Infrastructure > Equipment & Calibrations';
       case 'accounts':
         return 'Finance > Cash & Bank Accounts';
       case 'reports':

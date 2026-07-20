@@ -1,3 +1,33 @@
+export type EquipmentStatus = 'Operational' | 'Under Maintenance' | 'Calibration Due' | 'Faulty' | 'Decommissioned';
+
+export interface Equipment {
+  id: string;
+  equipmentCode: string;
+  name: string;
+  category: string;
+  location: string;
+  purchaseDate: string;
+  lastMaintenanceDate: string;
+  nextMaintenanceDate: string;
+  status: EquipmentStatus;
+  serialNumber?: string;
+  description?: string;
+  manufacturer?: string;
+  model?: string;
+  purchaseCost?: number;
+  notes?: string;
+  condition?: string;
+}
+export interface Sample {
+  id: string;
+  sampleCode: string;
+  partyId: string;
+  partyName: string;
+  receivedDate: string;
+  status: 'Pending' | 'In Analysis' | 'Completed' | 'Reported';
+  tests: string[];
+  createdAt: string;
+}
 export interface User {
   id: string;
   username: string;
@@ -37,14 +67,14 @@ export interface Party {
   updatedAt: string;
 }
 
-export type ItemType = 'Inventory Product' | 'Laboratory Service' | 'Chemical' | 'Reagent' | 'Consumable' | 'Equipment';
+export type ItemType = 'Inventory Product' | 'Equipment' | 'Asset' | 'Consumable' | 'Material' | 'Supply';
 
 export interface Item {
   id: string;
   code: string;
   name: string;
   category: string;
-  type: ItemType;
+  type: ItemType | string;
   unit: string;
   barcode?: string;
   hsnCode?: string;
@@ -60,45 +90,46 @@ export interface Item {
   supplierId?: string; // linked Party
   description?: string;
   isActive: boolean;
-
-  // Lab Service specific fields
-  testMethod?: string;
-  standardMethod?: string;
-  sampleType?: string;
-  requiredQuantity?: string;
-  turnaroundTimeDays?: number;
-  resultUnit?: string;
-  referenceRange?: string;
-  requiredEquipment?: string[];
-  requiredChemicals?: { chemicalId: string; quantityNeeded: number }[];
-  reportTemplate?: string;
-  instructions?: string;
 }
 
-export type QuotationStatus = 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'Expired' | 'Converted';
+export type QuotationStage = 'Estimate' | 'Final';
+export type QuotationStatus = 'Draft' | 'Sent' | 'Revised' | 'Approved' | 'Accepted' | 'Rejected' | 'Expired' | 'Converted' | 'Cancelled';
 
 export interface QuotationLineItem {
   id: string;
   itemId: string; // Product or Service
   itemName: string;
   itemCode: string;
+  description?: string;
+  hsnCode?: string;
   quantity: number;
   rate: number;
   discountPercent: number;
   taxPercent: number;
   taxAmount: number;
   amount: number;
+  // Lab specific fields
+  sampleDetails?: string;
+  testMethod?: string;
+  turnaroundTime?: string;
 }
 
 export interface Quotation {
   id: string;
-  quotationNumber: string;
+  stage: QuotationStage;
+  quotationNumber: string; // "EST-0001 Rev 1" or "QT-0001"
+  baseQuotationNumber?: string; // "EST-0001"
+  revisionNumber?: number;
+  originalEstimateId?: string;
+  isLocked?: boolean;
   partyId: string;
   partyName: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  partyGstNumber?: string;
   quotationDate: string;
   expiryDate: string;
   items: QuotationLineItem[];
-  sampleCount: number;
   subtotal: number;
   discountAmount: number;
   taxAmount: number;
@@ -108,6 +139,125 @@ export interface Quotation {
   advanceRequirement: number;
   notes?: string;
   termsAndConditions?: string;
+  // Lab specific fields
+  sampleCollectionCharges?: number;
+  reportDeliveryMode?: string;
+  accreditationDetails?: string;
+  // Commercial fields
+  deliveryTerms?: string;
+  paymentTerms?: string;
+  sampleCount?: number;
+  createdAt: string;
+}
+
+export type ProformaStatus = 'Draft' | 'Sent' | 'Viewed' | 'Accepted' | 'Rejected' | 'Expired' | 'Converted' | 'Cancelled';
+
+export interface ProformaInvoice {
+  id: string;
+  proformaNumber: string;
+  partyId: string;
+  partyName: string;
+  billingAddress: string;
+  shippingAddress?: string;
+  partyGstNumber?: string;
+  date: string;
+  validUntil: string;
+  reference?: string;
+  salesperson?: string;
+  items: InvoiceLineItem[];
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  additionalCharges: number;
+  roundOff: number;
+  total: number;
+  advanceRequested: number;
+  status: ProformaStatus;
+  notes?: string;
+  terms?: string;
+  relatedQuotationId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProcurementStatus = 'Draft' | 'Sent' | 'Partially Received' | 'Fully Received' | 'Cancelled' | 'Closed';
+
+export interface ProcurementOrder {
+  id: string;
+  orderNumber: string;
+  orderDate: string;
+  expectedDeliveryDate: string;
+  referenceNumber?: string;
+  partyId: string;
+  partyName: string;
+  supplierAddress?: string;
+  supplierGstNumber?: string;
+  shippingAddress?: string;
+  deliveryLocation?: string;
+  paymentTerms?: string;
+  status: ProcurementStatus;
+  items: PurchaseLineItem[];
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  additionalCharges: number;
+  roundOff: number;
+  total: number;
+  termsAndConditions?: string;
+  internalNotes?: string;
+  authorizedSignature?: string;
+  attachmentUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SalesReturnReason = 'Damaged item' | 'Wrong item supplied' | 'Quality issue' | 'Excess quantity' | 'Customer cancellation' | 'Expired item' | 'Other';
+export type ItemCondition = 'Resalable' | 'Damaged' | 'Expired' | 'Non-stock item';
+
+export interface SalesReturnLineItem extends InvoiceLineItem {
+  returnQuantity: number;
+  reason: SalesReturnReason;
+  condition: ItemCondition;
+  restockOption: boolean;
+}
+
+export interface SalesReturn {
+  id: string;
+  returnNumber: string;
+  returnDate: string;
+  partyId: string;
+  partyName: string;
+  originalInvoiceId?: string;
+  originalInvoiceNumber?: string;
+  items: SalesReturnLineItem[];
+  totalReturnAmount: number;
+  refundMethod?: PaymentMethod;
+  creditNoteIssued: boolean;
+  creditNoteId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export type CreditNoteStatus = 'Draft' | 'Issued' | 'Partially Adjusted' | 'Fully Adjusted' | 'Refunded' | 'Cancelled';
+
+export interface CreditNote {
+  id: string;
+  creditNoteNumber: string;
+  creditNoteDate: string;
+  partyId: string;
+  partyName: string;
+  originalInvoiceId?: string;
+  originalInvoiceNumber?: string;
+  salesReturnId?: string;
+  reason: string;
+  items: InvoiceLineItem[];
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  adjustedAmount: number;
+  refundAmount: number;
+  status: CreditNoteStatus;
+  notes?: string;
   createdAt: string;
 }
 
@@ -135,9 +285,6 @@ export interface Invoice {
   dueDate: string;
   relatedQuotationId?: string;
   relatedQuotationNumber?: string;
-  relatedSampleId?: string;
-  relatedSampleCode?: string;
-  relatedLabReportId?: string;
   items: InvoiceLineItem[];
   subtotal: number;
   discountAmount: number;
@@ -151,6 +298,7 @@ export interface Invoice {
   notes?: string;
   terms?: string;
   isLocked: boolean; // finalized
+  relatedSampleCode?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -232,165 +380,9 @@ export interface Expense {
   createdAt: string;
 }
 
-export type SamplePriority = 'Normal' | 'High' | 'Urgent';
-export type SampleStatus =
-  | 'Received'
-  | 'Registered'
-  | 'Test Assigned'
-  | 'Testing'
-  | 'Result Entered'
-  | 'Under Review'
-  | 'Report Ready'
-  | 'Delivered'
-  | 'Rejected'
-  | 'Cancelled';
-
-export interface SampleTimelineEvent {
-  id: string;
-  status: SampleStatus;
-  label: string;
-  description: string;
-  user: string;
-  timestamp: string;
-}
-
-export interface Sample {
-  id: string;
-  sampleCode: string; // e.g. SMP-2026-0001
-  partyId: string; // Customer
-  partyName: string;
-  relatedQuotationId?: string;
-  relatedQuotationNumber?: string;
-  relatedInvoiceId?: string;
-  relatedInvoiceNumber?: string;
-  sampleName: string;
-  sampleType: string; // e.g. Water, Blood, Soil, Chemical
-  sampleCategory: string;
-  quantity: number;
-  unit: string; // e.g. ml, g, tube
-  receivedDate: string;
-  receivedTime: string;
-  receivedBy: string;
-  receivedCondition: string; // e.g. Cool, Sealed, Intact
-  storageLocation: string;
-  requiredTestIds: string[]; // List of Lab Service Item IDs
-  priority: SamplePriority;
-  expectedCompletionDate: string;
-  customerInstructions?: string;
-  internalNotes?: string;
-  barcodeData?: string; // QR code data
-  status: SampleStatus;
-  deliveryStatus?: string; // e.g. Dispatched, Handed Over
-  deliveryInfo?: string;
-  timeline: SampleTimelineEvent[];
-  createdAt: string;
-}
-
-export type TestAssignmentStatus =
-  | 'Assigned'
-  | 'Accepted'
-  | 'Started'
-  | 'Paused'
-  | 'Result Submitted'
-  | 'Under Review'
-  | 'Approved'
-  | 'Rejected'
-  | 'Completed';
-
-export interface ParameterResult {
-  id: string;
-  parameterName: string;
-  method: string;
-  resultValue: string;
-  unit: string;
-  referenceRange: string;
-  status: 'Normal' | 'Abnormal' | 'Critical' | 'Pending';
-}
-
-export interface TestResultRevision {
-  id: string;
-  submittedBy: string;
-  submittedAt: string;
-  results: ParameterResult[];
-  rawObservation?: string;
-  equipmentUsed?: string;
-  chemicalsUsed?: { chemicalId: string; quantity: number }[];
-  comments?: string;
-}
-
-export interface TestAssignment {
-  id: string;
-  assignmentCode: string;
-  sampleId: string;
-  sampleCode: string;
-  sampleName: string;
-  serviceId: string; // Lab Service ID
-  serviceName: string;
-  assignedTechnicianId?: string;
-  assignedTechnicianName?: string;
-  assignedResearcherId?: string;
-  assignedResearcherName?: string;
-  assignedDate: string;
-  dueDate: string;
-  priority: SamplePriority;
-  requiredEquipment?: string[];
-  requiredChemicals?: { chemicalId: string; itemName: string; quantityNeeded: number }[];
-  testMethod: string;
-  instructions?: string;
-  status: TestAssignmentStatus;
-
-  // Active result entry fields
-  startDate?: string;
-  endDate?: string;
-  equipmentUsed?: string[];
-  chemicalsUsed?: { chemicalId: string; itemName: string; quantityUsed: number }[];
-  rawObservation?: string;
-  results: ParameterResult[];
-  interpretation?: string;
-  conclusion?: string;
-  technicianNotes?: string;
-
-  // Review & Approval fields
-  reviewerName?: string;
-  reviewDate?: string;
-  reviewComments?: string;
-  revisions: TestResultRevision[];
-}
-
-export type LabReportStatus = 'Draft' | 'Under Review' | 'Approved' | 'Delivered' | 'Revised' | 'Cancelled';
-
-export interface LabReport {
-  id: string;
-  reportNumber: string; // e.g. REP-2026-0001
-  partyId: string;
-  partyName: string;
-  sampleId: string;
-  sampleCode: string;
-  sampleName: string;
-  sampleType: string;
-  receivedDate: string;
-  reportDate: string;
-  reportTitle: string;
-  testAssignments: TestAssignment[];
-  observations?: string;
-  interpretation?: string;
-  conclusion?: string;
-  disclaimer: string;
-  preparedBy: string;
-  reviewedBy?: string;
-  approvedBy?: string;
-  digitalSignature?: string;
-  status: LabReportStatus;
-  qrCodeData: string;
-  isLocked: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export type StockMovementType =
   | 'Purchase In'
   | 'Sale Out'
-  | 'Lab Usage'
   | 'Adjustment'
   | 'Return'
   | 'Damaged'
@@ -405,38 +397,12 @@ export interface StockMovement {
   quantity: number; // positive or negative
   batchNumber?: string;
   expiryDate?: string;
-  referenceId?: string; // e.g. purchaseId, testAssignmentId, saleId
+  referenceId?: string; // e.g. purchaseId, saleId
   referenceNumber?: string; // e.g. INV-101, PUR-202
   accountId?: string; // if adjustment or return
   user: string;
   notes?: string;
   timestamp: string;
-}
-
-export type EquipmentStatus = 'Available' | 'In Use' | 'Under Maintenance' | 'Calibration Due' | 'Out of Service' | 'Retired';
-
-export interface Equipment {
-  id: string;
-  equipmentCode: string;
-  name: string;
-  category: string;
-  manufacturer?: string;
-  model?: string;
-  serialNumber?: string;
-  purchaseDate?: string;
-  vendorName?: string;
-  purchaseCost?: number;
-  location?: string;
-  condition?: string;
-  status: EquipmentStatus;
-  lastCalibrationDate?: string;
-  nextCalibrationDate?: string;
-  lastMaintenanceDate?: string;
-  nextMaintenanceDate?: string;
-  warrantyExpiry?: string;
-  responsibleStaffId?: string;
-  responsibleStaffName?: string;
-  notes?: string;
 }
 
 export interface CashBankAccount {
@@ -462,7 +428,7 @@ export interface AuditLog {
   id: string;
   user: string;
   role: string;
-  action: string; // e.g. 'Create Party', 'Finalise Invoice', 'Approve Lab Report'
+  action: string; // e.g. 'Create Party', 'Finalise Invoice', 'Approve Document'
   module: string; // e.g. 'Parties', 'Sales', 'Reports'
   recordId: string;
   recordName: string;
@@ -486,9 +452,9 @@ export interface DocumentNumberConfig {
 
 export interface AppSettings {
   company: {
-    labName: string;
+    companyName: string;
     legalName: string;
-    displayLabName: string;
+    displayCompanyName: string;
     businessType: string;
     logoUrl?: string;
     secondaryLogoUrl?: string;
@@ -542,36 +508,33 @@ export interface AppSettings {
     showAllocation: boolean;
     showPrevBalance: boolean;
   };
-  sample: {
-    prefix: string;
-    defaultTurnaroundTimeDays: number;
-    barcodePreference: 'QR Code' | 'Barcode';
-    labelSize: string;
-    labelCopies: number;
-  };
-  report: {
-    prefix: string;
-    header: string;
-    footer: string;
-    disclaimer: string;
-    signatureText: string;
-    accreditationText: string;
-    showLabLogo: boolean;
-    showAccreditation: boolean;
-    showCustomerDetails: boolean;
-    showSampleDetails: boolean;
-    showTestMethod: boolean;
-    showReferenceRange: boolean;
-    showInterpretation: boolean;
-    showConclusion: boolean;
-    showDisclaimer: boolean;
-    showQrVerification: boolean;
-  };
   notification: {
     emailPreferences: boolean;
     inAppPreferences: boolean;
     reminderDaysBeforeDue: number;
   };
+  security: {
+    transactionPinHash?: string; // salted hash
+    failedAttempts: number;
+    lockUntil?: string;
+    protectedActions: string[]; // e.g. ['delete_transaction', 'cancel_invoice']
+  };
+  whatsappSettings: {
+    alternateNumberVerification: boolean;
+    requirePinForShare: boolean;
+    saveAlternateNumberOption: boolean;
+  };
+  quotationTypes: {
+    id: string;
+    enabled: boolean;
+    name: string;
+    prefix: string;
+    startingNumber: number;
+    defaultValidityDays: number;
+    defaultTerms: string;
+    allowTax: boolean;
+    allowDiscount: boolean;
+  }[];
   system: {
     dateFormat: string;
     timeFormat: string;
@@ -631,15 +594,19 @@ export interface AppSettings {
     receiptFooter: string;
   };
   numbering: {
-    quotation: DocumentNumberConfig;
+    quotation: DocumentNumberConfig; // Final Quotation
+    estimateQuotation: DocumentNumberConfig; // Estimate Quotation
     invoice: DocumentNumberConfig;
     purchase: DocumentNumberConfig;
     receipt: DocumentNumberConfig;
     expense: DocumentNumberConfig;
-    sample: DocumentNumberConfig;
-    labTest: DocumentNumberConfig;
-    labReport: DocumentNumberConfig;
+    procurementOrder: DocumentNumberConfig;
+    proformaInvoice: DocumentNumberConfig;
+    salesReturn: DocumentNumberConfig;
     creditNote: DocumentNumberConfig;
+    paymentReceipt: DocumentNumberConfig;
+    paymentVoucher: DocumentNumberConfig;
+    creditNoteNumber: DocumentNumberConfig; // duplicate? wait
     debitNote: DocumentNumberConfig;
     stockAdjustment: DocumentNumberConfig;
   };
@@ -648,8 +615,6 @@ export interface AppSettings {
     quotationTemplate: string;
     receiptTemplate: string;
     purchaseTemplate: string;
-    labReportTemplate: string;
-    sampleLabelTemplate: string;
     primaryColor: string;
     secondaryColor: string;
     fontFamily: string;
@@ -679,4 +644,29 @@ export interface AppSettings {
     tableDensity: 'compact' | 'normal' | 'spacious';
     printCopyLabels: string[];
   };
+  communication: {
+    whatsapp: {
+      enableBusinessApi: boolean;
+      accessToken: string;
+      permanentAccessToken: string;
+      phoneNumberId: string;
+      businessAccountId: string;
+      webhookVerifyToken: string;
+      webhookSecret: string;
+      defaultSenderName: string;
+      apiVersion: string;
+    };
+  };
+}
+
+export interface CommunicationLog {
+  id: string;
+  type: 'WhatsApp' | 'Email' | 'SMS';
+  recipient: string;
+  recipientNumber: string;
+  status: 'Sent' | 'Delivered' | 'Failed';
+  subject: string;
+  content: string;
+  direction: 'Outbound' | 'Inbound';
+  timestamp: string;
 }

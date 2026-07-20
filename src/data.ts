@@ -6,16 +6,18 @@ import {
   Purchase,
   Payment,
   Expense,
-  Sample,
-  TestAssignment,
-  LabReport,
   StockMovement,
-  Equipment,
   CashBankAccount,
   AppNotification,
   AuditLog,
   AppSettings,
-  User
+  User,
+  CommunicationLog,
+  ProcurementOrder,
+  ProformaInvoice,
+  SalesReturn,
+  CreditNote,
+  Sample
 } from './types';
 
 export interface AppState {
@@ -26,26 +28,28 @@ export interface AppState {
   quotations: Quotation[];
   invoices: Invoice[];
   purchases: Purchase[];
+  procurementOrders: ProcurementOrder[];
+  proformaInvoices: ProformaInvoice[];
+  salesReturns: SalesReturn[];
+  creditNotes: CreditNote[];
   payments: Payment[];
   expenses: Expense[];
-  samples: Sample[];
-  testAssignments: TestAssignment[];
-  labReports: LabReport[];
   stockMovements: StockMovement[];
-  equipment: Equipment[];
   accounts: CashBankAccount[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
+  communicationLogs: CommunicationLog[];
+  samples: Sample[];
   settings: AppSettings;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   company: {
-    labName: 'LabBiz Operations Pvt Ltd',
-    legalName: 'LabBiz Operations Private Limited',
-    displayLabName: 'LabBiz Operations',
+    companyName: 'BizOps Enterprise Pvt Ltd',
+    legalName: 'BizOps Enterprise Private Limited',
+    displayCompanyName: 'BizOps Enterprise',
     businessType: 'Private Limited Company',
-    logoUrl: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?w=80&fit=crop&q=80', // elegant medical logo preview
+    logoUrl: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=80&fit=crop&q=80', // elegant business logo preview
     secondaryLogoUrl: '',
     address: 'Building 4B, Electronic City Phase 1, Bangalore, Karnataka - 560100',
     address1: 'Building 4B, Electronic City Phase 1',
@@ -57,15 +61,15 @@ const DEFAULT_SETTINGS: AppSettings = {
     country: 'India',
     primaryPhone: '+91 80 4912 3000',
     alternatePhone: '+91 80 4912 3001',
-    email: 'operations@labbiz.in',
+    email: 'ops@bizops.in',
     gstNumber: '29AAAAA1111A1Z1',
     pan: 'AAAAA1111A',
     cin: 'U72200KA2026PTC192834',
     registrationDate: '2026-04-01',
-    website: 'https://labbiz.in',
+    website: 'https://bizops.in',
     currency: 'INR',
     timezone: 'Asia/Kolkata',
-    description: 'NABL Accredited Chemical & Biological Analytical Testing Laboratory providing premier research, clinical, and industrial validation services.',
+    description: 'Premier enterprise ERP providing billing, inventory, and financial management services.',
     footerText: 'Thank you for your business. This is a computer-generated document requiring no physical signature.'
   },
   invoice: {
@@ -73,7 +77,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     numberFormat: '0000',
     defaultTaxRate: 18,
     terms: '1. Payment is due within 15 days of invoice date.\n2. Interest of 1.5% per month will be charged on overdue payments.\n3. Goods once sold cannot be returned.',
-    footer: 'Thank you for choosing LabBiz. For billing enquiries, please email finance@labbiz.in.',
+    footer: 'Thank you for choosing our business. For billing enquiries, please email finance@yourcompany.com.',
     signatureText: 'Authorized Signatory',
     isItemCodeVisible: true,
     isDescriptionVisible: true
@@ -81,12 +85,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   quotation: {
     prefix: 'QT-2026-',
     validityDays: 30,
-    terms: '1. Quotation valid for 30 days.\n2. 50% advance required for sample processing.',
+    terms: '1. Quotation valid for 30 days.\n2. 50% advance required for order processing.',
     isValidityVisible: true
   },
   purchase: {
     prefix: 'PUR-2026-',
-    terms: '1. Subject to physical inspection upon arrival.\n2. Damaged reagents will be rejected.',
+    terms: '1. Subject to physical inspection upon arrival.\n2. Damaged goods will be rejected.',
     footer: 'Authorized Purchase Manager',
     showSupplierGst: true,
     showBatchExpiry: true
@@ -97,36 +101,26 @@ const DEFAULT_SETTINGS: AppSettings = {
     showAllocation: true,
     showPrevBalance: true
   },
-  sample: {
-    prefix: 'SMP-2026-',
-    defaultTurnaroundTimeDays: 7,
-    barcodePreference: 'QR Code',
-    labelSize: '50mm x 25mm',
-    labelCopies: 1
-  },
-  report: {
-    prefix: 'REP-2026-',
-    header: 'LABBIZ RESEARCH & ANALYTICAL LABORATORY\nAccredited by NABL (ISO/IEC 17025)',
-    footer: 'End of Laboratory Test Report. Verified via secure digital signature and QR verification.',
-    disclaimer: 'This test report refers only to the specific sample submitted. Reproduction of part of this report without written permission is prohibited.',
-    signatureText: 'Chief Scientific Officer / Lab Director',
-    accreditationText: 'NABL Certificate No: TC-8492',
-    showLabLogo: true,
-    showAccreditation: true,
-    showCustomerDetails: true,
-    showSampleDetails: true,
-    showTestMethod: true,
-    showReferenceRange: true,
-    showInterpretation: true,
-    showConclusion: true,
-    showDisclaimer: true,
-    showQrVerification: true
-  },
   notification: {
     emailPreferences: true,
     inAppPreferences: true,
     reminderDaysBeforeDue: 3
   },
+  security: {
+    transactionPinHash: '',
+    failedAttempts: 0,
+    protectedActions: ['delete_transaction', 'cancel_invoice', 'edit_locked_invoice', 'issue_credit_note', 'record_refund', 'payment_out']
+  },
+  whatsappSettings: {
+    alternateNumberVerification: true,
+    requirePinForShare: true,
+    saveAlternateNumberOption: false
+  },
+  quotationTypes: [
+    { id: 'standard', enabled: true, name: 'Standard Quotation', prefix: 'QT/', startingNumber: 1, defaultValidityDays: 30, defaultTerms: 'Standard validity 30 days.', allowTax: true, allowDiscount: true },
+    { id: 'commercial', enabled: true, name: 'Commercial Quotation', prefix: 'CQ/', startingNumber: 1, defaultValidityDays: 45, defaultTerms: 'Commercial proposal valid for 45 days.', allowTax: true, allowDiscount: true },
+    { id: 'laboratory', enabled: true, name: 'Laboratory Estimate', prefix: 'LAB-QT/', startingNumber: 1, defaultValidityDays: 15, defaultTerms: 'Lab estimate valid for 15 days.', allowTax: true, allowDiscount: true }
+  ],
   system: {
     dateFormat: 'YYYY-MM-DD',
     timeFormat: 'HH:mm',
@@ -134,7 +128,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     paginationSize: 10,
     allowNegativeStock: false,
     financialYearStartMonth: 'April',
-    defaultBranchName: 'Main Laboratory Center',
+    defaultBranchName: 'Main Operations Center',
     firstDayOfWeek: 'Monday',
     currencySymbol: '₹',
     currencyPosition: 'Prefix',
@@ -168,13 +162,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   bank: {
     bankName: 'HDFC Bank Ltd',
-    accountHolderName: 'LABBIZ OPERATIONS PVT LTD',
+    accountHolderName: 'BIZOPS ENTERPRISE PVT LTD',
     accountNumber: '50200049123849',
     ifsc: 'HDFC0000140',
     branch: 'Electronic City, Bangalore',
     accountType: 'Current Account',
-    upiId: 'labbiz@hdfcbank',
-    upiDisplayName: 'LabBiz Operations',
+    upiId: 'bizops@hdfcbank',
+    upiDisplayName: 'BizOps Operations',
     qrCodeUrl: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=120&fit=crop&q=80', // generic placeholder representing QR
     defaultCashAccount: 'acc-1',
     defaultBankAccount: 'acc-2',
@@ -182,19 +176,23 @@ const DEFAULT_SETTINGS: AppSettings = {
     showBankDetailsOnInvoice: true,
     showUpiOnInvoice: true,
     showQrCodeOnInvoice: true,
-    paymentInstructions: 'Please quote the Invoice Number during NEFT transfer. Send payment screenshot to accounts@labbiz.in.',
+    paymentInstructions: 'Please quote the Invoice Number during NEFT transfer. Send payment screenshot to accounts@bizops.in.',
     receiptFooter: 'This is an official receipt of payment.'
   },
   numbering: {
     quotation: { prefix: 'QT/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
+    estimateQuotation: { prefix: 'EST/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
     invoice: { prefix: 'INV/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
     purchase: { prefix: 'PUR/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
     receipt: { prefix: 'REC/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
     expense: { prefix: 'EXP/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: false, includeMonth: false, includeBranchCode: false, resetByFinancialYear: false },
-    sample: { prefix: 'SMP/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
-    labTest: { prefix: 'TST/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: false, includeMonth: false, includeBranchCode: false, resetByFinancialYear: false },
-    labReport: { prefix: 'REP/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
+    procurementOrder: { prefix: 'PO/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
+    proformaInvoice: { prefix: 'PI/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
+    salesReturn: { prefix: 'SR/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
     creditNote: { prefix: 'CN/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
+    paymentReceipt: { prefix: 'REC/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
+    paymentVoucher: { prefix: 'PAY/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
+    creditNoteNumber: { prefix: 'CN/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
     debitNote: { prefix: 'DN/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: true, includeMonth: false, includeBranchCode: false, resetByFinancialYear: true },
     stockAdjustment: { prefix: 'ADJ/', startingNumber: 1, currentNumber: 1, minDigitLength: 5, separator: '', includeFinancialYear: false, includeMonth: false, includeBranchCode: false, resetByFinancialYear: false }
   },
@@ -203,8 +201,6 @@ const DEFAULT_SETTINGS: AppSettings = {
     quotationTemplate: 'corporate_blue',
     receiptTemplate: 'receipt_pro',
     purchaseTemplate: 'tally_classic',
-    labReportTemplate: 'premium_lab',
-    sampleLabelTemplate: 'sample_label',
     primaryColor: '#2563EB',
     secondaryColor: '#1E293B',
     fontFamily: 'Inter',
@@ -233,18 +229,31 @@ const DEFAULT_SETTINGS: AppSettings = {
     pageMargins: 'normal',
     tableDensity: 'normal',
     printCopyLabels: ['Original for Buyer', 'Duplicate for Transporter']
+  },
+  communication: {
+    whatsapp: {
+      enableBusinessApi: false,
+      accessToken: '',
+      permanentAccessToken: '',
+      phoneNumberId: '',
+      businessAccountId: '',
+      webhookVerifyToken: '',
+      webhookSecret: '',
+      defaultSenderName: 'BizOps ERP',
+      apiVersion: 'v18.0'
+    }
   }
 };
 
 const DEFAULT_USERS: User[] = [
-  { id: 'u1', username: 'superadmin', name: 'Dr. Dev Anand', email: 'dev@labbiz.in', isAdmin: true, isActive: true },
-  { id: 'u2', username: 'manager', name: 'Sarah Jenkins', email: 'sarah@labbiz.in', isAdmin: true, isActive: true },
-  { id: 'u3', username: 'receptionist', name: 'John Doe', email: 'john@labbiz.in', isAdmin: false, isActive: true },
-  { id: 'u4', username: 'technician', name: 'Alan Turing', email: 'alan@labbiz.in', isAdmin: false, isActive: true },
-  { id: 'u5', username: 'researcher', name: 'Marie Curie', email: 'marie@labbiz.in', isAdmin: false, isActive: true },
-  { id: 'u6', username: 'reviewer', name: 'Richard Feynman', email: 'richard@labbiz.in', isAdmin: false, isActive: true },
-  { id: 'u7', username: 'accountant', name: 'Warren Buffett', email: 'warren@labbiz.in', isAdmin: false, isActive: true },
-  { id: 'u8', username: 'inventory', name: 'Steve Jobs', email: 'steve@labbiz.in', isAdmin: false, isActive: true }
+  { id: 'u1', username: 'superadmin', name: 'BizOps Admin', email: 'admin@bizops.in', isAdmin: true, isActive: true },
+  { id: 'u2', username: 'manager', name: 'Sarah Jenkins', email: 'sarah@bizops.in', isAdmin: true, isActive: true },
+  { id: 'u3', username: 'receptionist', name: 'John Doe', email: 'john@bizops.in', isAdmin: false, isActive: true },
+  { id: 'u4', username: 'sales', name: 'Alan Turing', email: 'alan@bizops.in', isAdmin: false, isActive: true },
+  { id: 'u5', username: 'analyst', name: 'Marie Curie', email: 'marie@bizops.in', isAdmin: false, isActive: true },
+  { id: 'u6', username: 'supervisor', name: 'Richard Feynman', email: 'richard@bizops.in', isAdmin: false, isActive: true },
+  { id: 'u7', username: 'accountant', name: 'Warren Buffett', email: 'warren@bizops.in', isAdmin: false, isActive: true },
+  { id: 'u8', username: 'inventory', name: 'Steve Jobs', email: 'steve@bizops.in', isAdmin: false, isActive: true }
 ];
 
 export function getInitialState(): AppState {
@@ -252,116 +261,27 @@ export function getInitialState(): AppState {
     users: DEFAULT_USERS,
     currentUser: DEFAULT_USERS[0], // starts as Super Admin
     parties: [],
-    items: [
-      // Standard services & general categories by default
-      {
-        id: 'srv-1',
-        code: 'SRV-001',
-        name: 'Water Potability Microbiological Test',
-        category: 'Water Testing',
-        type: 'Laboratory Service',
-        unit: 'Sample',
-        purchasePrice: 0,
-        sellingPrice: 1500,
-        taxRate: 18,
-        openingStock: 0,
-        currentStock: 0,
-        minimumStock: 0,
-        isActive: true,
-        testMethod: 'IS 10500:2012',
-        standardMethod: 'Membrane Filtration',
-        sampleType: 'Drinking Water',
-        requiredQuantity: '500 ml',
-        turnaroundTimeDays: 3,
-        resultUnit: 'CFU/100ml',
-        referenceRange: 'E.coli: Absent, Total Coliforms: Absent',
-        batchTracking: false,
-        expiryTracking: false,
-        instructions: 'Collect in sterile sodium thiosulfate bottle and keep refrigerated.'
-      },
-      {
-        id: 'srv-2',
-        code: 'SRV-002',
-        name: 'Soil Nitrogen & Nutrient Profiling',
-        category: 'Agricultural Analysis',
-        type: 'Laboratory Service',
-        unit: 'Sample',
-        purchasePrice: 0,
-        sellingPrice: 2500,
-        taxRate: 18,
-        openingStock: 0,
-        currentStock: 0,
-        minimumStock: 0,
-        isActive: true,
-        testMethod: 'AOAC 973.48',
-        standardMethod: 'Kjeldahl Method',
-        sampleType: 'Soil / Compost',
-        requiredQuantity: '200 g',
-        turnaroundTimeDays: 5,
-        resultUnit: 'mg/kg',
-        referenceRange: 'Available Nitrogen: 280 - 560 mg/kg',
-        batchTracking: false,
-        expiryTracking: false,
-        instructions: 'Air-dry the soil, sieve through 2mm screen prior to dispatch.'
-      }
-    ],
+    items: [],
     quotations: [],
     invoices: [],
     purchases: [],
+    procurementOrders: [],
+    proformaInvoices: [],
+    salesReturns: [],
+    creditNotes: [],
     payments: [],
     expenses: [],
-    samples: [],
-    testAssignments: [],
-    labReports: [],
     stockMovements: [],
-    equipment: [
-      {
-        id: 'eq-1',
-        equipmentCode: 'EQ-01',
-        name: 'Sartorius Digital PH Meter',
-        category: 'Electrochemistry',
-        manufacturer: 'Sartorius',
-        model: 'PH-320',
-        serialNumber: 'SR-9412-PH',
-        purchaseDate: '2025-01-10',
-        purchaseCost: 45000,
-        location: 'Biochemistry Bench A',
-        condition: 'Good',
-        status: 'Available',
-        lastCalibrationDate: '2026-06-15',
-        nextCalibrationDate: '2026-12-15',
-        lastMaintenanceDate: '2026-05-10',
-        nextMaintenanceDate: '2026-11-10'
-      },
-      {
-        id: 'eq-2',
-        equipmentCode: 'EQ-02',
-        name: 'Thermo Scientific Spectrophotometer',
-        category: 'Spectroscopy',
-        manufacturer: 'Thermo Scientific',
-        model: 'Genesys 150',
-        serialNumber: 'TH-5021-SP',
-        purchaseDate: '2024-03-20',
-        purchaseCost: 320000,
-        location: 'Analytical Lab Room 2',
-        condition: 'Excellent',
-        status: 'Available',
-        lastCalibrationDate: '2026-04-10',
-        nextCalibrationDate: '2026-10-10',
-        lastMaintenanceDate: '2026-03-12',
-        nextMaintenanceDate: '2026-09-12'
-      }
-    ],
     accounts: [
-      { id: 'acc-1', name: 'Lab Business Petty Cash', type: 'Petty Cash', openingBalance: 15000, currentBalance: 15000 },
-      { id: 'acc-2', name: 'ICICI Bank Current Account', type: 'Bank', openingBalance: 450000, currentBalance: 450000 },
-      { id: 'acc-3', name: 'UPI HDFC Merchant QR', type: 'UPI', openingBalance: 80000, currentBalance: 80000 }
+      { id: 'acc-1', name: 'Petty Cash', type: 'Petty Cash', openingBalance: 15000, currentBalance: 15000 },
+      { id: 'acc-2', name: 'Bank Account', type: 'Bank', openingBalance: 450000, currentBalance: 450000 },
+      { id: 'acc-3', name: 'UPI/Wallet', type: 'UPI', openingBalance: 80000, currentBalance: 80000 }
     ],
     notifications: [
       {
         id: 'n-1',
-        title: 'Welcome to LabBiz',
-        message: 'Your lab management, billing, and inventory database has been initialized successfully.',
+        title: 'Welcome',
+        message: 'Your business management database has been initialized successfully.',
         type: 'success',
         isRead: false,
         timestamp: '2026-07-14T09:00:00Z'
@@ -370,32 +290,50 @@ export function getInitialState(): AppState {
     auditLogs: [
       {
         id: 'a-1',
-        user: 'Dr. Dev Anand',
+        user: 'BizOps Admin',
         role: 'Super Admin',
         action: 'System Initialized',
         module: 'System',
         recordId: 'system',
-        recordName: 'LabBiz App',
+        recordName: 'ERP App',
         timestamp: '2026-07-14T09:00:00Z',
         ipAddress: '127.0.0.1'
       }
     ],
+    communicationLogs: [],
+    samples: [],
     settings: DEFAULT_SETTINGS
   };
 }
 
 export function saveState(state: AppState) {
-  localStorage.setItem('labbiz_state', JSON.stringify(state));
+  localStorage.setItem('bizops_state', JSON.stringify(state));
 }
 
 export function loadState(): AppState {
-  const data = localStorage.getItem('labbiz_state');
+  const data = localStorage.getItem('bizops_state');
   if (data) {
     try {
       const parsed = JSON.parse(data);
       // Ensure key arrays exist
       if (!parsed.currentUser) parsed.currentUser = DEFAULT_USERS[0];
       if (!parsed.users) parsed.users = DEFAULT_USERS;
+      if (!parsed.samples) parsed.samples = [];
+      if (!parsed.parties) parsed.parties = [];
+      if (!parsed.items) parsed.items = [];
+      if (!parsed.quotations) parsed.quotations = [];
+      if (!parsed.invoices) parsed.invoices = [];
+      if (!parsed.purchases) parsed.purchases = [];
+      if (!parsed.expenses) parsed.expenses = [];
+      if (!parsed.payments) parsed.payments = [];
+      if (!parsed.proformaInvoices) parsed.proformaInvoices = [];
+      if (!parsed.procurementOrders) parsed.procurementOrders = [];
+      if (!parsed.salesReturns) parsed.salesReturns = [];
+      if (!parsed.creditNotes) parsed.creditNotes = [];
+      if (!parsed.stockMovements) parsed.stockMovements = [];
+      if (!parsed.notifications) parsed.notifications = [];
+      if (!parsed.auditLogs) parsed.auditLogs = [];
+      if (!parsed.communicationLogs) parsed.communicationLogs = [];
       
       // Ensure all settings blocks exist by merging with DEFAULT_SETTINGS
       if (!parsed.settings) {
@@ -407,9 +345,10 @@ export function loadState(): AppState {
           quotation: { ...DEFAULT_SETTINGS.quotation, ...parsed.settings.quotation },
           purchase: { ...DEFAULT_SETTINGS.purchase, ...parsed.settings.purchase },
           receipt: { ...DEFAULT_SETTINGS.receipt, ...parsed.settings.receipt },
-          sample: { ...DEFAULT_SETTINGS.sample, ...parsed.settings.sample },
-          report: { ...DEFAULT_SETTINGS.report, ...parsed.settings.report },
           notification: { ...DEFAULT_SETTINGS.notification, ...parsed.settings.notification },
+          security: { ...DEFAULT_SETTINGS.security, ...parsed.settings.security },
+          whatsappSettings: { ...DEFAULT_SETTINGS.whatsappSettings, ...parsed.settings.whatsappSettings },
+          quotationTypes: parsed.settings.quotationTypes || DEFAULT_SETTINGS.quotationTypes,
           system: { ...DEFAULT_SETTINGS.system, ...parsed.settings.system },
           tax: { ...DEFAULT_SETTINGS.tax, ...parsed.settings.tax },
           bank: { ...DEFAULT_SETTINGS.bank, ...parsed.settings.bank },
@@ -548,360 +487,86 @@ export function getDemoData(state: AppState): AppState {
     }
   ];
 
-  // 2. Demo Items (Products and Lab Services)
+  // 2. Demo Items (Products)
   const demoItems: Item[] = [
-    // Lab Services
     {
-      id: 'srv-1',
-      code: 'SRV-001',
-      name: 'Water Potability Microbiological Test',
-      category: 'Water Testing',
-      type: 'Laboratory Service',
-      unit: 'Sample',
-      purchasePrice: 0,
-      sellingPrice: 1500,
+      id: 'prod-1',
+      code: 'PRD-101',
+      name: 'Executive Office Chair',
+      category: 'Furniture',
+      type: 'Product',
+      unit: 'Piece (PCS)',
+      purchasePrice: 4500,
+      sellingPrice: 8500,
       taxRate: 18,
-      openingStock: 0,
-      currentStock: 0,
-      minimumStock: 0,
-      isActive: true,
-      testMethod: 'IS 10500:2012',
-      standardMethod: 'Membrane Filtration',
-      sampleType: 'Drinking Water',
-      requiredQuantity: '500 ml',
-      turnaroundTimeDays: 3,
-      resultUnit: 'CFU/100ml',
-      referenceRange: 'E.coli: Absent, Total Coliforms: Absent',
+      openingStock: 15,
+      currentStock: 15,
+      minimumStock: 5,
+      storageLocation: 'Warehouse A-1',
       batchTracking: false,
       expiryTracking: false,
-      instructions: 'Collect in sterile sodium thiosulfate bottle and keep refrigerated.'
-    },
-    {
-      id: 'srv-2',
-      code: 'SRV-002',
-      name: 'Soil Nitrogen & Nutrient Profiling',
-      category: 'Agricultural Analysis',
-      type: 'Laboratory Service',
-      unit: 'Sample',
-      purchasePrice: 0,
-      sellingPrice: 2500,
-      taxRate: 18,
-      openingStock: 0,
-      currentStock: 0,
-      minimumStock: 0,
       isActive: true,
-      testMethod: 'AOAC 973.48',
-      standardMethod: 'Kjeldahl Method',
-      sampleType: 'Soil / Compost',
-      requiredQuantity: '200 g',
-      turnaroundTimeDays: 5,
-      resultUnit: 'mg/kg',
-      referenceRange: 'Available Nitrogen: 280 - 560 mg/kg',
-      batchTracking: false,
-      expiryTracking: false,
-      instructions: 'Air-dry the soil, sieve through 2mm screen prior to dispatch.'
+      description: 'Ergonomic high-back office chair with lumbar support.'
     },
     {
-      id: 'srv-3',
-      code: 'SRV-003',
-      name: 'Heavy Metal Analysis - Arsenic & Lead',
-      category: 'Toxicity Screening',
-      type: 'Laboratory Service',
-      unit: 'Sample',
-      purchasePrice: 0,
-      sellingPrice: 4200,
+      id: 'prod-2',
+      code: 'PRD-102',
+      name: 'Dell UltraSharp 27 Monitor',
+      category: 'Electronics',
+      type: 'Product',
+      unit: 'Piece (PCS)',
+      purchasePrice: 22000,
+      sellingPrice: 35000,
       taxRate: 18,
-      openingStock: 0,
-      currentStock: 0,
-      minimumStock: 0,
-      isActive: true,
-      testMethod: 'EPA Method 200.8',
-      standardMethod: 'ICP-MS Analysis',
-      sampleType: 'Effluent / Industrial Water / Soil',
-      requiredQuantity: '100 ml',
-      turnaroundTimeDays: 4,
-      resultUnit: 'ppm (mg/L)',
-      referenceRange: 'Lead < 0.01 ppm, Arsenic < 0.05 ppm',
-      batchTracking: false,
-      expiryTracking: false,
-      instructions: 'Collect in acid-washed plastic bottle, preserve with nitric acid to pH < 2.'
-    },
-    // Chemicals (Stock tracked)
-    {
-      id: 'chem-1',
-      code: 'CHM-101',
-      name: 'Concentrated Nitric Acid 69%',
-      category: 'Mineral Acids',
-      type: 'Chemical',
-      unit: 'Bottle (500ml)',
-      purchasePrice: 1200,
-      sellingPrice: 0,
-      taxRate: 18,
-      openingStock: 10,
-      currentStock: 10,
-      minimumStock: 3,
-      storageLocation: 'Acid Cabinet B-1',
-      batchTracking: true,
-      expiryTracking: true,
-      isActive: true,
-      description: 'AR Grade analytical reagent, highly corrosive.'
-    },
-    {
-      id: 'chem-2',
-      code: 'CHM-102',
-      name: 'Silver Nitrate Powder (Analytical Grade)',
-      category: 'Inorganic Salts',
-      type: 'Chemical',
-      unit: 'Gram (g)',
-      purchasePrice: 150,
-      sellingPrice: 0,
-      taxRate: 18,
-      openingStock: 250,
-      currentStock: 220,
-      minimumStock: 50,
-      storageLocation: 'Locked Toxic Safe Shelf C',
-      batchTracking: true,
-      expiryTracking: true,
-      isActive: true,
-      description: 'Used for halide titration assays.'
-    },
-    {
-      id: 'item-prod',
-      code: 'PRD-201',
-      name: 'Sterile Water Sampling Bottles (500ml)',
-      category: 'Sampling Consumables',
-      type: 'Consumable',
-      unit: 'Box of 100',
-      purchasePrice: 1800,
-      sellingPrice: 2400,
-      taxRate: 12,
       openingStock: 8,
       currentStock: 8,
       minimumStock: 2,
-      storageLocation: 'Consumable Room Rack 2',
-      batchTracking: false,
+      storageLocation: 'Tech Shelf C',
+      batchTracking: true,
       expiryTracking: false,
       isActive: true,
-      description: 'Pre-treated with sodium thiosulfate tablets for chlorine neutralization.'
+      description: '4K resolution professional color-accurate monitor.'
     }
   ];
 
-  // 3. Demo Equipment
-  const demoEquipment: Equipment[] = [
-    {
-      id: 'eq-1',
-      equipmentCode: 'EQ-01',
-      name: 'Sartorius Digital PH Meter',
-      category: 'Electrochemistry',
-      manufacturer: 'Sartorius',
-      model: 'PH-320',
-      serialNumber: 'SR-9412-PH',
-      purchaseDate: '2025-01-10',
-      purchaseCost: 45000,
-      location: 'Biochemistry Bench A',
-      condition: 'Good',
-      status: 'Available',
-      lastCalibrationDate: '2026-06-15',
-      nextCalibrationDate: '2026-12-15',
-      lastMaintenanceDate: '2026-05-10',
-      nextMaintenanceDate: '2026-11-10'
-    },
-    {
-      id: 'eq-2',
-      equipmentCode: 'EQ-02',
-      name: 'Thermo Scientific Spectrophotometer',
-      category: 'Spectroscopy',
-      manufacturer: 'Thermo Scientific',
-      model: 'Genesys 150',
-      serialNumber: 'TH-5021-SP',
-      purchaseDate: '2024-03-20',
-      purchaseCost: 320000,
-      location: 'Analytical Lab Room 2',
-      condition: 'Excellent',
-      status: 'Available',
-      lastCalibrationDate: '2026-04-10',
-      nextCalibrationDate: '2026-10-10',
-      lastMaintenanceDate: '2026-03-12',
-      nextMaintenanceDate: '2026-09-12'
-    },
-    {
-      id: 'eq-3',
-      equipmentCode: 'EQ-03',
-      name: 'Horizontal High-Pressure Steam Autoclave',
-      category: 'Sterilization',
-      manufacturer: 'Equitron Medical',
-      model: 'EQ-80-AUTO',
-      serialNumber: 'EQ-8491-X',
-      purchaseDate: '2024-06-18',
-      purchaseCost: 185000,
-      location: 'Sterility Testing Room 1',
-      condition: 'Fair',
-      status: 'Calibration Due',
-      lastCalibrationDate: '2025-07-20',
-      nextCalibrationDate: '2026-07-20',
-      lastMaintenanceDate: '2026-01-15',
-      nextMaintenanceDate: '2026-07-15'
-    }
-  ];
-
-  // 4. Demo Quotation
+  // 3. Demo Quotation
   const demoQuotations: Quotation[] = [
     {
       id: 'qt-1',
+      stage: 'Final',
       quotationNumber: 'QT-2026-0001',
       partyId: 'pt-1',
       partyName: 'AquaPure Bottlers India',
       quotationDate: '2026-07-01',
       expiryDate: '2026-07-31',
-      sampleCount: 5,
       items: [
         {
           id: 'qti-1',
-          itemId: 'srv-1',
-          itemName: 'Water Potability Microbiological Test',
-          itemCode: 'SRV-001',
-          quantity: 5,
-          rate: 1500,
-          discountPercent: 10,
+          itemId: 'prod-1',
+          itemName: 'Executive Office Chair',
+          itemCode: 'PRD-101',
+          quantity: 2,
+          rate: 8500,
+          discountPercent: 5,
           taxPercent: 18,
-          taxAmount: 1215,
-          amount: 7965 // (7500 - 750) + 1215 = 7965
+          taxAmount: 2907,
+          amount: 19057
         }
       ],
-      subtotal: 7500,
-      discountAmount: 750,
-      taxAmount: 1215,
-      additionalCharges: 150,
-      total: 8115,
+      subtotal: 17000,
+      discountAmount: 850,
+      taxAmount: 2907,
+      additionalCharges: 500,
+      total: 19557,
       status: 'Accepted',
-      advanceRequirement: 4000,
-      notes: 'Testing scheduled for batches received in first week of July.',
-      termsAndConditions: '1. Deliver samples within 24 hours of collection.\n2. Balance within 15 days of reporting.',
+      advanceRequirement: 5000,
+      notes: 'Delivery expected within 3 business days.',
+      termsAndConditions: '1. Full payment upon delivery.',
       createdAt: '2026-07-01T10:30:00Z'
     }
   ];
 
-  // 5. Demo Samples
-  const demoSamples: Sample[] = [
-    {
-      id: 'smp-1',
-      sampleCode: 'SMP-2026-0001',
-      partyId: 'pt-1',
-      partyName: 'AquaPure Bottlers India',
-      relatedQuotationId: 'qt-1',
-      relatedQuotationNumber: 'QT-2026-0001',
-      sampleName: 'Raw Groundwater Ingress - Source A',
-      sampleType: 'Drinking Water',
-      sampleCategory: 'Microbiological Analysis',
-      quantity: 1000,
-      unit: 'ml',
-      receivedDate: '2026-07-12',
-      receivedTime: '11:15',
-      receivedBy: 'John Doe',
-      receivedCondition: 'Cool, Sealed, Glass Container',
-      storageLocation: 'Walk-In Chiller Chamber C',
-      requiredTestIds: ['srv-1'],
-      priority: 'High',
-      expectedCompletionDate: '2026-07-15',
-      internalNotes: 'Sample must be plated within 6 hours of arrival.',
-      status: 'Result Entered',
-      timeline: [
-        { id: 't1', status: 'Received', label: 'Sample Collected & Arrived', description: 'Sample received from Rajesh Kumar in sterile cooler bag.', user: 'John Doe', timestamp: '2026-07-12T11:15:00Z' },
-        { id: 't2', status: 'Registered', label: 'Registered in LIMS', description: 'Unique barcode generated and printed.', user: 'John Doe', timestamp: '2026-07-12T11:45:00Z' },
-        { id: 't3', status: 'Test Assigned', label: 'Tests & Staff Assigned', description: 'Assigned to Technician Alan Turing.', user: 'Sarah Jenkins', timestamp: '2026-07-12T13:00:00Z' },
-        { id: 't4', status: 'Testing', label: 'Testing Started', description: 'Incubators set and plates prepared.', user: 'Alan Turing', timestamp: '2026-07-12T14:30:00Z' },
-        { id: 't5', status: 'Result Entered', label: 'Observations Entered', description: 'Plates counted, E.coli colonies found.', user: 'Alan Turing', timestamp: '2026-07-14T15:00:00Z' }
-      ],
-      createdAt: '2026-07-12T11:15:00Z'
-    },
-    {
-      id: 'smp-2',
-      sampleCode: 'SMP-2026-0002',
-      partyId: 'pt-2',
-      partyName: 'GreenEarth Organics Farmer Co-op',
-      sampleName: 'Soil Sample - Plot B Red Loamy',
-      sampleType: 'Soil / Compost',
-      sampleCategory: 'Fertility Assessment',
-      quantity: 500,
-      unit: 'g',
-      receivedDate: '2026-07-14',
-      receivedTime: '09:30',
-      receivedBy: 'John Doe',
-      receivedCondition: 'Dry, Sealed Plastic Pouch',
-      storageLocation: 'Dry Storage Shelf 3',
-      requiredTestIds: ['srv-2'],
-      priority: 'Normal',
-      expectedCompletionDate: '2026-07-19',
-      status: 'Test Assigned',
-      timeline: [
-        { id: 't11', status: 'Received', label: 'Arrived at Laboratory', description: 'Arrived via courier.', user: 'John Doe', timestamp: '2026-07-14T09:30:00Z' },
-        { id: 't12', status: 'Registered', label: 'Registered in LIMS', description: 'Unique barcode generated.', user: 'John Doe', timestamp: '2026-07-14T10:15:00Z' },
-        { id: 't13', status: 'Test Assigned', label: 'Assigned to Technician', description: 'Assigned to Alan Turing.', user: 'Sarah Jenkins', timestamp: '2026-07-14T11:30:00Z' }
-      ],
-      createdAt: '2026-07-14T09:30:00Z'
-    }
-  ];
-
-  // 6. Demo Test Assignments
-  const demoTestAssignments: TestAssignment[] = [
-    {
-      id: 'ta-1',
-      assignmentCode: 'TST-0001',
-      sampleId: 'smp-1',
-      sampleCode: 'SMP-2026-0001',
-      sampleName: 'Raw Groundwater Ingress - Source A',
-      serviceId: 'srv-1',
-      serviceName: 'Water Potability Microbiological Test',
-      assignedTechnicianId: 'u4',
-      assignedTechnicianName: 'Alan Turing',
-      assignedResearcherId: 'u5',
-      assignedResearcherName: 'Marie Curie',
-      assignedDate: '2026-07-12',
-      dueDate: '2026-07-15',
-      priority: 'High',
-      requiredEquipment: ['EQ-03'], // Autoclave for sterilization
-      requiredChemicals: [{ chemicalId: 'chem-2', itemName: 'Silver Nitrate Powder', quantityNeeded: 2 }],
-      testMethod: 'IS 10500:2012',
-      status: 'Result Submitted',
-      startDate: '2026-07-12 14:30',
-      endDate: '2026-07-14 15:00',
-      equipmentUsed: ['Horizontal High-Pressure Steam Autoclave'],
-      chemicalsUsed: [{ chemicalId: 'chem-2', itemName: 'Silver Nitrate Powder', quantityUsed: 2 }],
-      rawObservation: 'Plated 100ml sample on MacConkey agar. Incubated at 37°C for 48 hours. Observed pink colonies.',
-      results: [
-        { id: 'p1', parameterName: 'Total Coliforms', method: 'IS 15185', resultValue: '18', unit: 'CFU/100ml', referenceRange: 'Absent', status: 'Abnormal' },
-        { id: 'p2', parameterName: 'E. coli', method: 'IS 15185', resultValue: '4', unit: 'CFU/100ml', referenceRange: 'Absent', status: 'Critical' }
-      ],
-      interpretation: 'The water sample contains alarming fecal coliform bacteria, rendering it completely unsafe for direct drinking purposes.',
-      conclusion: 'FAIL - Sample violates Drinking Water Specification IS 10500:2012.',
-      technicianNotes: 'Duplicate plates showed consistent contamination.',
-      revisions: []
-    },
-    {
-      id: 'ta-2',
-      assignmentCode: 'TST-0002',
-      sampleId: 'smp-2',
-      sampleCode: 'SMP-2026-0002',
-      sampleName: 'Soil Sample - Plot B Red Loamy',
-      serviceId: 'srv-2',
-      serviceName: 'Soil Nitrogen & Nutrient Profiling',
-      assignedTechnicianId: 'u4',
-      assignedTechnicianName: 'Alan Turing',
-      assignedResearcherId: 'u5',
-      assignedResearcherName: 'Marie Curie',
-      assignedDate: '2026-07-14',
-      dueDate: '2026-07-19',
-      priority: 'Normal',
-      testMethod: 'AOAC 973.48',
-      status: 'Assigned',
-      results: [
-        { id: 'p3', parameterName: 'Available Nitrogen (N)', method: 'Kjeldahl', resultValue: 'Pending', unit: 'mg/kg', referenceRange: '280 - 560', status: 'Pending' }
-      ],
-      revisions: []
-    }
-  ];
-
-  // 7. Demo Invoices
+  // 4. Demo Invoices
   const demoInvoices: Invoice[] = [
     {
       id: 'inv-1',
@@ -912,39 +577,37 @@ export function getDemoData(state: AppState): AppState {
       dueDate: '2026-07-27',
       relatedQuotationId: 'qt-1',
       relatedQuotationNumber: 'QT-2026-0001',
-      relatedSampleId: 'smp-1',
-      relatedSampleCode: 'SMP-2026-0001',
       items: [
         {
           id: 'invi-1',
-          itemId: 'srv-1',
-          itemName: 'Water Potability Microbiological Test',
-          itemCode: 'SRV-001',
+          itemId: 'prod-1',
+          itemName: 'Executive Office Chair',
+          itemCode: 'PRD-101',
           quantity: 1,
-          rate: 1500,
+          rate: 8500,
           discountPercent: 0,
           taxPercent: 18,
-          taxAmount: 270,
-          amount: 1770
+          taxAmount: 1530,
+          amount: 10030
         }
       ],
-      subtotal: 1500,
+      subtotal: 8500,
       discountAmount: 0,
-      taxAmount: 270,
-      additionalCharges: 50,
+      taxAmount: 1530,
+      additionalCharges: 100,
       roundOff: 0,
-      total: 1820,
-      amountPaid: 1000,
-      balanceDue: 820,
+      total: 10130,
+      amountPaid: 5000,
+      balanceDue: 5130,
       status: 'Partially Paid',
-      notes: 'Advance Rs 1000 received. Balance payable on report delivery.',
+      notes: 'Advance Rs 5000 received. Balance payable on delivery.',
       isLocked: true,
       createdAt: '2026-07-12T12:00:00Z',
       updatedAt: '2026-07-12T12:00:00Z'
     }
   ];
 
-  // 8. Demo Purchases
+  // 5. Demo Purchases
   const demoPurchases: Purchase[] = [
     {
       id: 'pur-1',
@@ -957,45 +620,32 @@ export function getDemoData(state: AppState): AppState {
       items: [
         {
           id: 'puri-1',
-          itemId: 'chem-1',
-          itemName: 'Concentrated Nitric Acid 69%',
+          itemId: 'prod-2',
+          itemName: 'Dell UltraSharp 27 Monitor',
           quantity: 5,
-          rate: 1200,
+          rate: 22000,
           taxPercent: 18,
-          taxAmount: 1080,
-          amount: 7080,
-          batchNumber: 'BCH-NIT-992',
+          taxAmount: 19800,
+          amount: 129800,
+          batchNumber: 'SER-DELL-992',
           mfgDate: '2026-03-01',
-          expiryDate: '2028-03-01'
-        },
-        {
-          id: 'puri-2',
-          itemId: 'chem-2',
-          itemName: 'Silver Nitrate Powder (Analytical Grade)',
-          quantity: 100,
-          rate: 150,
-          taxPercent: 18,
-          taxAmount: 2700,
-          amount: 17700,
-          batchNumber: 'BCH-SLV-01',
-          mfgDate: '2026-05-10',
-          expiryDate: '2029-05-10'
+          expiryDate: ''
         }
       ],
-      subtotal: 21000,
-      taxAmount: 3780,
-      discountAmount: 1000,
-      total: 23780,
-      amountPaid: 23780,
+      subtotal: 110000,
+      taxAmount: 19800,
+      discountAmount: 5000,
+      total: 124800,
+      amountPaid: 124800,
       balanceDue: 0,
       paymentStatus: 'Paid',
-      storageLocation: 'Chemical Storage Cabin A',
-      notes: 'Chemicals unpacked and stored with safety protocols.',
+      storageLocation: 'IT Storage Room',
+      notes: 'Items received in good condition.',
       createdAt: '2026-07-05T15:00:00Z'
     }
   ];
 
-  // 9. Demo Payments (Payment In & Payment Out)
+  // 6. Demo Payments (Payment In & Payment Out)
   const demoPayments: Payment[] = [
     {
       id: 'pay-1',
@@ -1009,7 +659,7 @@ export function getDemoData(state: AppState): AppState {
       accountId: 'acc-3',
       accountName: 'UPI HDFC Merchant QR',
       referenceNumber: 'UPI-61942059124',
-      notes: 'Partial advance for raw groundwater sample SMP-0001 testing.',
+      notes: 'Partial advance for order.',
       allocations: [
         { invoiceId: 'inv-1', allocatedAmount: 1000 }
       ],
@@ -1035,7 +685,7 @@ export function getDemoData(state: AppState): AppState {
     }
   ];
 
-  // 10. Demo Expenses
+  // 7. Demo Expenses
   const demoExpenses: Expense[] = [
     {
       id: 'exp-1',
@@ -1048,28 +698,13 @@ export function getDemoData(state: AppState): AppState {
       paymentMethod: 'Bank transfer',
       accountId: 'acc-2',
       accountName: 'ICICI Bank Current Account',
-      description: 'Electricity bill for Main Analytical Lab Space (June 2026)',
+      description: 'Electricity bill for Main Space (June 2026)',
       isRecurring: true,
       createdAt: '2026-07-04T10:00:00Z'
-    },
-    {
-      id: 'exp-2',
-      expenseNumber: 'EXP-2026-0002',
-      category: 'Equipment maintenance',
-      expenseDate: '2026-07-08',
-      vendorName: 'Sartorius Technical Services Ltd',
-      amount: 3200,
-      taxAmount: 576,
-      paymentMethod: 'UPI',
-      accountId: 'acc-3',
-      accountName: 'UPI HDFC Merchant QR',
-      description: 'Routine maintenance of Sartorius pH meter (EQ-01)',
-      isRecurring: false,
-      createdAt: '2026-07-08T11:20:00Z'
     }
   ];
 
-  // 11. Demo Stock Movements
+  // 8. Demo Stock Movements
   const demoStockMovements: StockMovement[] = [
     {
       id: 'mov-1',
@@ -1098,65 +733,18 @@ export function getDemoData(state: AppState): AppState {
       user: 'Steve Jobs',
       notes: 'Added from purchase receipt.',
       timestamp: '2026-07-05T15:00:00Z'
-    },
-    {
-      id: 'mov-3',
-      itemId: 'chem-2',
-      itemName: 'Silver Nitrate Powder (Analytical Grade)',
-      type: 'Lab Usage',
-      quantity: -2,
-      referenceId: 'ta-1',
-      referenceNumber: 'TST-0001',
-      user: 'Alan Turing',
-      notes: 'Used in Water Coliform Assay testing titration.',
-      timestamp: '2026-07-14T15:00:00Z'
     }
   ];
 
-  // 12. Demo Lab Reports
-  const demoReports: LabReport[] = [
-    {
-      id: 'rep-1',
-      reportNumber: 'REP-2026-0001',
-      partyId: 'pt-1',
-      partyName: 'AquaPure Bottlers India',
-      sampleId: 'smp-1',
-      sampleCode: 'SMP-2026-0001',
-      sampleName: 'Raw Groundwater Ingress - Source A',
-      sampleType: 'Drinking Water',
-      receivedDate: '2026-07-12',
-      reportDate: '2026-07-14',
-      reportTitle: 'MICROBIOLOGICAL ANALYSIS OF GROUNDWATER',
-      testAssignments: [], // will link to ta-1
-      observations: 'Microbiological culture plates show severe bacterial colony development. Coliform count exceeds standard values.',
-      interpretation: 'The tested sample has active contamination. Direct human consumption is prohibited without standard multi-barrier treatment and chlorination.',
-      conclusion: 'FAIL - Not potable as per IS 10500:2012 biological limits.',
-      disclaimer: 'This analytical report represents only the sample as received and tested at LabBiz. The lab assumes no liability for sampling unless performed by our staff.',
-      preparedBy: 'Alan Turing (Lab Technician)',
-      reviewedBy: 'Marie Curie (Researcher)',
-      approvedBy: 'Richard Feynman (Reviewer)',
-      digitalSignature: 'SIGNED_RICHARD_FEYNMAN_77492',
-      status: 'Under Review',
-      qrCodeData: 'https://labbiz.in/verify/REP-2026-0001',
-      isLocked: false,
-      createdAt: '2026-07-14T15:30:00Z',
-      updatedAt: '2026-07-14T15:30:00Z'
-    }
-  ];
-
-  // 13. Audit logs for seed data actions
+  // 9. Audit logs for seed data actions
   const demoAuditLogs: AuditLog[] = [
     { id: 'al-1', user: 'Steve Jobs', role: 'Inventory Staff', action: 'Purchase Registered & Stocks Credited', module: 'Purchases', recordId: 'pur-1', recordName: 'PUR-2026-0001', timestamp: '2026-07-05T15:01:00Z' },
-    { id: 'al-2', user: 'John Doe', role: 'Receptionist', action: 'Quotation Accepted by Client', module: 'Quotations', recordId: 'qt-1', recordName: 'QT-2026-0001', timestamp: '2026-07-01T12:00:00Z' },
-    { id: 'al-3', user: 'John Doe', role: 'Receptionist', action: 'Sample Registered in LIMS', module: 'Samples', recordId: 'smp-1', recordName: 'SMP-2026-0001', timestamp: '2026-07-12T11:45:00Z' },
-    { id: 'al-4', user: 'Alan Turing', role: 'Lab Technician', action: 'Test Observation Submitted', module: 'Lab Tests', recordId: 'ta-1', recordName: 'TST-0001', timestamp: '2026-07-14T15:00:00Z' },
-    { id: 'al-5', user: 'Marie Curie', role: 'Researcher', action: 'Drafted Analytical Report', module: 'Lab Reports', recordId: 'rep-1', recordName: 'REP-2026-0001', timestamp: '2026-07-14T15:35:00Z' }
+    { id: 'al-2', user: 'John Doe', role: 'Receptionist', action: 'Quotation Accepted by Client', module: 'Quotations', recordId: 'qt-1', recordName: 'QT-2026-0001', timestamp: '2026-07-01T12:00:00Z' }
   ];
 
-  // 14. Initial Notifications
+  // 10. Initial Notifications
   const demoNotifications: AppNotification[] = [
     { id: 'dn-1', title: 'Low Stock Alert', message: 'Item "Concentrated Nitric Acid 69%" is near minimum stock level.', type: 'warning', isRead: false, timestamp: '2026-07-14T16:00:00Z' },
-    { id: 'dn-2', title: 'New Test Results Submitted', message: 'Alan Turing has submitted results for TST-0001 water test.', type: 'info', isRead: false, relatedLink: { module: 'Lab Tests', recordId: 'ta-1' }, timestamp: '2026-07-14T15:01:00Z' },
     { id: 'dn-3', title: 'Payment In Registered', message: 'Received Rs 1000 from AquaPure Bottlers India.', type: 'success', isRead: true, timestamp: '2026-07-12T12:05:00Z' }
   ];
 
@@ -1165,26 +753,7 @@ export function getDemoData(state: AppState): AppState {
   let bankBalance = 450000;
   let upiBalance = 80000;
 
-  // Apply transactions
-  // pay-1 payment in (1000 INR into UPI)
-  upiBalance += 1000;
-  // pay-2 payment out (23780 INR from Bank)
-  bankBalance -= 23780;
-  // exp-1 electricity bill (8500 INR from Bank)
-  bankBalance -= 8500;
-  // exp-2 maintenance bill (3200 INR from UPI)
-  upiBalance -= 3200;
-
-  const demoAccounts: CashBankAccount[] = [
-    { id: 'acc-1', name: 'Lab Business Petty Cash', type: 'Petty Cash', openingBalance: 15000, currentBalance: cashBalance },
-    { id: 'acc-2', name: 'ICICI Bank Current Account', type: 'Bank', openingBalance: 450000, currentBalance: bankBalance },
-    { id: 'acc-3', name: 'UPI HDFC Merchant QR', type: 'UPI', openingBalance: 80000, currentBalance: upiBalance }
-  ];
-
-  // Link report test assignments
-  const matchedReport = { ...demoReports[0] };
-  matchedReport.testAssignments = [demoTestAssignments[0]];
-
+  // Apply transformations
   return {
     ...state,
     parties: demoParties,
@@ -1194,13 +763,14 @@ export function getDemoData(state: AppState): AppState {
     purchases: demoPurchases,
     payments: demoPayments,
     expenses: demoExpenses,
-    samples: demoSamples,
-    testAssignments: demoTestAssignments,
-    labReports: [matchedReport],
     stockMovements: demoStockMovements,
-    equipment: demoEquipment,
-    accounts: demoAccounts,
+    auditLogs: [...demoAuditLogs, ...state.auditLogs],
     notifications: [...demoNotifications, ...state.notifications],
-    auditLogs: [...demoAuditLogs, ...state.auditLogs]
+    accounts: state.accounts.map(acc => {
+      if (acc.id === 'acc-1') return { ...acc, currentBalance: cashBalance };
+      if (acc.id === 'acc-2') return { ...acc, currentBalance: bankBalance };
+      if (acc.id === 'acc-3') return { ...acc, currentBalance: upiBalance };
+      return acc;
+    })
   };
 }

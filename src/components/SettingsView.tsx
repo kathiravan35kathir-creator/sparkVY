@@ -37,7 +37,8 @@ import {
   X,
   Calendar,
   Grid,
-  FileCheck
+  FileCheck,
+  MessageSquare
 } from 'lucide-react';
 import { AppSettings } from '../types';
 import DocumentTemplateRenderer from './DocumentTemplateRenderer';
@@ -48,7 +49,7 @@ export const INVOICE_TEMPLATES = [
   { id: 'tally_classic', name: 'Tally Prime Classic', desc: 'Monospaced classic ledger accounting format with thick lines', paper: 'A4', badge: 'Built-in' },
   { id: 'tally_gst', name: 'Tally Prime GST', desc: 'Detailed central & state GST ledger rows compliant with rules', paper: 'A4', badge: 'Built-in' },
   { id: 'vyapar_modern', name: 'Vyapar Modern', desc: 'Clean cards with teal highlight accents and spacious summaries', paper: 'A4', badge: 'Built-in' },
-  { id: 'corporate_blue', name: 'Corporate Blue', desc: 'Deep blue banner header for high-end clinical labs', paper: 'A4', badge: 'Built-in' },
+  { id: 'corporate_blue', name: 'Corporate Blue', desc: 'Deep blue banner header for high-end professional firms', paper: 'A4', badge: 'Built-in' },
   { id: 'executive_minimal', name: 'Executive Minimal', desc: 'Elegant minimal serif layout with ample white space and borders', paper: 'A4', badge: 'Built-in' },
   { id: 'gst_detailed', name: 'GST Detailed', desc: 'Tax invoice with detailed CGST/SGST/IGST breakdown grids', paper: 'A4', badge: 'Built-in' },
   { id: 'manufacturing_invoice', name: 'Manufacturing Invoice', desc: 'Includes batch tracking, raw materials, and packaging details', paper: 'A4', badge: 'Built-in' },
@@ -63,7 +64,7 @@ export const QUOTATION_TEMPLATES = [
   { id: 'modern_quotation', name: 'Modern Quotation', desc: 'Clean layout with rounded grid headers and soft gray borders', paper: 'A4', badge: 'Built-in' },
   { id: 'tender_format', name: 'Tender Format', desc: 'Strict regulatory and compliance format with specific bids', paper: 'A4', badge: 'Built-in' },
   { id: 'technical_proposal', name: 'Technical Proposal', desc: 'Includes technical specs worksheets and verification stamps', paper: 'A4', badge: 'Built-in' },
-  { id: 'laboratory_estimate', name: 'Laboratory Estimate', desc: 'Specifically designed for multi-sample assay schedules', paper: 'A4', badge: 'Built-in' }
+  { id: 'project_estimate', name: 'Project Estimate', desc: 'Specifically designed for multi-stage service schedules', paper: 'A4', badge: 'Built-in' }
 ];
 
 export const PURCHASE_TEMPLATES = [
@@ -78,21 +79,6 @@ export const RECEIPT_TEMPLATES = [
   { id: 'compact_receipt', name: 'Compact Receipt', desc: 'Half-letter landscape slip layout with double signature lines', paper: 'A5', badge: 'Built-in' },
   { id: 'detailed_receipt', name: 'Detailed Receipt', desc: 'Itemizes specific invoices and past outstanding credits', paper: 'A4', badge: 'Built-in' },
   { id: 'thermal_receipt', name: 'Thermal Receipt', desc: 'Monospaced receipts optimized for standard 80mm roll printers', paper: '80mm', badge: 'Built-in' }
-];
-
-export const LAB_REPORT_TEMPLATES = [
-  { id: 'laboratory_professional', name: 'Laboratory Professional', desc: 'Official letterhead style with digital CSO & Director stamps', paper: 'A4', badge: 'Built-in' },
-  { id: 'research_report', name: 'Research Report', desc: 'Detailed multi-page report structure with literature references', paper: 'A4', badge: 'Built-in' },
-  { id: 'iso_format', name: 'ISO Format', desc: 'ISO/IEC 17025 accredited template with regulatory uncertainty values', paper: 'A4', badge: 'Built-in' },
-  { id: 'medical_style', name: 'Medical Style', desc: 'Color-coded clinical ranges with dedicated pathologist approval boxes', paper: 'A4', badge: 'Built-in' },
-  { id: 'industrial_test_report', name: 'Industrial Test Report', desc: 'Designed for effluent liquid water, gaseous emissions, and soils', paper: 'A4', badge: 'Built-in' }
-];
-
-export const SAMPLE_LABEL_TEMPLATES = [
-  { id: 'qr_label', name: 'QR Label', desc: 'High density QR code for barcode scanners and inventory shelves', paper: 'Compact', badge: 'Built-in' },
-  { id: 'barcode_label', name: 'Barcode Label', desc: 'Traditional linear barcode with UID code lines and timestamp', paper: 'Compact', badge: 'Built-in' },
-  { id: 'compact_label', name: 'Compact Label', desc: 'Micro sized simple label for small sample tubes and vials', paper: 'Compact', badge: 'Built-in' },
-  { id: 'warehouse_label', name: 'Warehouse Label', desc: 'Storage cabinet location, cold slots, and hazard symbols', paper: 'Compact', badge: 'Built-in' }
 ];
 
 interface SettingsViewProps {
@@ -110,14 +96,14 @@ type ActivePageId =
   | 'company_details' | 'general_settings' | 'tax_gst' | 'bank_payments' | 'document_numbering'
   // Sales & Purchase
   | 'invoice_settings' | 'quotation_settings' | 'purchase_settings' | 'receipt_settings' | 'party_settings' | 'item_settings'
-  // Lab Settings
-  | 'sample_settings' | 'lab_test_settings' | 'lab_report_settings' | 'signature_auth'
   // Inventory
-  | 'stock_settings' | 'batch_expiry_settings' | 'units_settings' | 'categories_settings' | 'locations_settings'
+  | 'stock_settings' | 'units_settings' | 'categories_settings' | 'locations_settings'
   // Print & Templates
-  | 'invoice_templates' | 'quotation_templates' | 'receipt_templates' | 'purchase_templates' | 'lab_report_templates' | 'sample_label_templates' | 'print_layout_settings'
+  | 'invoice_templates' | 'quotation_templates' | 'receipt_templates' | 'purchase_templates' | 'print_layout_settings'
+  // Communication
+  | 'whatsapp_business'
   // Application
-  | 'date_time_settings' | 'currency_number_settings' | 'theme_layout_settings' | 'notifications_settings' | 'backup_export_settings' | 'admin_profile_settings';
+  | 'date_time_settings' | 'currency_number_settings' | 'theme_layout_settings' | 'security_settings' | 'notifications_settings' | 'backup_export_settings' | 'admin_profile_settings';
 
 interface NavigationItem {
   id: ActivePageId;
@@ -159,12 +145,82 @@ export default function SettingsView({
   const [showPasswords, setShowPasswords] = useState(false);
   const [numberingType, setNumberingType] = useState<keyof AppSettings['numbering']>('invoice');
   const [backupLog, setBackupLog] = useState<string[]>([]);
+  
+  // WhatsApp Business Test Connection state
+  const [testConnectionStatus, setTestConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
+  const [testConnectionMessage, setTestConnectionMessage] = useState('');
+  const [showTokens, setShowTokens] = useState(false);
+  const [whatsappSettingsTab, setWhatsappSettingsTab] = useState<'config' | 'logs'>('config');
+  const [communicationLogsList, setCommunicationLogsList] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  const fetchCommunicationLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const res = await fetch('/api/communication/logs');
+      const data = await res.json();
+      if (res.ok && data.success && data.logs) {
+        setCommunicationLogsList(data.logs);
+      }
+    } catch (err) {
+      console.error('Failed to fetch communication logs:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const handleRetryLog = async (logId: string) => {
+    try {
+      const res = await fetch(`/api/whatsapp/retry-log/${logId}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert('Retry request sent successfully! Checking delivery status...');
+        setTimeout(fetchCommunicationLogs, 1500);
+      } else {
+        alert(`Failed to retry: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Retry failed:', err);
+    }
+  };
+
+  const handleTestWhatsAppConnection = async () => {
+    setTestConnectionStatus('testing');
+    setTestConnectionMessage('');
+    try {
+      const res = await fetch('/api/whatsapp/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: localSettings.communication?.whatsapp?.accessToken || '',
+          permanentAccessToken: localSettings.communication?.whatsapp?.permanentAccessToken || '',
+          phoneNumberId: localSettings.communication?.whatsapp?.phoneNumberId || '',
+          businessAccountId: localSettings.communication?.whatsapp?.businessAccountId || '',
+          apiVersion: localSettings.communication?.whatsapp?.apiVersion || 'v18.0',
+          defaultSenderName: localSettings.communication?.whatsapp?.defaultSenderName || 'BizOps ERP',
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestConnectionStatus('success');
+        setTestConnectionMessage(data.message || 'Meta Cloud API connection test passed!');
+      } else {
+        setTestConnectionStatus('failed');
+        setTestConnectionMessage(data.error || 'Connection failed. Please check your credentials.');
+      }
+    } catch (err: any) {
+      setTestConnectionStatus('failed');
+      setTestConnectionMessage(err?.message || 'Network error occurred.');
+    }
+  };
 
   // Template Management Center states
-  const [activeDocType, setActiveDocType] = useState<'invoice' | 'quotation' | 'receipt' | 'purchase' | 'labReport' | 'sampleLabel'>('invoice');
+  const [activeDocType, setActiveDocType] = useState<'invoice' | 'quotation' | 'receipt' | 'purchase'>('invoice');
   const [duplicatedTemplates, setDuplicatedTemplates] = useState<any[]>(() => {
     try {
-      const saved = localStorage.getItem('labbiz_duplicated_templates');
+      const saved = localStorage.getItem('bizops_duplicated_templates');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -195,14 +251,12 @@ export default function SettingsView({
 
     const updatedClones = [...duplicatedTemplates, newTpl];
     setDuplicatedTemplates(updatedClones);
-    localStorage.setItem('labbiz_duplicated_templates', JSON.stringify(updatedClones));
+    localStorage.setItem('bizops_duplicated_templates', JSON.stringify(updatedClones));
 
     // Automatically set as active template for this activeDocType
     const field = activeDocType === 'invoice' ? 'invoiceTemplate' :
                   activeDocType === 'quotation' ? 'quotationTemplate' :
-                  activeDocType === 'purchase' ? 'purchaseTemplate' :
-                  activeDocType === 'receipt' ? 'receiptTemplate' :
-                  activeDocType === 'labReport' ? 'labReportTemplate' : 'sampleLabelTemplate';
+                  activeDocType === 'purchase' ? 'purchaseTemplate' : 'receiptTemplate';
     
     setLocalSettings((prev) => {
       const updated = {
@@ -225,14 +279,41 @@ export default function SettingsView({
       invoice_templates: 'invoice',
       quotation_templates: 'quotation',
       receipt_templates: 'receipt',
-      purchase_templates: 'purchase',
-      lab_report_templates: 'labReport',
-      sample_label_templates: 'sampleLabel'
+      purchase_templates: 'purchase'
     };
     if (typeMap[activePage]) {
       setActiveDocType(typeMap[activePage]);
     }
   }, [activePage]);
+
+  useEffect(() => {
+    if (activePage === 'whatsapp_business') {
+      const fetchWhatsAppSettings = async () => {
+        try {
+          const res = await fetch('/api/whatsapp/settings');
+          const data = await res.json();
+          if (res.ok && data.success && data.config) {
+            setLocalSettings(prev => ({
+              ...prev,
+              communication: {
+                ...prev.communication,
+                whatsapp: data.config
+              }
+            }));
+          }
+        } catch (err) {
+          console.error('Failed to fetch WhatsApp Business Settings:', err);
+        }
+      };
+      fetchWhatsAppSettings();
+    }
+  }, [activePage]);
+
+  useEffect(() => {
+    if (activePage === 'whatsapp_business' && whatsappSettingsTab === 'logs') {
+      fetchCommunicationLogs();
+    }
+  }, [activePage, whatsappSettingsTab]);
 
   // Field change handler
   const handleFieldChange = (group: keyof AppSettings, field: string, value: any) => {
@@ -322,6 +403,24 @@ export default function SettingsView({
       }
     }
 
+    // Also save WhatsApp settings if we're on the WhatsApp page
+    if (activePage === 'whatsapp_business') {
+      try {
+        const res = await fetch('/api/whatsapp/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ config: localSettings.communication?.whatsapp })
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          alert(`Failed to save WhatsApp Secure Credentials: ${data.error || 'Unknown error'}`);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to save secure WhatsApp settings:', err);
+      }
+    }
+
     setHasChanges(false);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -340,7 +439,7 @@ export default function SettingsView({
     try {
       let stateObj = dbState;
       if (!stateObj) {
-        const stateStr = localStorage.getItem('labbiz_state');
+        const stateStr = localStorage.getItem('bizops_state');
         if (stateStr) {
           stateObj = JSON.parse(stateStr);
         }
@@ -356,9 +455,7 @@ export default function SettingsView({
       const itemCount = stateObj.items?.length || 0;
       const quoteCount = stateObj.quotations?.length || 0;
       const invoiceCount = stateObj.invoices?.length || 0;
-      const sampleCount = stateObj.samples?.length || 0;
-      const reportCount = stateObj.labReports?.length || 0;
-      const totalRecords = partyCount + itemCount + quoteCount + invoiceCount + sampleCount + reportCount;
+      const totalRecords = partyCount + itemCount + quoteCount + invoiceCount;
 
       // Serialize with pretty-printing
       const formattedJson = JSON.stringify(stateObj, null, 2);
@@ -368,7 +465,7 @@ export default function SettingsView({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       const timestampStr = new Date().toISOString().slice(0, 10);
-      const filename = `labbiz_backup_${timestampStr}_${Date.now()}.json`;
+      const filename = `bizops_backup_${timestampStr}_${Date.now()}.json`;
       
       link.href = url;
       link.download = filename;
@@ -379,7 +476,7 @@ export default function SettingsView({
 
       setBackupLog((prev) => [
         `[${timestamp}] Commencing full schema serialization...`,
-        `[${timestamp}] Bundled: ${partyCount} parties, ${itemCount} items, ${quoteCount} quotations, ${invoiceCount} invoices, ${sampleCount} samples, ${reportCount} lab reports.`,
+        `[${timestamp}] Bundled: ${partyCount} parties, ${itemCount} items, ${quoteCount} quotations, ${invoiceCount} invoices.`,
         `[${timestamp}] Compressed ${totalRecords} data records.`,
         `[${timestamp}] Exported database state successfully to local file!`,
         `[${timestamp}] Backup archive downloaded: ${filename}`,
@@ -395,7 +492,7 @@ export default function SettingsView({
   };
 
   const runFactoryReset = () => {
-    if (confirm('CRITICAL WARNING: This will delete all transactions, ledgers, samples and reset all configurations to absolute factory defaults. This action cannot be undone! Type "RESET" in the next prompt if you wish to continue.')) {
+    if (confirm('CRITICAL WARNING: This will delete all transactions, ledgers, items and reset all configurations to absolute factory defaults. This action cannot be undone! Type "RESET" in the next prompt if you wish to continue.')) {
       const confirmation = prompt('Please type "RESET" to confirm:');
       if (confirmation === 'RESET') {
         alert('All databases reset. Re-booting app state to default standard demo parameters.');
@@ -423,20 +520,10 @@ export default function SettingsView({
       items: [
         { id: 'invoice_settings', label: 'Invoice Settings', desc: 'Invoicing terms, footers & columns visibility', icon: FileText },
         { id: 'quotation_settings', label: 'Quotation Settings', desc: 'Proposal parameters and validity duration', icon: FileSpreadsheet },
-        { id: 'purchase_settings', label: 'Purchase Settings', desc: 'Supplier order terms, batch/reagent visibility', icon: ShoppingCart },
+        { id: 'purchase_settings', label: 'Purchase Settings', desc: 'Supplier order terms', icon: ShoppingCart },
         { id: 'receipt_settings', label: 'Receipt Settings', desc: 'Allocation details, receipt footers & previews', icon: Receipt },
         { id: 'party_settings', label: 'Party Settings', desc: 'Credit boundaries and mandatory tax triggers', icon: Users },
-        { id: 'item_settings', label: 'Item & Service Setup', desc: 'Service tax groupings and unit conversions', icon: Briefcase }
-      ]
-    },
-    {
-      id: 'lab_settings',
-      label: 'Lab Settings',
-      items: [
-        { id: 'sample_settings', label: 'Sample Settings', desc: 'Sample prefixes, TAT durations & labeling size', icon: Barcode },
-        { id: 'lab_test_settings', label: 'Lab Test Settings', desc: 'Double review, incubation thresholds', icon: Activity },
-        { id: 'lab_report_settings', label: 'Lab Report Settings', desc: 'Report layout toggles, reference range details', icon: Award },
-        { id: 'signature_auth', label: 'Signature & Auth', desc: 'Signatory authority names and digital seals', icon: PenTool }
+        { id: 'item_settings', label: 'Item Setup', desc: 'Tax groupings and unit conversions', icon: Briefcase }
       ]
     },
     {
@@ -444,10 +531,9 @@ export default function SettingsView({
       label: 'Inventory',
       items: [
         { id: 'stock_settings', label: 'Stock Settings', desc: 'Negative stock bypass, stock alarms', icon: TrendingDown },
-        { id: 'batch_expiry_settings', label: 'Batch & Expiry', desc: 'Reagent batch numbering and alarm levels', icon: Calendar },
-        { id: 'units_settings', label: 'Units Configuration', desc: 'Primary & secondary testing units', icon: Layers },
-        { id: 'categories_settings', label: 'Categories Settings', desc: 'Service & product grouping categories', icon: Grid },
-        { id: 'locations_settings', label: 'Storage Locations', desc: 'Cold rooms, cabinets and shelf identifiers', icon: Building }
+        { id: 'units_settings', label: 'Units Configuration', desc: 'Primary & secondary units', icon: Layers },
+        { id: 'categories_settings', label: 'Categories Settings', desc: 'Grouping categories', icon: Grid },
+        { id: 'locations_settings', label: 'Storage Locations', desc: 'Warehouse locations, cabinets and shelf identifiers', icon: Building }
       ]
     },
     {
@@ -458,9 +544,14 @@ export default function SettingsView({
         { id: 'quotation_templates', label: 'Quotation Templates', desc: 'Customize proposal layout & live preview', icon: FileSpreadsheet },
         { id: 'receipt_templates', label: 'Receipt Templates', desc: 'Customize receipt layout & live preview', icon: Receipt },
         { id: 'purchase_templates', label: 'Purchase Templates', desc: 'Customize purchase order layout & live preview', icon: ShoppingCart },
-        { id: 'lab_report_templates', label: 'Lab Report Templates', desc: 'Customize report layout & live preview', icon: Award },
-        { id: 'sample_label_templates', label: 'Sample Label Templates', desc: 'Customize thermal label barcodes & preview', icon: Barcode },
         { id: 'print_layout_settings', label: 'Print Layout Settings', desc: 'Global primary colors, fonts, and margin rules', icon: Palette }
+      ]
+    },
+    {
+      id: 'communication',
+      label: 'Communication',
+      items: [
+        { id: 'whatsapp_business', label: 'WhatsApp Business', desc: 'Meta Cloud API credentials & template sharing', icon: MessageSquare }
       ]
     },
     {
@@ -470,6 +561,7 @@ export default function SettingsView({
         { id: 'date_time_settings', label: 'Date & Time Format', desc: 'System date/time display configurations', icon: Clock },
         { id: 'currency_number_settings', label: 'Currency & Numbers', desc: 'Decimal places, currency symbols, separators', icon: Coins },
         { id: 'theme_layout_settings', label: 'Theme & Layout', desc: 'Sidebar modes, compact table layout options', icon: Sliders },
+        { id: 'security_settings', label: 'Security & PIN', desc: 'Transaction PIN and protected actions', icon: Lock },
         { id: 'notifications_settings', label: 'Notifications Setup', desc: 'Email and in-app system triggers', icon: Bell },
         { id: 'backup_export_settings', label: 'Backup & JSON Export', desc: 'Download state database archives & reset', icon: Download },
         { id: 'admin_profile_settings', label: 'Admin Profile', desc: 'Administrative user details', icon: Users }
@@ -620,8 +712,8 @@ export default function SettingsView({
                         type="text"
                         required
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.labName}
-                        onChange={(e) => handleFieldChange('company', 'labName', e.target.value)}
+                        value={localSettings.company.companyName}
+                        onChange={(e) => handleFieldChange('company', 'companyName', e.target.value)}
                       />
                     </div>
                     <div>
@@ -638,8 +730,8 @@ export default function SettingsView({
                       <input
                         type="text"
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.displayLabName}
-                        onChange={(e) => handleFieldChange('company', 'displayLabName', e.target.value)}
+                        value={localSettings.company.displayCompanyName}
+                        onChange={(e) => handleFieldChange('company', 'displayCompanyName', e.target.value)}
                       />
                     </div>
                     <div>
@@ -762,7 +854,7 @@ export default function SettingsView({
                       >
                         <option value="dashboard">Operations Dashboard</option>
                         <option value="sales">Sales & Billing Ledger</option>
-                        <option value="lab">LIMS Sample Intake</option>
+                        <option value="business">Business Operations Intake</option>
                         <option value="inventory">Inventory Hub</option>
                       </select>
                     </div>
@@ -880,7 +972,7 @@ export default function SettingsView({
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Merchant UPI VPA ID</label>
                       <input
                         type="text"
-                        placeholder="labbiz@upi"
+                        placeholder="bizops@upi"
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
                         value={localSettings.bank.upiId}
                         onChange={(e) => handleFieldChange('bank', 'upiId', e.target.value)}
@@ -916,7 +1008,7 @@ export default function SettingsView({
                               : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                           }`}
                         >
-                          {type.replace(/_/g, ' ')}
+                          {type.replace(/([A-Z])/g, ' $1').trim().replace(/_/g, ' ')}
                         </button>
                       ))}
                     </div>
@@ -962,6 +1054,28 @@ export default function SettingsView({
                         <option value="true">Automatically reset back to 1 every new FY</option>
                         <option value="false">Infinite continuous numeric serials</option>
                       </select>
+                    </div>
+                    <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg border border-blue-100 sm:col-span-2">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="includeFY"
+                          checked={localSettings.numbering[numberingType].includeFinancialYear}
+                          onChange={(e) => handleNumberingChange(numberingType, 'includeFinancialYear', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                        />
+                        <label htmlFor="includeFY" className="text-xs font-bold text-slate-700">Include FY in document number (e.g. /24-25/)</label>
+                      </div>
+                      <div className="flex items-center space-x-2 border-l border-blue-200 pl-3">
+                        <input
+                          type="checkbox"
+                          id="includeMonth"
+                          checked={localSettings.numbering[numberingType].includeMonth}
+                          onChange={(e) => handleNumberingChange(numberingType, 'includeMonth', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                        />
+                        <label htmlFor="includeMonth" className="text-xs font-bold text-slate-700">Include Month (e.g. /07/)</label>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1117,165 +1231,20 @@ export default function SettingsView({
                 </div>
               )}
 
-              {/* K. ITEM & SERVICE SETTINGS */}
+              {/* K. ITEM SETUP */}
               {activePage === 'item_settings' && (
                 <div className="space-y-4">
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-4">
-                    <p className="text-xs font-bold text-slate-700">Analytical Assay Standard Setup</p>
+                    <p className="text-xs font-bold text-slate-700">Item & Service Setup</p>
                     <div className="space-y-3 text-[11px] text-slate-600">
                       <label className="flex items-center space-x-2 cursor-pointer font-bold">
                         <input type="checkbox" defaultChecked className="rounded text-blue-600 border-slate-300" />
-                        <span>Enforce standard SAC code (998346) for newly registered biological assays</span>
+                        <span>Enforce standard HSN/SAC codes for newly registered items</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer font-bold">
                         <input type="checkbox" defaultChecked className="rounded text-blue-600 border-slate-300" />
-                        <span>Allow dynamic price modification inside laboratory worksheet invoices</span>
+                        <span>Allow dynamic price modification inside sales documents</span>
                       </label>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* =========================================================================
-                  LAB SETTINGS SUB-PAGES
-                  ========================================================================= */}
-
-              {/* L. SAMPLE SETTINGS */}
-              {activePage === 'sample_settings' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Standard LIMS Sample Intake Prefix</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
-                        value={localSettings.sample.prefix}
-                        onChange={(e) => handleFieldChange('sample', 'prefix', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Turnaround Target Duration (Days)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-bold focus:outline-none focus:border-blue-500"
-                        value={localSettings.sample.defaultTurnaroundTimeDays}
-                        onChange={(e) => handleFieldChange('sample', 'defaultTurnaroundTimeDays', Number(e.target.value))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Barcode Technology Preference</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.sample.barcodePreference}
-                        onChange={(e) => handleFieldChange('sample', 'barcodePreference', e.target.value)}
-                      >
-                        <option value="QR Code">QR Code Matrix (Recommended)</option>
-                        <option value="Barcode">Standard Linear Code-128 Barcode</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Standard Thermal Label Roll Size</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.sample.labelSize}
-                        onChange={(e) => handleFieldChange('sample', 'labelSize', e.target.value)}
-                      >
-                        <option value="50mm x 25mm">50mm x 25mm (Standard Compact Tube)</option>
-                        <option value="38mm x 25mm">38mm x 25mm (Vial Micro size)</option>
-                        <option value="80mm x 50mm">80mm x 50mm (Large Sample Container)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* M. LAB TEST SETTINGS */}
-              {activePage === 'lab_test_settings' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-                    <div>
-                      <p className="text-xs font-bold text-slate-700">Enforce Double Scientific Peer Review</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Require senior cytologist/scientist reviewer approvals before reports lock digitally.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => alert('Peer review rules activated for active laboratory validation sequences.')}
-                      className="relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out bg-slate-300"
-                    >
-                      <span className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out translate-x-0" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* N. LAB REPORT SETTINGS */}
-              {activePage === 'lab_report_settings' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-slate-600 font-bold">
-                    <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-150 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={localSettings.report.showLabLogo}
-                        onChange={(e) => handleFieldChange('report', 'showLabLogo', e.target.checked)}
-                        className="rounded text-blue-600 border-slate-300"
-                      />
-                      <span>Show logo branding in report headers</span>
-                    </label>
-                    <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-150 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={localSettings.report.showAccreditation}
-                        onChange={(e) => handleFieldChange('report', 'showAccreditation', e.target.checked)}
-                        className="rounded text-blue-600 border-slate-300"
-                      />
-                      <span>Show NABL certificate accreditation details</span>
-                    </label>
-                    <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-150 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={localSettings.report.showCustomerDetails}
-                        onChange={(e) => handleFieldChange('report', 'showCustomerDetails', e.target.checked)}
-                        className="rounded text-blue-600 border-slate-300"
-                      />
-                      <span>Include billed recipient reference codes</span>
-                    </label>
-                    <label className="flex items-center space-x-2 p-2 bg-slate-50 rounded border border-slate-150 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={localSettings.report.showSampleDetails}
-                        onChange={(e) => handleFieldChange('report', 'showSampleDetails', e.target.checked)}
-                        className="rounded text-blue-600 border-slate-300"
-                      />
-                      <span>Display sample matrix collection timelines</span>
-                    </label>
-                  </div>
-
-                  <div className="sm:col-span-2 pt-2">
-                    <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Standard NABL Accreditation Certificate Number</label>
-                    <input
-                      type="text"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono font-bold focus:outline-none focus:border-blue-500"
-                      value={localSettings.report.accreditationText}
-                      onChange={(e) => handleFieldChange('report', 'accreditationText', e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* O. SIGNATURE & AUTHORISATION */}
-              {activePage === 'signature_auth' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Accredited Laboratory Certificate Signatory Stamp Label *</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:outline-none focus:border-blue-500"
-                        value={localSettings.report.signatureText}
-                        onChange={(e) => handleFieldChange('report', 'signatureText', e.target.value)}
-                      />
                     </div>
                   </div>
                 </div>
@@ -1291,7 +1260,7 @@ export default function SettingsView({
                   <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-200">
                     <div>
                       <p className="text-xs font-bold text-slate-700">Allow Negative Stock Level Sales</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Permit billing and invoicing reagent kits even if recorded ledger stock drops below 0.</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Permit billing and invoicing items even if recorded ledger stock drops below 0.</p>
                     </div>
                     <button
                       type="button"
@@ -1308,30 +1277,15 @@ export default function SettingsView({
                 </div>
               )}
 
-              {/* Q. BATCH & EXPIRY */}
-              {activePage === 'batch_expiry_settings' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-4">
-                    <p className="text-xs font-bold text-slate-700">Batch Expiry Safe Guards</p>
-                    <div className="space-y-3 text-[11px] text-slate-600">
-                      <label className="flex items-center space-x-2 cursor-pointer font-bold">
-                        <input type="checkbox" defaultChecked className="rounded text-blue-600 border-slate-300" />
-                        <span>Block chemical reagent allocations if remaining shelf life is &lt; 90 days</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* R. UNITS CONFIGURATION */}
               {activePage === 'units_settings' && (
                 <div className="space-y-4">
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-3 text-xs">
                     <h5 className="font-bold text-slate-700 uppercase tracking-wide text-[9px]">Standard Operational Unit Definitions:</h5>
                     <div className="divide-y divide-slate-200 font-mono text-[11px] text-slate-600">
-                      <div className="py-2 flex justify-between"><span>Sample (SMP)</span> <span className="font-bold">Active default LIMS matrix unit</span></div>
-                      <div className="py-2 flex justify-between"><span>Vial (VIL)</span> <span className="font-bold">Active chemical solution container</span></div>
-                      <div className="py-2 flex justify-between"><span>Box / 100 (BOX)</span> <span className="font-bold">Active package grouping unit</span></div>
+                      <div className="py-2 flex justify-between"><span>Piece (PCS)</span> <span className="font-bold">Primary unit</span></div>
+                      <div className="py-2 flex justify-between"><span>Kilogram (KG)</span> <span className="font-bold">Weight unit</span></div>
+                      <div className="py-2 flex justify-between"><span>Box / 10 (BOX)</span> <span className="font-bold">Packaging unit</span></div>
                     </div>
                   </div>
                 </div>
@@ -1343,7 +1297,7 @@ export default function SettingsView({
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-3 text-xs">
                     <h5 className="font-bold text-slate-700 uppercase tracking-wide text-[9px]">System Grouping Categories:</h5>
                     <div className="flex flex-wrap gap-2">
-                      {['Water Testing', 'Chemical Plating Services', 'LIMS Assay Reagents', 'Vessels & Glassware', 'Lab Equipment Maintenance'].map((cat) => (
+                      {['General Products', 'Hardware', 'Software', 'Services', 'Maintenance'].map((cat) => (
                         <span key={cat} className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg font-bold text-slate-600 shadow-3xs">{cat}</span>
                       ))}
                     </div>
@@ -1357,8 +1311,8 @@ export default function SettingsView({
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 space-y-3 text-xs">
                     <h5 className="font-bold text-slate-700 uppercase tracking-wide text-[9px]">System Storage Warehouses & Shelves:</h5>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] text-slate-600 font-mono">
-                      <div className="p-2.5 bg-white rounded border border-slate-200"><strong>Cold Room Refrigerator 1A</strong> (Temp range: 2°C to 8°C)</div>
-                      <div className="p-2.5 bg-white rounded border border-slate-200"><strong>Chemical Cabinet B</strong> (Reagent isolation shelves)</div>
+                      <div className="p-2.5 bg-white rounded border border-slate-200"><strong>Main Warehouse</strong> (Primary storage)</div>
+                      <div className="p-2.5 bg-white rounded border border-slate-200"><strong>Display Shelf A</strong> (Showroom inventory)</div>
                     </div>
                   </div>
                 </div>
@@ -1386,7 +1340,7 @@ export default function SettingsView({
                         <Palette size={20} className="text-blue-600" />
                         <h2 className="text-sm font-black text-slate-900 tracking-tight uppercase">Template Management Center</h2>
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-black uppercase rounded-full">
-                          Professional LIMS Suite
+                          Professional ERP Suite
                         </span>
                       </div>
                     </div>
@@ -1397,9 +1351,7 @@ export default function SettingsView({
                         onClick={() => {
                           const field = activeDocType === 'invoice' ? 'invoiceTemplate' :
                                         activeDocType === 'quotation' ? 'quotationTemplate' :
-                                        activeDocType === 'purchase' ? 'purchaseTemplate' :
-                                        activeDocType === 'receipt' ? 'receiptTemplate' :
-                                        activeDocType === 'labReport' ? 'labReportTemplate' : 'sampleLabelTemplate';
+                                        activeDocType === 'purchase' ? 'purchaseTemplate' : 'receiptTemplate';
                           const selectedId = localSettings.print[field as keyof AppSettings['print']] || '';
                           setNewTemplateBaseId(selectedId || 'tally_modern');
                           setNewTemplateName(`Custom ${activeDocType.charAt(0).toUpperCase() + activeDocType.slice(1)} Template`);
@@ -1423,9 +1375,7 @@ export default function SettingsView({
                           invoice: INVOICE_TEMPLATES,
                           quotation: QUOTATION_TEMPLATES,
                           purchase: PURCHASE_TEMPLATES,
-                          receipt: RECEIPT_TEMPLATES,
-                          labReport: LAB_REPORT_TEMPLATES,
-                          sampleLabel: SAMPLE_LABEL_TEMPLATES
+                          receipt: RECEIPT_TEMPLATES
                         };
                         const baseList = listMap[activeDocType] || [];
                         const clones = duplicatedTemplates.filter((t: any) => t.docType === activeDocType);
@@ -1433,9 +1383,7 @@ export default function SettingsView({
 
                         const field = activeDocType === 'invoice' ? 'invoiceTemplate' :
                                       activeDocType === 'quotation' ? 'quotationTemplate' :
-                                      activeDocType === 'purchase' ? 'purchaseTemplate' :
-                                      activeDocType === 'receipt' ? 'receiptTemplate' :
-                                      activeDocType === 'labReport' ? 'labReportTemplate' : 'sampleLabelTemplate';
+                                      activeDocType === 'purchase' ? 'purchaseTemplate' : 'receiptTemplate';
                         
                         const selectedId = localSettings.print[field as keyof AppSettings['print']] || '';
 
@@ -1499,7 +1447,7 @@ export default function SettingsView({
                                       if (confirm(`Are you sure you want to delete your custom template "${tpl.name}"?`)) {
                                         const filtered = duplicatedTemplates.filter(item => item.id !== tpl.id);
                                         setDuplicatedTemplates(filtered);
-                                        localStorage.setItem('labbiz_duplicated_templates', JSON.stringify(filtered));
+                                        localStorage.setItem('bizops_duplicated_templates', JSON.stringify(filtered));
                                         
                                         // Reset selected template if deleted
                                         if (selectedId === tpl.id) {
@@ -1800,7 +1748,7 @@ export default function SettingsView({
                       <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 shrink-0 font-sans">
                         <span className="flex items-center space-x-1.5 font-black text-[10px] text-slate-700 uppercase tracking-wider">
                           <Printer size={13} className="text-slate-400" />
-                          <span>Real-time LIMS PDF Preview Sheet</span>
+                          <span>Real-time ERP PDF Preview Sheet</span>
                         </span>
                         <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 font-bold rounded-full text-[9px] uppercase font-sans">
                           Scale: Fit width (A4 Layout)
@@ -2120,7 +2068,7 @@ export default function SettingsView({
                     <div className="p-4 bg-blue-50 rounded-xl border border-blue-150 flex flex-col justify-between h-40">
                       <div>
                         <h4 className="font-extrabold text-blue-900 text-sm">Full State Backup Archive</h4>
-                        <p className="text-[11px] text-blue-700 mt-1">Package all customer data, LIMS worksheets, reagent stock movements and ledger reports into a single portable backup file.</p>
+                        <p className="text-[11px] text-blue-700 mt-1">Package all customer data, ERP worksheets, stock movements and ledger reports into a single portable backup file.</p>
                       </div>
                       <button
                         type="button"
@@ -2130,6 +2078,101 @@ export default function SettingsView({
                         <Download size={13} />
                         <span>Run Full Database Backup</span>
                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECURITY SETTINGS */}
+              {activePage === 'security_settings' && (
+                <div className="space-y-6">
+                  <div className="bg-slate-900 rounded-xl p-6 text-white overflow-hidden relative">
+                    <div className="relative z-10">
+                      <h4 className="text-lg font-black tracking-tight">Transaction Security PIN</h4>
+                      <p className="text-slate-400 text-xs mt-1 max-w-md">Enable a 4-6 digit PIN to authorize critical operations. This prevents unauthorized cancellations or high-value payouts.</p>
+                      
+                      <div className="mt-6 flex items-center gap-4">
+                        <div className="flex gap-2">
+                          {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <div 
+                              key={i} 
+                              className={`w-3 h-3 rounded-full border-2 border-slate-700 ${
+                                (localSettings.security.transactionPinHash?.length || 0) > i ? 'bg-blue-500 border-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : ''
+                              }`} 
+                            />
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newPin = prompt('Enter new 4-6 digit PIN:');
+                            if (newPin && /^\d{4,6}$/.test(newPin)) {
+                              handleFieldChange('security', 'transactionPinHash', newPin);
+                            } else if (newPin) {
+                              alert('Invalid PIN. Must be 4-6 digits.');
+                            }
+                          }}
+                          className="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-black uppercase tracking-widest transition"
+                        >
+                          {localSettings.security.transactionPinHash ? 'Change PIN' : 'Setup PIN'}
+                        </button>
+                        {localSettings.security.transactionPinHash && (
+                          <button
+                            type="button"
+                            onClick={() => handleFieldChange('security', 'transactionPinHash', '')}
+                            className="px-4 py-1.5 bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 rounded-lg text-[10px] font-black uppercase tracking-widest transition"
+                          >
+                            Disable
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <Lock className="absolute -right-8 -bottom-8 text-white/5" size={160} />
+                  </div>
+
+                  <div className="space-y-3">
+                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Protected Actions</h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[
+                        { id: 'cancel_invoice', label: 'Cancel Sales Invoice' },
+                        { id: 'record_refund', label: 'Issue Credit Note Refund' },
+                        { id: 'payment_out', label: 'Record Payment Out' },
+                        { id: 'delete_party', label: 'Deactivate Party Record' },
+                        { id: 'edit_settings', label: 'Modify System Settings' }
+                      ].map((action) => (
+                        <label 
+                          key={action.id}
+                          className={`flex items-center justify-between p-3.5 rounded-xl border transition cursor-pointer ${
+                            localSettings.security.protectedActions.includes(action.id)
+                              ? 'bg-blue-50 border-blue-200'
+                              : 'bg-white border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${localSettings.security.protectedActions.includes(action.id) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                              <ShieldAlert size={14} />
+                            </div>
+                            <span className={`text-[11px] font-bold ${localSettings.security.protectedActions.includes(action.id) ? 'text-blue-900' : 'text-slate-600'}`}>
+                              {action.label}
+                            </span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                            checked={localSettings.security.protectedActions.includes(action.id)}
+                            onChange={(e) => {
+                              const actions = [...localSettings.security.protectedActions];
+                              if (e.target.checked) {
+                                actions.push(action.id);
+                              } else {
+                                const index = actions.indexOf(action.id);
+                                if (index > -1) actions.splice(index, 1);
+                              }
+                              handleFieldChange('security', 'protectedActions', actions);
+                            }}
+                          />
+                        </label>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -2244,6 +2287,453 @@ export default function SettingsView({
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {activePage === 'whatsapp_business' && (
+                <div className="space-y-6">
+                  {/* Tab Bar */}
+                  <div className="flex border-b border-slate-200">
+                    <button
+                      type="button"
+                      id="whatsapp-config-tab"
+                      onClick={() => setWhatsappSettingsTab('config')}
+                      className={`px-4 py-2 text-xs font-bold border-b-2 transition ${
+                        whatsappSettingsTab === 'config'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      API Configuration
+                    </button>
+                    <button
+                      type="button"
+                      id="whatsapp-logs-tab"
+                      onClick={() => setWhatsappSettingsTab('logs')}
+                      className={`px-4 py-2 text-xs font-bold border-b-2 transition ${
+                        whatsappSettingsTab === 'logs'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Delivery Logs
+                    </button>
+                  </div>
+
+                  {whatsappSettingsTab === 'config' && (
+                    <div className="space-y-6">
+                      {/* Toggle header */}
+                      <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-xl border border-blue-100">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-800 animate-fade-in">WhatsApp Business Cloud API Settings</h4>
+                          <p className="text-xs text-slate-500 mt-1 animate-fade-in">
+                            Configure Meta Cloud API credentials to enable direct document sharing with PDF attachments.
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            id="enable-whatsapp-api-toggle"
+                            checked={localSettings.communication?.whatsapp?.enableBusinessApi || false}
+                            onChange={(e) => {
+                              const val = e.target.checked;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    enableBusinessApi: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                          <span className="ml-2 text-xs font-semibold text-slate-700">
+                            {localSettings.communication?.whatsapp?.enableBusinessApi ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </label>
+                      </div>
+
+                      {/* Settings fields */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">API Version</label>
+                          <input
+                            type="text"
+                            placeholder="v18.0"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                            value={localSettings.communication?.whatsapp?.apiVersion || 'v18.0'}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    apiVersion: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Default Sender Name</label>
+                          <input
+                            type="text"
+                            placeholder="BizOps ERP"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                            value={localSettings.communication?.whatsapp?.defaultSenderName || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    defaultSenderName: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Phone Number ID</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 106518739213454"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                            value={localSettings.communication?.whatsapp?.phoneNumberId || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    phoneNumberId: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">WhatsApp Business Account ID</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 106518739213454"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                            value={localSettings.communication?.whatsapp?.businessAccountId || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    businessAccountId: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Webhook Verify Token</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. my_bizops_verify_token"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                            value={localSettings.communication?.whatsapp?.webhookVerifyToken || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    webhookVerifyToken: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Webhook Secret</label>
+                          <input
+                            type="password"
+                            placeholder="e.g. whsec_..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                            value={localSettings.communication?.whatsapp?.webhookSecret || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    webhookSecret: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider">Access Token</label>
+                            <button
+                              type="button"
+                              id="reveal-whatsapp-token-btn"
+                              onClick={() => setShowTokens(!showTokens)}
+                              className="text-[9px] text-blue-600 font-bold hover:underline"
+                            >
+                              {showTokens ? 'Hide Tokens' : 'Reveal Tokens'}
+                            </button>
+                          </div>
+                          <input
+                            type={showTokens ? 'text' : 'password'}
+                            placeholder="EAABw..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-mono text-xs font-semibold"
+                            value={localSettings.communication?.whatsapp?.accessToken || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    accessToken: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Permanent Access Token (Optional)</label>
+                          <input
+                            type={showTokens ? 'text' : 'password'}
+                            placeholder="EAABw..."
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-mono text-xs font-semibold"
+                            value={localSettings.communication?.whatsapp?.permanentAccessToken || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                communication: {
+                                  ...prev.communication,
+                                  whatsapp: {
+                                    ...prev.communication.whatsapp,
+                                    permanentAccessToken: val
+                                  }
+                                }
+                              }));
+                              setHasChanges(true);
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Test Connection Button and Feedback Panel */}
+                      <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <button
+                          type="button"
+                          id="test-whatsapp-connection-btn"
+                          onClick={handleTestWhatsAppConnection}
+                          disabled={testConnectionStatus === 'testing'}
+                          className="px-5 py-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-400 text-white font-bold rounded-lg text-xs transition shadow-sm self-start"
+                        >
+                          {testConnectionStatus === 'testing' ? 'Testing Connection...' : 'Test Connection'}
+                        </button>
+
+                        {testConnectionStatus !== 'idle' && (
+                          <div className={`p-3 rounded-lg border text-xs flex-grow flex items-center space-x-2 ${
+                            testConnectionStatus === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+                          }`}>
+                            <div className="font-bold uppercase tracking-wide text-[10px]">
+                              {testConnectionStatus === 'success' ? 'Passed' : 'Failed'}:
+                            </div>
+                            <div className="font-medium">{testConnectionMessage}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* failover fields */}
+                      <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+                          <div>
+                            <p className="text-xs font-bold text-slate-700">Second-Step Verification</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Require OTP for sharing sensitive documents.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleFieldChange('communication', 'whatsapp', { ...localSettings.communication.whatsapp, enableSecondStepVerification: !localSettings.communication.whatsapp.enableSecondStepVerification })}
+                            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                              localSettings.communication.whatsapp.enableSecondStepVerification ? 'bg-blue-600' : 'bg-slate-300'
+                            }`}
+                          >
+                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                              localSettings.communication.whatsapp.enableSecondStepVerification ? 'translate-x-5' : 'translate-x-0'
+                            }`} />
+                          </button>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Alternate Alert Number</label>
+                          <input
+                            type="text"
+                            placeholder="+919876543210"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-bold"
+                            value={localSettings.communication.whatsapp.alternateNumber || ''}
+                            onChange={(e) => handleFieldChange('communication', 'whatsapp', { ...localSettings.communication.whatsapp, alternateNumber: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Informational Panel */}
+                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                        <h5 className="text-xs font-bold text-slate-700">Supported Message Placeholders & Template</h5>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Below is the default message caption template that will accompany your shared PDF document:
+                        </p>
+                        <pre className="bg-white p-3 rounded-lg border border-slate-200 font-mono text-[10px] text-slate-600 leading-relaxed whitespace-pre-wrap">
+                          {`Hello {{customer_name}},
+
+Greetings from {{company_name}}.
+
+Please find your document attached.
+
+Document: {{document_number}}
+Amount: {{amount}}
+
+Thank you.
+
+Regards,
+{{company_name}}`}
+                        </pre>
+                        <div className="text-[10px] text-slate-500">
+                          <strong>Available Variables:</strong> <code className="bg-white px-1 border rounded">{"{{customer_name}}"}</code>, <code className="bg-white px-1 border rounded">{"{{company_name}}"}</code>, <code className="bg-white px-1 border rounded">{"{{document_number}}"}</code>, <code className="bg-white px-1 border rounded">{"{{document_date}}"}</code>, <code className="bg-white px-1 border rounded">{"{{amount}}"}</code>, <code className="bg-white px-1 border rounded">{"{{due_date}}"}</code>, <code className="bg-white px-1 border rounded">{"{{payment_status}}"}</code>, <code className="bg-white px-1 border rounded">{"{{support_phone}}"}</code>, <code className="bg-white px-1 border rounded">{"{{business_email}}"}</code>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {whatsappSettingsTab === 'logs' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-800">Communication Delivery Status History</h4>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Track the delivery statuses of messages dispatched via the WhatsApp Business Cloud API.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          id="refresh-logs-btn"
+                          onClick={fetchCommunicationLogs}
+                          disabled={logsLoading}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition"
+                        >
+                          {logsLoading ? 'Refreshing...' : 'Refresh Logs'}
+                        </button>
+                      </div>
+
+                      {logsLoading && communicationLogsList.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-500">Loading delivery history...</div>
+                      ) : communicationLogsList.length === 0 ? (
+                        <div className="py-12 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                          No document sharing history found yet. Share a document using the Enterprise Business API to populate this log.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[9px]">
+                                <th className="p-3">Recipient</th>
+                                <th className="p-3">Document</th>
+                                <th className="p-3">Channel</th>
+                                <th className="p-3">Status</th>
+                                <th className="p-3">Timestamp</th>
+                                <th className="p-3 text-center">Retries</th>
+                                <th className="p-3">API Response / ID</th>
+                                <th className="p-3 text-right">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {communicationLogsList.map((log: any) => (
+                                <tr key={log.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50">
+                                  <td className="p-3 font-semibold text-slate-700">{log.recipient}</td>
+                                  <td className="p-3">
+                                    <div className="font-semibold text-slate-800">{log.document}</div>
+                                    <div className="text-[10px] text-slate-400">{log.documentType}</div>
+                                  </td>
+                                  <td className="p-3">
+                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">
+                                      {log.channel}
+                                    </span>
+                                  </td>
+                                  <td className="p-3">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      log.status === 'Queued' ? 'bg-amber-100 text-amber-800' :
+                                      log.status === 'Sent' ? 'bg-blue-100 text-blue-800' :
+                                      log.status === 'Delivered' ? 'bg-indigo-100 text-indigo-800' :
+                                      log.status === 'Read' ? 'bg-emerald-100 text-emerald-800' :
+                                      'bg-rose-100 text-rose-800'
+                                    }`}>
+                                      {log.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-slate-500 text-[10px]">
+                                    {new Date(log.timestamp).toLocaleString()}
+                                  </td>
+                                  <td className="p-3 text-slate-600 font-bold text-center">{log.retryCount || 0}</td>
+                                  <td className="p-3 text-slate-500 font-mono text-[9px] max-w-[200px] truncate" title={log.apiResponse}>
+                                    {log.apiResponse}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    {log.status === 'Failed' && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRetryLog(log.id)}
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px] shadow-sm transition"
+                                      >
+                                        Retry
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

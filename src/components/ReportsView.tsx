@@ -15,7 +15,7 @@ import {
   Briefcase,
   DollarSign
 } from 'lucide-react';
-import { Invoice, Purchase, Expense, Payment, Sample, Item, Party } from '../types';
+import { Invoice, Purchase, Expense, Payment, Sample, Item, Party, Quotation } from '../types';
 
 interface ReportsViewProps {
   invoices: Invoice[];
@@ -25,19 +25,20 @@ interface ReportsViewProps {
   samples: Sample[];
   items: Item[];
   parties: Party[];
+  quotations: Quotation[];
   isAdmin: boolean;
 }
 
-type ReportTab = 'finance' | 'inventory' | 'lims';
+type ReportTab = 'finance' | 'inventory' | 'crm';
 
 export default function ReportsView({
   invoices,
   purchases,
   expenses,
   payments,
-  samples,
   items,
   parties,
+  quotations,
   isAdmin
 }: ReportsViewProps) {
   const [activeTab, setActiveTab] = useState<ReportTab>('finance');
@@ -68,19 +69,20 @@ export default function ReportsView({
   const profitOrLoss = totalInvoicedSales - totalPurchasesCost - totalIndirectExpenses;
 
   // 2. INVENTORY CALCULATIONS
-  const physicalItems = items.filter((it) => it.type !== 'Laboratory Service' && it.isActive);
+  const physicalItems = items.filter((it) => it.type === 'Product' && it.isActive);
   const lowStockItems = physicalItems.filter((it) => it.currentStock <= it.minimumStock);
   const totalStockValue = physicalItems.reduce((sum, it) => sum + (it.currentStock * it.purchasePrice), 0);
 
-  // 3. LIMS CALCULATIONS
-  const filteredSamples = samples.filter((s) => isWithinRange(s.receivedDate) && (filterPartyId === 'All' || s.partyId === filterPartyId));
-  const samplesByStatus = {
-    Received: filteredSamples.filter((s) => s.status === 'Received').length,
-    Testing: filteredSamples.filter((s) => s.status === 'Testing' || s.status === 'Test Assigned').length,
-    ReportReady: filteredSamples.filter((s) => s.status === 'Report Ready').length,
-    Delivered: filteredSamples.filter((s) => s.status === 'Delivered').length,
-    Cancelled: filteredSamples.filter((s) => s.status === 'Cancelled' || s.status === 'Rejected').length
-  };
+  // 3. CRM CALCULATIONS
+  const filteredQuotations = quotations.filter((q) => isWithinRange(q.quotationDate) && (filterPartyId === 'All' || q.partyId === filterPartyId));
+  const estimateQuotations = filteredQuotations.filter((q) => q.stage === 'Estimate');
+  const finalQuotations = filteredQuotations.filter((q) => q.stage === 'Final');
+  
+  const acceptedQuotations = filteredQuotations.filter((q) => q.status === 'Accepted' || q.status === 'Converted');
+  const rejectedQuotations = filteredQuotations.filter((q) => q.status === 'Rejected');
+  const expiredQuotations = filteredQuotations.filter((q) => q.status === 'Expired');
+  
+  const conversionRate = finalQuotations.length > 0 ? (acceptedQuotations.length / finalQuotations.length) * 100 : 0;
 
   const handlePrint = () => {
     window.print();
@@ -104,17 +106,19 @@ export default function ReportsView({
       physicalItems.forEach((it) => {
         csvContent += `"${it.code}","${it.name}","${it.type}",${it.currentStock},${it.minimumStock},₹${it.currentStock * it.purchasePrice}\n`;
       });
-    } else {
-      csvContent += 'LIMS Laboratory Performance metrics\n';
-      csvContent += 'Sample Code,Sample Name,Customer,Date,Status\n';
-      filteredSamples.forEach((s) => {
-        csvContent += `"${s.sampleCode}","${s.sampleName}","${s.partyName}","${s.receivedDate}","${s.status}"\n`;
-      });
+    } else if (activeTab === 'crm') {
+      csvContent += 'CRM & Pipeline Report\n';
+      csvContent += `Total Estimate Quotations,${estimateQuotations.length}\n`;
+      csvContent += `Total Final Quotations,${finalQuotations.length}\n`;
+      csvContent += `Accepted Quotations,${acceptedQuotations.length}\n`;
+      csvContent += `Rejected Quotations,${rejectedQuotations.length}\n`;
+      csvContent += `Expired Quotations,${expiredQuotations.length}\n`;
+      csvContent += `Conversion Rate (Final to Accepted/Converted),${conversionRate.toFixed(1)}%\n`;
     }
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `LabBiz_Business_Report_${activeTab}.csv`);
+    link.setAttribute('download', `BizOps_Business_Report_${activeTab}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -125,8 +129,8 @@ export default function ReportsView({
       {/* Top toolbar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-wrap justify-between items-center gap-4">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Analytical Business & LIMS Reports</h2>
-          <p className="text-xs text-slate-500 mt-1">Audit net margins, cash reserves, inventory valuations, and NABL diagnostic volumes.</p>
+          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Analytical Business Reports</h2>
+          <p className="text-xs text-slate-500 mt-1">Audit net margins, cash reserves, and inventory valuations.</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
@@ -207,14 +211,14 @@ export default function ReportsView({
           Inventory Valuation & Low Stocks
         </button>
         <button
-          onClick={() => setActiveTab('lims')}
+          onClick={() => setActiveTab('crm')}
           className={`px-4 py-2 font-bold text-xs rounded-t-lg border-t border-x transition ${
-            activeTab === 'lims'
+            activeTab === 'crm'
               ? 'bg-white border-slate-200 text-blue-600 border-t-2 border-t-blue-500'
               : 'border-transparent text-slate-400 hover:text-slate-600 bg-slate-50/50'
           }`}
         >
-          LIMS Lab Operations
+          CRM & Pipeline
         </button>
       </div>
 
@@ -321,7 +325,7 @@ export default function ReportsView({
 
           {/* Low Stock alerting list */}
           <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4">
-            <h3 className="font-extrabold text-slate-800 mb-2 border-b border-slate-100 pb-2">Chemicals & Reagents Safety Levels</h3>
+            <h3 className="font-extrabold text-slate-800 mb-2 border-b border-slate-100 pb-2">Material Stock Safety Levels</h3>
             {lowStockItems.length === 0 ? (
               <p className="p-4 text-center text-xs text-slate-400 font-semibold">All physical stock levels are perfectly within safety bounds.</p>
             ) : (
@@ -347,72 +351,67 @@ export default function ReportsView({
         </div>
       )}
 
-      {activeTab === 'lims' && (
+      {activeTab === 'crm' && (
         <div className="space-y-4">
-          {/* LIMS KPI Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-              <span className="text-slate-400 font-bold block uppercase text-[9px]">Total Received</span>
-              <p className="text-lg font-black text-slate-800 mt-1">{filteredSamples.length}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
+              <span className="text-slate-400 font-bold block uppercase text-[10px]">Estimated Quotes Pipeline</span>
+              <p className="text-lg font-black text-indigo-600 mt-1">{estimateQuotations.length} Estimates</p>
+              <p className="text-[10px] text-slate-400 mt-1">Total approximate quotes generated.</p>
             </div>
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-              <span className="text-slate-400 font-bold block uppercase text-[9px]">Pending Setup</span>
-              <p className="text-lg font-black text-amber-600 mt-1">{samplesByStatus.Received}</p>
+            <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
+              <span className="text-slate-400 font-bold block uppercase text-[10px]">Final Proposal Volume</span>
+              <p className="text-lg font-black text-blue-600 mt-1">{finalQuotations.length} Proposals</p>
+              <p className="text-[10px] text-slate-400 mt-1">Total final quotations logged.</p>
             </div>
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-              <span className="text-slate-400 font-bold block uppercase text-[9px]">Under Testing</span>
-              <p className="text-lg font-black text-blue-600 mt-1">{samplesByStatus.Testing}</p>
-            </div>
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-              <span className="text-slate-400 font-bold block uppercase text-[9px]">Reports Approved</span>
-              <p className="text-lg font-black text-emerald-600 mt-1">{samplesByStatus.ReportReady}</p>
-            </div>
-            <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-xs">
-              <span className="text-slate-400 font-bold block uppercase text-[9px]">Dispatched / Handed Over</span>
-              <p className="text-lg font-black text-slate-700 mt-1">{samplesByStatus.Delivered}</p>
+            <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
+              <span className="text-slate-400 font-bold block uppercase text-[10px]">Conversion & Acceptance Rate</span>
+              <p className="text-lg font-black text-emerald-600 mt-1">{conversionRate.toFixed(1)}%</p>
+              <p className="text-[10px] text-slate-400 mt-1">{acceptedQuotations.length} accepted out of {finalQuotations.length} finals.</p>
             </div>
           </div>
 
-          {/* Detailed Lab Samples performance log */}
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4">
-            <h3 className="font-extrabold text-slate-800 mb-3 border-b border-slate-100 pb-2">Active Analytical Custody Logs</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-400 font-bold border-b border-slate-100 text-[10px] uppercase tracking-wider">
-                    <th className="p-3">Sample Code</th>
-                    <th className="p-3">Matrix Name</th>
-                    <th className="p-3">Client</th>
-                    <th className="p-3">Received Date</th>
-                    <th className="p-3">Required Assay Tests</th>
-                    <th className="p-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {filteredSamples.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/50">
-                      <td className="p-3 font-bold text-blue-600 font-mono">{s.sampleCode}</td>
-                      <td className="p-3 font-semibold text-slate-700">{s.sampleName}</td>
-                      <td className="p-3 text-slate-500 font-medium">{s.partyName}</td>
-                      <td className="p-3 text-slate-500 font-semibold">{s.receivedDate}</td>
-                      <td className="p-3 text-slate-600 font-medium">{s.requiredTestIds.length} Assays</td>
-                      <td className="p-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          s.status === 'Delivered'
-                            ? 'bg-slate-100 text-slate-700'
-                            : s.status === 'Report Ready'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : s.status === 'Testing'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}>
-                          {s.status}
-                        </span>
-                      </td>
-                    </tr>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4">
+              <h3 className="font-extrabold text-slate-800 mb-2 border-b border-slate-100 pb-2">Recently Accepted & Converted</h3>
+              {acceptedQuotations.length === 0 ? (
+                <p className="p-4 text-center text-xs text-slate-400 font-semibold">No recent accepted proposals.</p>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {acceptedQuotations.slice(0, 10).map((q) => (
+                    <div key={q.id} className="py-2.5 flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-slate-700">{q.partyName}</p>
+                        <p className="text-[10px] text-slate-400">{q.quotationNumber} | {q.quotationDate}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-emerald-600">₹{q.total.toLocaleString()}</p>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4">
+              <h3 className="font-extrabold text-slate-800 mb-2 border-b border-slate-100 pb-2">Lost Opportunities (Rejected/Expired)</h3>
+              {rejectedQuotations.length === 0 && expiredQuotations.length === 0 ? (
+                <p className="p-4 text-center text-xs text-slate-400 font-semibold">No lost proposals in this period.</p>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {[...rejectedQuotations, ...expiredQuotations].slice(0, 10).map((q) => (
+                    <div key={q.id} className="py-2.5 flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-slate-700">{q.partyName}</p>
+                        <p className="text-[10px] text-slate-400">{q.quotationNumber} | {q.status}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-black text-rose-600">₹{q.total.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

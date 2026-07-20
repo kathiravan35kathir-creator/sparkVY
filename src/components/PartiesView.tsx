@@ -313,7 +313,7 @@ export default function PartiesView({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `LabBiz_Parties_List_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `BizOps_Parties_List_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -361,7 +361,7 @@ export default function PartiesView({
               {isEditMode ? `Edit Party: ${name}` : 'Add New Party'}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              {isEditMode ? 'Modify and update registration, tax and financial parameters for this business ledger.' : 'Register a new business party, client, patient or chemical reagent supplier.'}
+              {isEditMode ? 'Modify and update registration, tax and financial parameters for this business ledger.' : 'Register a new business party, client, or supplier.'}
             </p>
           </div>
           <div>
@@ -404,7 +404,7 @@ export default function PartiesView({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Dr. Reddy's Laboratories Ltd"
+                  placeholder="e.g. Acme Corporation"
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value);
@@ -861,7 +861,7 @@ export default function PartiesView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Parties Management (CRM & Vendors)</h2>
-          <p className="text-xs text-slate-500 mt-1">Manage lab clients, patients, corporate partners, and reagent suppliers.</p>
+          <p className="text-xs text-slate-500 mt-1">Manage business clients, corporate partners, and suppliers.</p>
         </div>
         <div className="flex items-center space-x-2.5">
           <button

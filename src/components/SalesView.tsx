@@ -13,7 +13,8 @@ import {
   User,
   History,
   Lock,
-  DollarSign
+  DollarSign,
+  Calendar
 } from 'lucide-react';
 import { Invoice, Party, Item, InvoiceStatus, InvoiceLineItem, PaymentMethod, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -28,6 +29,8 @@ interface SalesViewProps {
   onCancelInvoice: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
+  onCheckPin?: (action: string, onConfirm: () => void) => void;
+  onLogCommunication?: (log: any) => void;
 }
 
 export default function SalesView({
@@ -39,15 +42,20 @@ export default function SalesView({
   onRecordPayment,
   onCancelInvoice,
   isAdmin,
-  settings
+  settings,
+  onCheckPin,
+  onLogCommunication
 }: SalesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Active view toggles
   const [isCreating, setIsCreating] = useState(false);
   const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
 
   // Form Fields
   const [partyId, setPartyId] = useState('');
@@ -207,7 +215,8 @@ export default function SalesView({
       i.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       i.partyName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === 'All' || i.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesDate = (!startDate || i.invoiceDate >= startDate) && (!endDate || i.invoiceDate <= endDate);
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   if (isCreating) {
@@ -228,7 +237,7 @@ export default function SalesView({
               Generate Sales Tax Invoice / Bill
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Add products or lab assay services, configure discount rates, add transport charges, and generate standard tax ledger mappings.
+              Add products or professional services, configure discount rates, add transport charges, and generate standard tax ledger mappings.
             </p>
           </div>
           <div>
@@ -297,7 +306,7 @@ export default function SalesView({
           {/* SECTION 2: Dynamic Items & Assay Grid */}
           <div className="space-y-4">
             <div>
-              <h3 className="text-[14px] font-bold text-slate-900 tracking-wide uppercase">Assay Services & Consumables Table</h3>
+              <h3 className="text-[14px] font-bold text-slate-900 tracking-wide uppercase">Services & Consumables Table</h3>
               <div className="h-px bg-[#E5EAF0] w-full mt-2" />
             </div>
 
@@ -305,7 +314,7 @@ export default function SalesView({
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-[#D8E0EA] text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                    <th className="py-3 px-4 w-[40%]">Product or Test/Assay Service Spec</th>
+                    <th className="py-3 px-4 w-[40%]">Product or Service Spec</th>
                     <th className="py-3 px-3 text-center w-[12%]">Qty</th>
                     <th className="py-3 px-3 text-right w-[15%]">Unit Rate (₹)</th>
                     <th className="py-3 px-3 text-right w-[11%]">Disc %</th>
@@ -395,7 +404,7 @@ export default function SalesView({
               className="flex items-center space-x-1.5 px-4 py-2 border border-[#D8E0EA] hover:bg-slate-50 text-slate-700 bg-white rounded-lg text-xs font-bold transition cursor-pointer"
             >
               <PlusCircle size={14} className="text-blue-600" />
-              <span>Add Another Item / Assay Row</span>
+              <span>Add Another Item / Service Row</span>
             </button>
           </div>
 
@@ -410,7 +419,7 @@ export default function SalesView({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full p-3 bg-white border border-[#D8E0EA] rounded-lg text-xs text-slate-800 focus:outline-none transition"
-                  placeholder="Describe tax settings, lab test references, etc."
+                  placeholder="Describe tax settings, service references, etc."
                 />
               </div>
 
@@ -501,15 +510,24 @@ export default function SalesView({
               <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Sales Register & Tax Invoices</h2>
               <p className="text-xs text-slate-500 mt-1">Generate GST invoices, accept partial payments, and manage corporate receivables.</p>
             </div>
-            {isAdmin && (
+            <div className="flex items-center space-x-2">
               <button
-                onClick={() => setIsCreating(true)}
-                className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
+                onClick={() => setIsBulkPrinting(true)}
+                className="flex items-center space-x-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold shadow-xs hover:bg-slate-50 transition"
               >
-                <Plus size={14} />
-                <span>Create Sales Invoice</span>
+                <Printer size={14} />
+                <span>Print All</span>
               </button>
-            )}
+              {isAdmin && (
+                <button
+                  onClick={() => setIsCreating(true)}
+                  className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
+                >
+                  <Plus size={14} />
+                  <span>Create Sales Invoice</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Filters */}
@@ -524,8 +542,35 @@ export default function SalesView({
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
               />
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-bold">Status</span>
+            
+            <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
+              <Calendar size={14} className="text-slate-400" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500"
+              />
+              <span className="text-slate-300">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500"
+              />
+              {(startDate || endDate) && (
+                <button 
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                  title="Clear Dates"
+                >
+                  <XCircle size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</span>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
@@ -603,7 +648,7 @@ export default function SalesView({
                             <button
                               onClick={() => setPrintingInvoice(inv)}
                               className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded"
-                              title="Print Labbiz Invoice PDF"
+                              title="Print Invoice PDF"
                             >
                               <Printer size={13} />
                             </button>
@@ -672,6 +717,39 @@ export default function SalesView({
           data={printingInvoice}
           settings={settings}
           onClose={() => setPrintingInvoice(null)}
+          onCheckPin={onCheckPin}
+          onLogCommunication={onLogCommunication}
+        />
+      )}
+
+      {isBulkPrinting && (
+        <DocumentPrintView
+          documentType="transaction_list"
+          data={{
+            title: 'Sales Transaction Register',
+            dateRange: `${startDate || 'Start'} to ${endDate || 'End'}`,
+            columns: ['Date', 'Invoice #', 'Party', 'Total', 'Paid', 'Balance'],
+            rows: filteredInvoices.map(inv => [
+              inv.invoiceDate,
+              inv.invoiceNumber,
+              inv.partyName,
+              inv.total,
+              inv.amountPaid,
+              inv.balanceDue
+            ]),
+            totals: [
+              '',
+              'TOTAL',
+              '',
+              filteredInvoices.reduce((sum, i) => sum + i.total, 0),
+              filteredInvoices.reduce((sum, i) => sum + i.amountPaid, 0),
+              filteredInvoices.reduce((sum, i) => sum + i.balanceDue, 0)
+            ]
+          }}
+          settings={settings}
+          onClose={() => setIsBulkPrinting(false)}
+          onCheckPin={onCheckPin}
+          onLogCommunication={onLogCommunication}
         />
       )}
 
@@ -736,7 +814,7 @@ export default function SalesView({
                 >
                   <option value="acc-3">UPI HDFC Merchant QR (HDFC UPI)</option>
                   <option value="acc-2">ICICI Bank Current Account (Bank)</option>
-                  <option value="acc-1">Lab Business Petty Cash (Petty Cash)</option>
+                  <option value="acc-1">Business Petty Cash (Petty Cash)</option>
                 </select>
               </div>
 

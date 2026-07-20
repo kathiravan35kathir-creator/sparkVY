@@ -12,9 +12,12 @@ import {
   CreditCard,
   Building,
   User,
-  BookOpen
+  BookOpen,
+  Calendar,
+  Printer
 } from 'lucide-react';
-import { Expense, Payment, Party, PaymentMethod } from '../types';
+import { Expense, Payment, Party, PaymentMethod, AppSettings } from '../types';
+import DocumentPrintView from './DocumentPrintView';
 
 interface FinanceViewProps {
   expenses: Expense[];
@@ -23,7 +26,10 @@ interface FinanceViewProps {
   onAddExpense: (expense: Omit<Expense, 'id' | 'expenseNumber' | 'createdAt'>) => void;
   onApproveExpense: (id: string) => void;
   isAdmin: boolean;
-  initialTab?: 'accounts' | 'expenses' | 'payments';
+  settings: AppSettings;
+  initialTab?: 'expenses' | 'payments';
+  onCheckPin?: (action: string, onConfirm: () => void) => void;
+  onLogCommunication?: (log: any) => void;
 }
 
 export default function FinanceView({
@@ -33,9 +39,12 @@ export default function FinanceView({
   onAddExpense,
   onApproveExpense,
   isAdmin,
-  initialTab
+  settings,
+  initialTab,
+  onCheckPin,
+  onLogCommunication
 }: FinanceViewProps) {
-  const [activeFinanceTab, setActiveFinanceTab] = useState<'accounts' | 'expenses' | 'payments'>(initialTab || 'accounts');
+  const [activeFinanceTab, setActiveFinanceTab] = useState<'expenses' | 'payments'>(initialTab || 'expenses');
 
   React.useEffect(() => {
     if (initialTab) {
@@ -43,36 +52,23 @@ export default function FinanceView({
     }
   }, [initialTab]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [filterExpenseCategory, setFilterExpenseCategory] = useState<string>('All');
 
   // New Expense state
   const [isAddingExpense, setIsAddingExpense] = useState(false);
+  const [isBulkPrinting, setIsBulkPrinting] = useState(false);
   const [vendorName, setVendorName] = useState('');
   const [expenseDate, setExpenseDate] = useState('2026-07-14');
-  const [category, setCategory] = useState('Lab Consumables');
+  const [category, setCategory] = useState('Office Consumables');
   const [amount, setAmount] = useState(0);
   const [taxAmount, setTaxAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
   const [linkedAccountId, setLinkedAccountId] = useState('acc-3'); // UPI standard
   const [description, setDescription] = useState('');
 
-  // Auto-calculated Cash & Bank reserves based on payments (Inflow vs Outflow)
-  // Petty Cash (acc-1): Starts at 15000 in demo
-  const cashReserve = payments
-    .filter((p) => p.accountId === 'acc-1')
-    .reduce((sum, p) => (p.paymentType === 'Payment In' ? sum + p.amount : sum - p.amount), 15000);
-
-  // ICICI Bank (acc-2): Starts at 450000 in demo
-  const iciciReserve = payments
-    .filter((p) => p.accountId === 'acc-2')
-    .reduce((sum, p) => (p.paymentType === 'Payment In' ? sum + p.amount : sum - p.amount), 450000);
-
-  // HDFC UPI (acc-3): Starts at 80000 in demo
-  const hdfcReserve = payments
-    .filter((p) => p.accountId === 'acc-3')
-    .reduce((sum, p) => (p.paymentType === 'Payment In' ? sum + p.amount : sum - p.amount), 80000);
-
-  const totalLiquidity = cashReserve + iciciReserve + hdfcReserve;
+  // Auto-calculated Cash & Bank reserves removed
 
   const handleSaveExpense = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,15 +104,17 @@ export default function FinanceView({
       (ex.vendorName && ex.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (ex.description && ex.description.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = filterExpenseCategory === 'All' || ex.category === filterExpenseCategory;
-    return matchesSearch && matchesCategory;
+    const matchesDate = (!startDate || ex.expenseDate >= startDate) && (!endDate || ex.expenseDate <= endDate);
+    return matchesSearch && matchesCategory && matchesDate;
   });
 
   const filteredPayments = payments.filter((p) => {
-    return (
+    const matchesSearch =
       (p.notes && p.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
       p.paymentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.partyName && p.partyName.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+      (p.partyName && p.partyName.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesDate = (!startDate || p.paymentDate >= startDate) && (!endDate || p.paymentDate <= endDate);
+    return matchesSearch && matchesDate;
   });
 
   if (isAddingExpense) {
@@ -133,10 +131,10 @@ export default function FinanceView({
               <span className="text-[#172033] font-semibold">Record Expense</span>
             </div>
             <h2 id="form-title" className="text-xl font-extrabold text-slate-900 tracking-tight mt-1">
-              Record Indirect Lab Expenditure Voucher
+              Record Indirect Business Expenditure Voucher
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Add indirect expenses like salaries, electricity bills, rent, or consumable chemicals. Track and link to your active cash/bank drawers.
+              Add indirect expenses like salaries, electricity bills, rent, or consumable supplies. Track and link to your active cash/bank drawers.
             </p>
           </div>
           <div>
@@ -192,9 +190,9 @@ export default function FinanceView({
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
-                  <option value="Lab Consumables">Lab Consumables (Filters, Tips)</option>
+                  <option value="Office Consumables">Office Consumables</option>
                   <option value="Salaries & Staff">Salaries & Staff Stipends</option>
-                  <option value="Equipment Calibration">Equipment Calibration & repairs</option>
+                  <option value="Infrastructure Maintenance">Infrastructure maintenance & repairs</option>
                   <option value="Utilities / Electricity">Utilities / Electricity & Water bills</option>
                   <option value="Rent / Maintenance">Rent / Maintenance of premises</option>
                 </select>
@@ -304,32 +302,33 @@ export default function FinanceView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Finance, Books & Accounts Ledgers</h2>
-          <p className="text-xs text-slate-500 mt-1">Monitor real-time cash/bank registers, approve direct lab expenditures, and check GST input sheets.</p>
+          <p className="text-xs text-slate-500 mt-1">Monitor real-time cash/bank registers, approve direct business expenditures, and check GST input sheets.</p>
         </div>
-        {activeFinanceTab === 'expenses' && isAdmin && (
-          <button
-            onClick={() => setIsAddingExpense(true)}
-            className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
-          >
-            <Plus size={14} />
-            <span>Record Business Expense</span>
-          </button>
-        )}
+        <div className="flex items-center space-x-2">
+          {(activeFinanceTab === 'expenses' || activeFinanceTab === 'payments') && (
+            <button
+              onClick={() => setIsBulkPrinting(true)}
+              className="flex items-center space-x-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold shadow-xs hover:bg-slate-50 transition"
+            >
+              <Printer size={13} />
+              <span>Print All</span>
+            </button>
+          )}
+          {activeFinanceTab === 'expenses' && isAdmin && (
+            <button
+              onClick={() => setIsAddingExpense(true)}
+              className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
+            >
+              <Plus size={14} />
+              <span>Record Business Expense</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* FINANCE AREA TABS */}
       <div className="border-b border-slate-200">
         <nav className="flex space-x-6">
-          <button
-            onClick={() => setActiveFinanceTab('accounts')}
-            className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition ${
-              activeFinanceTab === 'accounts'
-                ? 'border-[#2563EB] text-[#2563EB]'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            Cash & Bank Registers
-          </button>
           <button
             onClick={() => setActiveFinanceTab('expenses')}
             className={`pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition ${
@@ -338,7 +337,7 @@ export default function FinanceView({
                 : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
-            Indirect Lab Expenses
+            Indirect Business Expenses
           </button>
           <button
             onClick={() => setActiveFinanceTab('payments')}
@@ -353,85 +352,12 @@ export default function FinanceView({
         </nav>
       </div>
 
-      {/* SECTION 1: DYNAMIC CASH & BANK RETAINERS DISPLAY */}
-      {activeFinanceTab === 'accounts' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Total Liquidity */}
-            <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-xs border border-slate-800 flex flex-col justify-between">
-              <div>
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Net Cash Reserves</span>
-                <p className="text-2xl font-black font-mono mt-2">₹{totalLiquidity.toLocaleString()}</p>
-              </div>
-              <p className="text-[10px] text-teal-400 font-bold mt-4 flex items-center space-x-1">
-                <span>● LIQUID CAPITAL SECURED</span>
-              </p>
-            </div>
-
-            {/* ICICI Bank Current */}
-            <div className="bg-white p-5 rounded-2xl shadow-2xs border border-slate-200 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">ICICI Bank Current</span>
-                  <p className="text-xl font-black text-slate-900 font-mono mt-2">₹{iciciReserve.toLocaleString()}</p>
-                </div>
-                <div className="bg-blue-50 text-blue-700 p-2 rounded-lg">
-                  <Building size={16} />
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold mt-4">A/C: 104209123000 (ICICI-004)</p>
-            </div>
-
-            {/* HDFC UPI Merchant */}
-            <div className="bg-white p-5 rounded-2xl shadow-2xs border border-slate-200 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">HDFC QR UPI Merchant</span>
-                  <p className="text-xl font-black text-slate-900 font-mono mt-2">₹{hdfcReserve.toLocaleString()}</p>
-                </div>
-                <div className="bg-purple-50 text-purple-700 p-2 rounded-lg">
-                  <CreditCard size={16} />
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold mt-4">UPI: labbiz@hdfcmerchant</p>
-            </div>
-
-            {/* Cash in Hand */}
-            <div className="bg-white p-5 rounded-2xl shadow-2xs border border-slate-200 flex flex-col justify-between">
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Lab Business Petty Cash</span>
-                  <p className="text-xl font-black text-slate-900 font-mono mt-2">₹{cashReserve.toLocaleString()}</p>
-                </div>
-                <div className="bg-emerald-50 text-emerald-700 p-2 rounded-lg">
-                  <DollarSign size={16} />
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold mt-4">Locked Drawer No. 1 Reserves</p>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4.5 flex flex-col md:flex-row items-center justify-between text-xs text-slate-600 leading-relaxed gap-3">
-            <div className="flex items-center space-x-2.5">
-              <BookOpen size={16} className="text-[#2563EB]" />
-              <span>Real-time Labbiz sync monitors all client invoice collections (debits) and vendor reagent chemical outlays (credits).</span>
-            </div>
-            <button
-              onClick={() => setActiveFinanceTab('payments')}
-              className="text-xs font-bold text-blue-600 hover:underline shrink-0"
-            >
-              Audit capital cash trails &rarr;
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* SECTION 2: INDIRECT EXPENSES MANAGEMENT */}
       {activeFinanceTab === 'expenses' && (
         <div className="space-y-4">
           {/* Quick Filters */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3">
-            <div className="relative flex-1">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-wrap gap-3 items-center">
+            <div className="relative flex-1 min-w-[200px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -441,7 +367,25 @@ export default function FinanceView({
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs focus:bg-white focus:outline-none"
               />
             </div>
-            <div className="flex items-center space-x-2">
+            
+            <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
+              <Calendar size={14} className="text-slate-400" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-50 border rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500"
+              />
+              <span className="text-slate-300">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-50 border rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-bold">Category</span>
               <select
                 value={filterExpenseCategory}
@@ -449,9 +393,9 @@ export default function FinanceView({
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-700 font-semibold focus:outline-none"
               >
                 <option value="All">All Categories</option>
-                <option value="Lab Consumables">Lab Consumables</option>
+                <option value="Office Consumables">Office Consumables</option>
                 <option value="Salaries & Staff">Salaries & Staff</option>
-                <option value="Equipment Calibration">Equipment Calibration</option>
+                <option value="Infrastructure Maintenance">Infrastructure Maintenance</option>
                 <option value="Utilities / Electricity">Utilities / Electricity</option>
                 <option value="Rent / Maintenance">Rent / Maintenance</option>
               </select>
@@ -521,8 +465,8 @@ export default function FinanceView({
       {activeFinanceTab === 'payments' && (
         <div className="space-y-4">
           {/* Quick Search */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
-            <div className="relative">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-wrap gap-3 items-center">
+            <div className="relative flex-1 min-w-[200px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -530,6 +474,23 @@ export default function FinanceView({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs focus:bg-white focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
+              <Calendar size={14} className="text-slate-400" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-50 border rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500"
+              />
+              <span className="text-slate-300">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-50 border rounded-lg px-2 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
@@ -585,6 +546,54 @@ export default function FinanceView({
         </div>
       )}
 
+      {isBulkPrinting && (
+        <DocumentPrintView
+          documentType="transaction_list"
+          data={activeFinanceTab === 'expenses' ? {
+            title: 'Business Expenditure Register',
+            dateRange: `${startDate || 'Start'} to ${endDate || 'End'}`,
+            columns: ['Date', 'Vendor', 'Category', 'Method', 'Tax', 'Amount'],
+            rows: filteredExpenses.map(ex => [
+              ex.expenseDate,
+              ex.vendorName,
+              ex.category,
+              ex.paymentMethod,
+              ex.taxAmount,
+              ex.amount
+            ]),
+            totals: [
+              '',
+              'TOTAL',
+              '',
+              '',
+              filteredExpenses.reduce((sum, ex) => sum + ex.taxAmount, 0),
+              filteredExpenses.reduce((sum, ex) => sum + ex.amount, 0)
+            ]
+          } : {
+            title: 'Consolidated Payment Ledger',
+            dateRange: `${startDate || 'Start'} to ${endDate || 'End'}`,
+            columns: ['Date', 'Reference', 'Account', 'Inflow (+)', 'Outflow (-)'],
+            rows: filteredPayments.map(p => [
+              p.paymentDate,
+              p.referenceNumber || p.paymentNumber,
+              p.accountName,
+              p.paymentType === 'Payment In' ? p.amount : '-',
+              p.paymentType === 'Payment Out' ? p.amount : '-'
+            ]),
+            totals: [
+              '',
+              'NET FLOW',
+              '',
+              filteredPayments.reduce((sum, p) => p.paymentType === 'Payment In' ? sum + p.amount : sum, 0),
+              filteredPayments.reduce((sum, p) => p.paymentType === 'Payment Out' ? sum + p.amount : sum, 0)
+            ]
+          }}
+          settings={settings}
+          onClose={() => setIsBulkPrinting(false)}
+          onCheckPin={onCheckPin}
+          onLogCommunication={onLogCommunication}
+        />
+      )}
     </div>
   );
 }

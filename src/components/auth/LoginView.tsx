@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FlaskConical } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { signInWithGoogle } from '../../services/authService';
 
 interface LoginViewProps {
@@ -38,14 +38,14 @@ export default function LoginView({ onEmailSubmit, onGoogleSuccess, isLoading }:
       <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-xl border border-slate-100 p-8">
         <div className="flex flex-col items-center mb-8">
           <div className="bg-blue-600 text-white p-3 rounded-xl mb-4 shadow-sm">
-            <FlaskConical size={28} />
+            <Building2 size={28} />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">LabBiz</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">BizOps</h1>
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mt-1">
-            Billing & Laboratory Management
+            Enterprise Billing & Management
           </h2>
           <p className="text-center text-sm text-slate-500 mt-3 leading-relaxed">
-            Manage billing, inventory, samples, tests and reports from one place.
+            Manage billing, inventory, customers, and operations from one place.
           </p>
         </div>
 

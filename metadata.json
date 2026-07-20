@@ -1,6 +1,6 @@
 {
-  "name": "LabBiz",
-  "description": "Billing, Inventory & Lab Management System - A private internal lab and business operations management application.",
+  "name": "BizOps Enterprise",
+  "description": "General ERP system for enterprise billing, inventory, and financial management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

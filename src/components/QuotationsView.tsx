@@ -25,8 +25,12 @@ interface QuotationsViewProps {
   onAddQuotation: (quotation: Omit<Quotation, 'id' | 'quotationNumber' | 'createdAt'>) => void;
   onEditQuotation: (id: string, quotation: Partial<Quotation>) => void;
   onConvertToInvoice: (id: string) => void;
+  onReviseEstimate?: (id: string) => void;
+  onConvertEstimateToFinal?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
+  onCheckPin?: (action: string, onConfirm: () => void) => void;
+  onLogCommunication?: (log: any) => void;
 }
 
 export default function QuotationsView({
@@ -36,8 +40,12 @@ export default function QuotationsView({
   onAddQuotation,
   onEditQuotation,
   onConvertToInvoice,
+  onReviseEstimate,
+  onConvertEstimateToFinal,
   isAdmin,
-  settings
+  settings,
+  onCheckPin,
+  onLogCommunication
 }: QuotationsViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
@@ -48,6 +56,7 @@ export default function QuotationsView({
 
   // New Quotation Fields
   const [partyId, setPartyId] = useState('');
+  const [quotationStage, setQuotationStage] = useState<'Estimate' | 'Final'>('Estimate');
   const [quotationDate, setQuotationDate] = useState('2026-07-14');
   const [expiryDate, setExpiryDate] = useState('2026-08-14');
   const [additionalCharges, setAdditionalCharges] = useState(0);
@@ -154,6 +163,7 @@ export default function QuotationsView({
     }
 
     onAddQuotation({
+      stage: quotationStage,
       partyId,
       partyName: selectedParty.name,
       quotationDate,
@@ -165,7 +175,7 @@ export default function QuotationsView({
       taxAmount,
       additionalCharges: Number(additionalCharges),
       total,
-      status: 'Sent',
+      status: 'Sent', // Both stages allow 'Sent'
       advanceRequirement: Number(advanceRequirement),
       notes,
       termsAndConditions: terms
@@ -205,7 +215,7 @@ export default function QuotationsView({
               Draft Professional Quotation Proposal
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Line items support both physical chemical products or standard diagnostic test services.
+              Line items support both physical products or standard business services.
             </p>
           </div>
           <div>
@@ -228,7 +238,19 @@ export default function QuotationsView({
               <h3 className="text-[14px] font-bold text-slate-900 tracking-wide uppercase">Proposal Metadata</h3>
               <div className="h-px bg-[#E5EAF0] w-full mt-2" />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Quotation Stage</label>
+                <select
+                  value={quotationStage}
+                  onChange={(e) => setQuotationStage(e.target.value as 'Estimate' | 'Final')}
+                  className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold"
+                >
+                  <option value="Estimate">Estimate Quotation</option>
+                  <option value="Final">Final Quotation</option>
+                </select>
+              </div>
+
               <div className="md:col-span-1">
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Select Customer (Client/Org) *</label>
                 <select
@@ -281,8 +303,8 @@ export default function QuotationsView({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-150 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                      <th className="py-2.5 px-3 w-[45%]">Select Item or Lab Service</th>
-                      <th className="py-2.5 px-3 text-center w-[10%]">Qty / Samples</th>
+                      <th className="py-2.5 px-3 w-[45%]">Select Item or Service Description</th>
+                      <th className="py-2.5 px-3 text-center w-[10%]">Qty / Units</th>
                       <th className="py-2.5 px-3 text-right w-[15%]">Rate (₹)</th>
                       <th className="py-2.5 px-3 text-right w-[10%]">Disc %</th>
                       <th className="py-2.5 px-3 text-right w-[10%]">GST %</th>
@@ -383,7 +405,7 @@ export default function QuotationsView({
                   onChange={(e) => setAdvanceRequirement(Number(e.target.value))}
                   className="w-full md:max-w-xs h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs focus:border-blue-500 focus:outline-none font-mono"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Specify upfront billing deposit needed before samples enter processing cycle.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Specify upfront billing deposit needed before processing begins.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Proposal Reference Terms & Conditions</label>
@@ -466,7 +488,7 @@ export default function QuotationsView({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Quotations & Business Proposals</h2>
-              <p className="text-xs text-slate-500 mt-1">Generate and dispatch Labbiz-style quotes for diagnostic services to client organizations.</p>
+              <p className="text-xs text-slate-500 mt-1">Generate and dispatch professional quotes for products and services to client organizations.</p>
             </div>
             {isAdmin && (
               <button
@@ -501,7 +523,9 @@ export default function QuotationsView({
                 <option value="All">All Quotations</option>
                 <option value="Draft">Draft</option>
                 <option value="Sent">Sent</option>
-                <option value="Accepted">Accepted</option>
+                <option value="Revised">Revised (Est)</option>
+                <option value="Approved">Approved (Est)</option>
+                <option value="Accepted">Accepted (Final)</option>
                 <option value="Rejected">Rejected</option>
                 <option value="Expired">Expired</option>
                 <option value="Converted">Converted to Invoice</option>
@@ -516,9 +540,9 @@ export default function QuotationsView({
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/75 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                     <th className="py-3 px-4">Quote Number</th>
+                    <th className="py-3 px-4">Stage</th>
                     <th className="py-3 px-4">Customer</th>
                     <th className="py-3 px-4">Quote Date</th>
-                    <th className="py-3 px-4">Valid Until</th>
                     <th className="py-3 px-4 text-center">Items Qty</th>
                     <th className="py-3 px-4 text-right">Quote Total</th>
                     <th className="py-3 px-4 text-center">Status</th>
@@ -536,21 +560,27 @@ export default function QuotationsView({
                     filteredQuotations.map((q) => (
                       <tr key={q.id} className="hover:bg-slate-50/50 transition">
                         <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{q.quotationNumber}</td>
+                        <td className="py-3.5 px-4 font-medium text-slate-600">
+                          {q.stage === 'Estimate' ? (
+                            <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold">ESTIMATE</span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-bold">FINAL</span>
+                          )}
+                        </td>
                         <td className="py-3.5 px-4 font-bold text-slate-800">{q.partyName}</td>
                         <td className="py-3.5 px-4 font-mono text-slate-600">{q.quotationDate}</td>
-                        <td className="py-3.5 px-4 font-mono text-slate-600">{q.expiryDate}</td>
                         <td className="py-3.5 px-4 text-center font-bold text-slate-600">{q.items.length} lines</td>
                         <td className="py-3.5 px-4 text-right font-mono font-black text-[#163A5F]">
                           ₹{q.total.toLocaleString()}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                            q.status === 'Accepted' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                            q.status === 'Accepted' || q.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                             q.status === 'Converted' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
                             q.status === 'Rejected' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
                             'bg-blue-50 text-blue-700 border border-blue-100'
                           }`}>
-                            {q.status === 'Converted' ? 'Converted to Invoice' : q.status}
+                            {q.status === 'Converted' ? 'Converted' : q.status}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
@@ -562,17 +592,49 @@ export default function QuotationsView({
                             >
                               <Printer size={13} />
                             </button>
-                            {isAdmin && q.status === 'Sent' && (
+                            
+                            {/* Duplicate / Revise (For Estimates) */}
+                            {isAdmin && q.stage === 'Estimate' && q.status !== 'Converted' && (
+                                <button
+                                  onClick={() => {
+                                      if (confirm(`Create a new revision for ${q.quotationNumber}?`)) {
+                                          if (onReviseEstimate) onReviseEstimate(q.id);
+                                      }
+                                  }}
+                                  className="flex items-center space-x-1 px-2 py-0.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded text-[10px] font-extrabold transition"
+                                  title="Revise Estimate"
+                                >
+                                  <span>Revise</span>
+                                </button>
+                            )}
+
+                            {/* Convert Estimate to Final */}
+                            {isAdmin && q.stage === 'Estimate' && q.status !== 'Converted' && (
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Convert Estimate ${q.quotationNumber} to Final Quotation now?`)) {
+                                      if (onConvertEstimateToFinal) onConvertEstimateToFinal(q.id);
+                                    }
+                                  }}
+                                  className="flex items-center space-x-1 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100 rounded text-[10px] font-extrabold transition"
+                                  title="Convert to Final"
+                                >
+                                  <span>To Final</span>
+                                </button>
+                            )}
+
+                            {/* Convert Final to Invoice */}
+                            {isAdmin && q.stage === 'Final' && (q.status === 'Sent' || q.status === 'Accepted') && (
                               <button
                                 onClick={() => {
-                                  if (confirm(`Convert quotation ${q.quotationNumber} to Sales Tax Invoice now?`)) {
+                                  if (confirm(`Convert Final Quotation ${q.quotationNumber} to Sales Tax Invoice now?`)) {
                                     onConvertToInvoice(q.id);
                                   }
                                 }}
                                 className="flex items-center space-x-1 px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 rounded text-[10px] font-extrabold transition"
-                                title="Convert"
+                                title="Convert to Invoice"
                               >
-                                <span>Bill Invoice</span>
+                                <span>To Invoice</span>
                                 <ChevronRight size={10} />
                               </button>
                             )}
@@ -588,13 +650,15 @@ export default function QuotationsView({
         </>
       )}
 
-      {/* SECTION 3: STUNNING LABBIZ PRINT/PDF PREVIEW */}
+      {/* SECTION 3: PROFESSIONAL PRINT/PDF PREVIEW */}
       {printingQuotation && (
         <DocumentPrintView
           documentType="quotation"
           data={printingQuotation}
           settings={settings}
           onClose={() => setPrintingQuotation(null)}
+          onCheckPin={onCheckPin}
+          onLogCommunication={onLogCommunication}
         />
       )}
     </div>

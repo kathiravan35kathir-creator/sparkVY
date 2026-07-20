@@ -86,8 +86,8 @@ export default function OnboardingView({ user, onSave, onSkip }: OnboardingViewP
         timezone: timezone
       }, {
         legalName,
-        displayLabName: displayBusinessName,
-        labName: laboratoryName || displayBusinessName,
+        displayCompanyName: displayBusinessName,
+        companyName: laboratoryName || displayBusinessName,
         businessType,
         industry_sector: industry,
         address1,
@@ -121,7 +121,7 @@ export default function OnboardingView({ user, onSave, onSkip }: OnboardingViewP
         <div className="mb-8">
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Complete Your Setup</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Add your profile and company information to start using LabBiz.
+            Add your profile and company information to start using BizOps.
           </p>
         </div>
 
@@ -194,7 +194,7 @@ export default function OnboardingView({ user, onSave, onSkip }: OnboardingViewP
                 <input required value={displayBusinessName} onChange={e => setDisplayBusinessName(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
               </div>
               <div className="lg:col-span-2">
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Laboratory Name (Optional)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Business Branch Name (Optional)</label>
                 <input value={laboratoryName} onChange={e => setLaboratoryName(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
               </div>
               <div>
@@ -207,24 +207,18 @@ export default function OnboardingView({ user, onSave, onSkip }: OnboardingViewP
                   <option value="LLP">LLP</option>
                   <option value="Trust">Trust</option>
                   <option value="Society">Society</option>
-                  <option value="Educational Institution">Educational Institution</option>
-                  <option value="Research Institution">Research Institution</option>
-                  <option value="Laboratory">Laboratory</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Industry / Sector *</label>
                 <select required value={industry} onChange={e => setIndustry(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
-                  <option value="Research Laboratory">Research Laboratory</option>
-                  <option value="Diagnostic Laboratory">Diagnostic Laboratory</option>
-                  <option value="Chemical Testing">Chemical Testing</option>
-                  <option value="Water Testing">Water Testing</option>
-                  <option value="Food Testing">Food Testing</option>
-                  <option value="Pharmaceutical Research">Pharmaceutical Research</option>
-                  <option value="Material Testing">Material Testing</option>
-                  <option value="Environmental Testing">Environmental Testing</option>
-                  <option value="Educational Research">Educational Research</option>
+                  <option value="Retail">Retail</option>
+                  <option value="Wholesale">Wholesale</option>
+                  <option value="Manufacturing">Manufacturing</option>
+                  <option value="Services">Services</option>
+                  <option value="Consulting">Consulting</option>
+                  <option value="Technology">Technology</option>
                   <option value="Other">Other</option>
                 </select>
               </div>

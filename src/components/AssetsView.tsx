@@ -60,8 +60,10 @@ export default function EquipmentView({
       location,
       purchaseCost: Number(purchaseCost),
       purchaseDate,
+      lastMaintenanceDate: purchaseDate,
+      nextMaintenanceDate: purchaseDate,
       notes,
-      status: 'Available' as const,
+      status: 'Operational' as const,
       condition: 'Excellent'
     });
 
@@ -75,12 +77,12 @@ export default function EquipmentView({
   };
 
   const triggerCalibration = (id: string) => {
-    onUpdateEquipmentStatus(id, 'Available', `Calibrated on ${new Date().toISOString().slice(0, 10)}.`);
+    onUpdateEquipmentStatus(id, 'Operational', `Calibrated on ${new Date().toISOString().slice(0, 10)}.`);
     alert('Instrument calibration logged successfully. Next calibration date reset for 6 months.');
   };
 
   const triggerMaintenance = (id: string) => {
-    onUpdateEquipmentStatus(id, 'Available', `Maintenance complete. Checked components.`);
+    onUpdateEquipmentStatus(id, 'Operational', `Maintenance complete. Checked components.`);
     alert('Instrument maintenance logged successfully.');
   };
 
@@ -109,10 +111,10 @@ export default function EquipmentView({
               <span className="text-[#172033] font-semibold">Register New Asset</span>
             </div>
             <h2 id="form-title" className="text-xl font-extrabold text-slate-900 tracking-tight mt-1">
-              Register New Laboratory Asset / Equipment
+              Register New Business Asset / Equipment
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Add high-end spectrometers, digital pH meters, centrifuges, and incubators. Log purchase values, serial codes, and starting calibration settings.
+              Add enterprise assets, IT infrastructure, machinery, and office equipment. Log purchase values, serial codes, and starting maintenance settings.
             </p>
           </div>
           <div>
@@ -156,11 +158,11 @@ export default function EquipmentView({
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
-                  <option value="Electrochemistry">Electrochemistry (e.g. pH meters)</option>
-                  <option value="Spectroscopy">Spectroscopy (e.g. UV-Vis, FTIR)</option>
-                  <option value="Chromatography">Chromatography (e.g. HPLC, GC)</option>
-                  <option value="Microbiology">Microbiology (e.g. Autoclaves)</option>
-                  <option value="General Apparatus">General Apparatus (e.g. Balances)</option>
+                  <option value="IT Infrastructure">IT Infrastructure (e.g. Servers, PCs)</option>
+                  <option value="Office Furniture">Office Furniture</option>
+                  <option value="Machinery">Industrial Machinery</option>
+                  <option value="Vehicles">Fleet Vehicles</option>
+                  <option value="General Apparatus">General Apparatus (e.g. Tools)</option>
                 </select>
               </div>
 
@@ -278,8 +280,8 @@ export default function EquipmentView({
       {/* Top Banner Control */}
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-wrap justify-between items-center gap-4">
         <div>
-          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Analytical Laboratory Equipment Registers</h2>
-          <p className="text-xs text-slate-500 mt-1">Audit high-end spectrometer assets, digital pH meters, log active calibration certificates, and maintenance records.</p>
+          <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Enterprise Asset & Equipment Registers</h2>
+          <p className="text-xs text-slate-500 mt-1">Audit business assets, IT infrastructure, log active warranty certificates, and maintenance records.</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
@@ -316,7 +318,7 @@ export default function EquipmentView({
                   onChange={(e) => setFilterCondition(e.target.value)}
                 >
                   <option value="All">All Assets</option>
-                  <option value="Available">Available / Active</option>
+                  <option value="Operational">Operational / Active</option>
                   <option value="Calibration Due">Calibration Due</option>
                   <option value="Under Maintenance">Under Maintenance</option>
                   <option value="Out of Service">Out of Service</option>
@@ -345,7 +347,7 @@ export default function EquipmentView({
                       <td className="p-3 font-bold text-blue-600 font-mono">{eq.equipmentCode}</td>
                       <td className="p-3">
                         <p className="font-bold text-slate-800">{eq.name}</p>
-                        <p className="text-[10px] text-slate-400">{eq.manufacturer} {eq.model}</p>
+                        <p className="text-[10px] text-slate-400">SN: {eq.serialNumber || 'N/A'}</p>
                       </td>
                       <td className="p-3">
                         <p className="font-medium text-slate-700">{eq.category}</p>
@@ -355,11 +357,11 @@ export default function EquipmentView({
                         </p>
                       </td>
                       <td className="p-3 font-semibold text-slate-500">
-                        {eq.nextCalibrationDate || 'N/A'}
+                        {eq.nextMaintenanceDate || 'N/A'}
                       </td>
                       <td className="p-3">
                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          eq.status === 'Available'
+                          eq.status === 'Operational'
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : eq.status === 'Calibration Due'
                             ? 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -407,14 +409,14 @@ export default function EquipmentView({
 
                 {/* Operations Actions */}
                 <div className="space-y-2 pt-1">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Calibration & Quality Logs</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Maintenance & Quality Logs</p>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => triggerCalibration(selectedEquip.id)}
                       className="flex items-center justify-center space-x-1.5 p-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-emerald-700 font-bold text-xs"
                     >
                       <CheckCircle size={13} />
-                      <span>Log Calibration</span>
+                      <span>Log Maintenance</span>
                     </button>
                     <button
                       onClick={() => triggerMaintenance(selectedEquip.id)}

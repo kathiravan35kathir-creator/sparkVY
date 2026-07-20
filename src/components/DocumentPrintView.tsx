@@ -1,4 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import {
   Printer,
   Download,
@@ -17,12 +19,68 @@ import {
 } from 'lucide-react';
 import { AppSettings } from '../types';
 import DocumentTemplateRenderer from './DocumentTemplateRenderer';
+import { sendWhatsAppMessage } from '../services/communicationService';
+
+// Global color cache to speed up canvas-based color resolution
+const colorCache = new Map<string, string>();
+
+/**
+ * Resolves modern CSS colors (like oklch, lch, lab, color-mix) down to standard rgb/rgba
+ * using the browser's native Canvas rendering. html2canvas fails on modern colors.
+ */
+function resolveToRgba(colorStr: string): string {
+  if (!colorStr || typeof colorStr !== 'string') return colorStr;
+  
+  const lower = colorStr.toLowerCase();
+  // Include oklab, oklch, lch, lab, color-mix, light-dark, and generic color() functions
+  if (!lower.includes('oklch') && 
+      !lower.includes('oklab') && 
+      !lower.includes('lch') && 
+      !lower.includes('color-mix') && 
+      !lower.includes('lab') && 
+      !lower.includes('p3') &&
+      !lower.includes('light-dark')) {
+    return colorStr;
+  }
+  
+  if (colorCache.has(colorStr)) {
+    return colorCache.get(colorStr)!;
+  }
+  
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return colorStr;
+    
+    // Set fillStyle to the potentially problematic color
+    ctx.fillStyle = colorStr;
+    ctx.fillRect(0, 0, 1, 1);
+    
+    // The browser's Canvas implementation automatically resolves modern colors to RGBA
+    const data = ctx.getImageData(0, 0, 1, 1).data;
+    const r = data[0];
+    const g = data[1];
+    const b = data[2];
+    const a = Number((data[3] / 255).toFixed(3));
+    
+    // Return a clean RGB or RGBA string that html2canvas can definitely parse
+    const resolved = a === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
+    colorCache.set(colorStr, resolved);
+    return resolved;
+  } catch (e) {
+    return colorStr;
+  }
+}
 
 interface DocumentPrintViewProps {
-  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'report' | 'sample_label';
+  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'report' | 'sample_label' | 'transaction_list' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher';
   data: any; 
   settings: AppSettings;
   onClose: () => void;
+  onCheckPin?: (action: string, onConfirm: () => void) => void;
+  onLogCommunication?: (log: any) => void;
 }
 
 const SHARE_PRESETS = [
@@ -47,7 +105,9 @@ export default function DocumentPrintView({
   documentType,
   data,
   settings,
-  onClose
+  onClose,
+  onCheckPin,
+  onLogCommunication
 }: DocumentPrintViewProps) {
   const printRef = useRef<HTMLDivElement>(null);
   const [shareSuccess, setShareSuccess] = useState<string | null>(null);
@@ -59,6 +119,11 @@ export default function DocumentPrintView({
   const [isShareConfigOpen, setIsShareConfigOpen] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState('polite_greeting');
   const [customMessageText, setCustomMessageText] = useState(SHARE_PRESETS[0].template);
+
+  const initialPhone = data?.partyPhone || data?.supplierPhone || data?.mobile || data?.phone || '';
+  const [recipientPhone, setRecipientPhone] = useState(initialPhone);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // Update text when preset changes
   const handlePresetSelect = (presetId: string) => {
@@ -80,10 +145,6 @@ export default function DocumentPrintView({
         return settings.print.receiptTemplate;
       case 'purchase':
         return settings.print.purchaseTemplate;
-      case 'report':
-        return settings.print.labReportTemplate;
-      case 'sample_label':
-        return settings.print.sampleLabelTemplate;
       default:
         return 'tally_modern';
     }
@@ -110,12 +171,6 @@ export default function DocumentPrintView({
     } else if (documentType === 'purchase') {
       docNum = data.purchaseNumber || '';
       docTypeStr = 'Purchase Order';
-    } else if (documentType === 'report') {
-      docNum = data.reportNumber || '';
-      docTypeStr = 'Lab Report';
-    } else if (documentType === 'sample_label') {
-      docNum = data.sampleCode || '';
-      docTypeStr = 'Sample Label';
     }
 
     let amt = '₹0';
@@ -127,7 +182,7 @@ export default function DocumentPrintView({
       amt = `₹${data.amountPaid.toLocaleString()}`;
     }
 
-    let bizName = settings.company.displayLabName || settings.company.labName || 'LabBiz ERP';
+    let bizName = settings.company.displayCompanyName || settings.company.companyName || 'BizOps ERP';
 
     return templateStr
       .replace(/{ClientName}/g, clientName)
@@ -154,43 +209,313 @@ export default function DocumentPrintView({
     document.title = originalTitle;
   };
 
-  // Simulated PDF download helper
-  const handleDownloadPDF = () => {
-    let docNum = '';
-    if (documentType === 'invoice') docNum = data.invoiceNumber || '';
-    if (documentType === 'quotation') docNum = data.quotationNumber || '';
-    if (documentType === 'receipt') docNum = data.receiptNumber || '';
-    if (documentType === 'purchase') docNum = data.purchaseNumber || '';
-    if (documentType === 'report') docNum = data.reportNumber || '';
+  // Real PDF download helper using html2canvas and jsPDF
+  const handleDownloadPDF = async () => {
+    if (isGeneratingPdf) return;
 
-    const element = document.createElement('a');
-    const fileContent = `LabBiz Digital PDF Document\n` +
-      `========================\n` +
-      `Type: ${documentType.toUpperCase()}\n` +
-      `Document No: ${docNum}\n` +
-      `Client: ${data.partyName || data.supplierName || 'General'}\n` +
-      `Total Amount: ₹${data.total || data.amountPaid || 0}\n` +
-      `Date: ${data.invoiceDate || data.quotationDate || data.paymentDate || '2026-07-14'}\n` +
-      `Verified via electronic signature.\n\n` +
-      `Rendered successfully via ${activeTemplate.toUpperCase()} layout.`;
+    setIsGeneratingPdf(true);
+    setShareSuccess('Preparing document canvas...');
 
-    const file = new Blob([fileContent], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${documentType}_${docNum}.pdf`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    try {
+      const element = printRef.current;
+      if (!element) {
+        throw new Error('Print preview element not found.');
+      }
 
-    setShareSuccess('PDF generated & downloaded to device');
-    setTimeout(() => setShareSuccess(null), 3000);
+      // Confirm quotation data exists and company settings are loaded
+      if (!data) {
+        throw new Error('Document data is empty.');
+      }
+      if (!settings) {
+        throw new Error('Company settings are not loaded.');
+      }
+
+      // Wait for fonts and all images to be fully loaded
+      await document.fonts.ready;
+      const images = element.querySelectorAll('img');
+      const imagePromises = Array.from(images).map(img => {
+        const htmlImg = img as HTMLImageElement;
+        if (htmlImg.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          htmlImg.onload = resolve;
+          htmlImg.onerror = resolve;
+        });
+      });
+      await Promise.all(imagePromises);
+
+      // Verify that the element is rendered and has positive dimensions
+      const targetElement = element.querySelector('#printed-document-root') || element;
+      const rect = targetElement.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        throw new Error(`Render element has zero dimensions (width: ${rect.width}px, height: ${rect.height}px).`);
+      }
+
+      setShareSuccess('Rendering PDF bytes...');
+
+      // Render the element to a canvas
+      const canvas = await html2canvas(targetElement as HTMLElement, {
+        scale: 2, // High resolution for professional print
+        useCORS: true, 
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true,
+        imageTimeout: 15000,
+        onclone: (clonedDoc, clonedElement) => {
+          // Robust color sanitization: html2canvas v1.4.1 fails on modern CSS (oklch, color-mix)
+          // We iterate through all cloned elements and explicitly resolve colors using original computed styles
+          const allCloned = clonedElement.querySelectorAll('*');
+          const allOriginal = targetElement.querySelectorAll('*');
+          
+          // Match and sanitize
+          for (let i = 0; i < allCloned.length; i++) {
+            const cEl = allCloned[i] as HTMLElement;
+            const oEl = allOriginal[i] as HTMLElement;
+            if (!oEl || !cEl.style) continue;
+
+            const computed = window.getComputedStyle(oEl);
+            const props = ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke', 'outlineColor', 'stopColor'];
+            
+            props.forEach(prop => {
+              const cssProp = prop.replace(/[A-Z]/g, m => "-" + m.toLowerCase());
+              const val = computed.getPropertyValue(cssProp);
+              
+              if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('lch') || val.includes('color-mix') || val.includes('var('))) {
+                const resolved = resolveToRgba(val);
+                cEl.style.setProperty(cssProp, resolved, 'important');
+              }
+            });
+          }
+        }
+      });
+
+      // Determine paper size from active template/settings
+      const paperSize = settings.print.paperSize || 'A4';
+
+      let orientation: 'portrait' | 'landscape' = 'portrait';
+      let format: string | [number, number] = 'a4';
+      let pdfWidth = 210; // in mm
+      let pdfHeight = 297; // in mm
+
+      if (paperSize === 'A5') {
+        format = 'a5';
+        pdfWidth = 148;
+        pdfHeight = 210;
+        if (canvas.width > canvas.height) {
+          orientation = 'landscape';
+          pdfWidth = 210;
+          pdfHeight = 148;
+        }
+      } else if (paperSize === 'Letter') {
+        format = 'letter';
+        pdfWidth = 215.9;
+        pdfHeight = 279.4;
+        if (canvas.width > canvas.height) {
+          orientation = 'landscape';
+          pdfWidth = 279.4;
+          pdfHeight = 215.9;
+        }
+      } else if (paperSize === '80mm') {
+        pdfWidth = 80;
+        pdfHeight = (canvas.height / canvas.width) * 80;
+        format = [80, pdfHeight];
+      } else {
+        format = 'a4';
+        pdfWidth = 210;
+        pdfHeight = 297;
+        if (canvas.width > canvas.height) {
+          orientation = 'landscape';
+          pdfWidth = 297;
+          pdfHeight = 210;
+        }
+      }
+
+      const pdf = new jsPDF({
+        orientation: orientation,
+        unit: 'mm',
+        format: format
+      });
+
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Pass the canvas directly to jsPDF instead of base64 to avoid truncation/corruption
+      if (paperSize === '80mm' || imgHeight <= pdfHeight) {
+        pdf.addImage(canvas, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+      } else {
+        let position = 0;
+        pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        let heightLeft = imgHeight - pdfHeight;
+
+        while (heightLeft > 0) {
+          position = position - pdfHeight;
+          pdf.addPage(format, orientation);
+          pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+          heightLeft -= pdfHeight;
+        }
+      }
+
+      // Obtain output as PDF Blob
+      const pdfBlob = pdf.output('blob');
+
+      // ----------------------------------------------------
+      // VALIDATE GENERATED PDF BYTES
+      // ----------------------------------------------------
+      if (!pdfBlob) {
+        throw new Error('PDF output is null or undefined.');
+      }
+      if (pdfBlob.size < 1000) {
+        throw new Error(`PDF output size is too small (${pdfBlob.size} bytes).`);
+      }
+      if (pdfBlob.type !== 'application/pdf') {
+        throw new Error(`PDF output content type is invalid (${pdfBlob.type}).`);
+      }
+
+      // Check first five bytes are "%PDF-"
+      const header = await pdfBlob.slice(0, 5).text();
+      if (header !== '%PDF-') {
+        console.error('PDF validation failed', {
+          type: pdfBlob.type,
+          size: pdfBlob.size,
+          header
+        });
+        throw new Error(`PDF signature is corrupt or invalid. Found header: "${header}"`);
+      }
+
+      // Log success details in development
+      console.log("PDF validation success", {
+        type: pdfBlob.type,
+        size: pdfBlob.size,
+        header,
+        templateId: activeTemplate,
+        paperFormat: paperSize,
+        dimensions: { width: rect.width, height: rect.height }
+      });
+
+      // Determine file name
+      let docNum = '';
+      if (documentType === 'invoice') docNum = data.invoiceNumber || '';
+      else if (documentType === 'quotation') docNum = data.quotationNumber || '';
+      else if (documentType === 'receipt') docNum = data.receiptNumber || '';
+      else if (documentType === 'purchase') docNum = data.purchaseNumber || '';
+      else if (documentType === 'report') docNum = data.reportNumber || '';
+      else docNum = data.id || 'DOC';
+
+      const fileName = `${documentType}_${docNum}.pdf`;
+
+      // Download PDF
+      const objectUrl = URL.createObjectURL(pdfBlob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+
+      setShareSuccess('PDF generated & downloaded!');
+    } catch (err: any) {
+      console.error('PDF generation error:', err);
+      // Log details of failure
+      const element = printRef.current;
+      const targetElement = element?.querySelector('#printed-document-root') || element;
+      const rect = targetElement?.getBoundingClientRect() || { width: 0, height: 0 };
+      console.error('PDF generation details:', {
+        message: err.message,
+        templateId: activeTemplate,
+        paperFormat: settings.print.paperSize || 'A4',
+        renderWidth: rect.width,
+        renderHeight: rect.height
+      });
+      alert(`PDF generation failed. ${err.message || 'The generated file is invalid.'}`);
+      setShareSuccess(null);
+    } finally {
+      setIsGeneratingPdf(false);
+      setTimeout(() => setShareSuccess(null), 3000);
+    }
   };
 
   // WhatsApp sender using customized, compiled text
   const handleShareWhatsApp = () => {
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(compiledText)}`;
-    window.open(url, '_blank');
-    setShareSuccess('Redirecting to WhatsApp web...');
-    setTimeout(() => setShareSuccess(null), 3000);
+    const doShare = () => {
+      const targetPhone = data.phone || data.mobile || '';
+      const url = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(compiledText)}`;
+      window.open(url, '_blank');
+      
+      if (onLogCommunication) {
+        onLogCommunication({
+          type: 'WhatsApp',
+          recipient: data.partyName || 'Unknown',
+          recipientNumber: targetPhone,
+          status: 'Sent',
+          subject: `${documentType.toUpperCase()} Dispatch`,
+          content: compiledText,
+          direction: 'Outbound'
+        });
+      }
+      
+      setShareSuccess('Redirecting to WhatsApp web...');
+      setTimeout(() => setShareSuccess(null), 3000);
+    };
+
+    if (settings.whatsappSettings.requirePinForShare && onCheckPin) {
+      onCheckPin('share_document', doShare);
+    } else {
+      doShare();
+    }
+  };
+
+  // Enterprise WhatsApp Business API sender
+  const handleShareWhatsAppEnterprise = async () => {
+    if (!recipientPhone) {
+      alert('Please enter a recipient phone number.');
+      return;
+    }
+    
+    setIsSendingWhatsApp(true);
+    setShareSuccess('Generating PDF & sending via Enterprise API...');
+    
+    let docNum = '';
+    if (documentType === 'invoice') docNum = data.invoiceNumber || '';
+    else if (documentType === 'quotation') docNum = data.quotationNumber || '';
+    else if (documentType === 'receipt') docNum = data.receiptNumber || '';
+    else if (documentType === 'purchase') docNum = data.purchaseNumber || '';
+    else if (documentType === 'report') docNum = data.reportNumber || '';
+    else docNum = data.id || 'DOC';
+
+    const docTypeStr = documentType.charAt(0).toUpperCase() + documentType.slice(1);
+    
+    try {
+      const res = await fetch('/api/whatsapp/send-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipientPhone: recipientPhone,
+          docType: docTypeStr,
+          docNumber: docNum,
+          date: data.invoiceDate || data.quotationDate || data.paymentDate || new Date().toISOString().slice(0, 10),
+          partyName: data.partyName || data.supplierName || 'Customer',
+          amount: data.total || data.amountPaid || data.amount || 0,
+          items: data.items || [],
+          caption: compiledText
+        })
+      });
+
+      const result = await res.json();
+      if (res.ok && result.success) {
+        setShareSuccess('Dispatched via Enterprise WhatsApp API successfully!');
+      } else {
+        alert(`Failed to send: ${result.error || 'Unknown error'}`);
+        setShareSuccess(null);
+      }
+    } catch (err: any) {
+      console.error('Enterprise WhatsApp dispatch failed:', err);
+      alert(`Error sending: ${err.message || err}`);
+      setShareSuccess(null);
+    } finally {
+      setIsSendingWhatsApp(false);
+      setTimeout(() => setShareSuccess(null), 4000);
+    }
   };
 
   // Email sender using customized, compiled text
@@ -202,7 +527,7 @@ export default function DocumentPrintView({
     if (documentType === 'purchase') docNum = data.purchaseNumber || '';
     if (documentType === 'report') docNum = data.reportNumber || '';
 
-    const subject = `${documentType.toUpperCase()} - ${docNum} from ${settings.company.labName}`;
+    const subject = `${documentType.toUpperCase()} - ${docNum} from ${settings.company.companyName}`;
     const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(compiledText)}`;
     window.open(url, '_blank');
     setShareSuccess('Opening email composer...');
@@ -255,10 +580,15 @@ export default function DocumentPrintView({
 
             <button
               onClick={handleDownloadPDF}
-              className="flex items-center space-x-1.5 bg-slate-800 text-white border border-slate-700 px-3 py-1.5 rounded text-[11px] font-semibold hover:bg-slate-700 transition cursor-pointer"
+              disabled={isGeneratingPdf}
+              className={`flex items-center space-x-1.5 border px-3 py-1.5 rounded text-[11px] font-semibold transition cursor-pointer ${
+                isGeneratingPdf
+                  ? 'bg-slate-700 text-slate-400 border-slate-600 cursor-not-allowed'
+                  : 'bg-slate-800 text-white border-slate-700 hover:bg-slate-700'
+              }`}
             >
               <Download size={13} />
-              <span>PDF Download</span>
+              <span>{isGeneratingPdf ? 'Preparing PDF...' : 'PDF Download'}</span>
             </button>
 
             <button
@@ -349,18 +679,62 @@ export default function DocumentPrintView({
                 </div>
               </div>
 
+              {/* Recipient Phone input */}
+              <div className="space-y-1">
+                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider">
+                  Recipient Phone Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 919999999999"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                  value={recipientPhone}
+                  onChange={(e) => setRecipientPhone(e.target.value)}
+                />
+              </div>
+
               {/* Action buttons */}
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                {settings.communication?.whatsapp?.enableBusinessApi ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      id="enterprise-whatsapp-send-btn"
+                      onClick={handleShareWhatsAppEnterprise}
+                      disabled={isSendingWhatsApp}
+                      className="flex-1 flex items-center justify-center space-x-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white py-2 rounded-xl text-[10px] font-extrabold transition cursor-pointer shadow-sm"
+                    >
+                      <Smartphone size={12} />
+                      <span>{isSendingWhatsApp ? 'Sending...' : 'Enterprise Send'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="standard-whatsapp-send-btn"
+                      onClick={handleShareWhatsApp}
+                      disabled={isSendingWhatsApp}
+                      className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-[10px] font-extrabold transition cursor-pointer shadow-sm"
+                    >
+                      <Smartphone size={12} />
+                      <span>Standard Share</span>
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    id="standard-only-whatsapp-send-btn"
+                    onClick={handleShareWhatsApp}
+                    className="w-full flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer shadow-sm"
+                  >
+                    <Smartphone size={13} />
+                    <span>Send WhatsApp (Standard)</span>
+                  </button>
+                )}
                 <button
-                  onClick={handleShareWhatsApp}
-                  className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer shadow-sm"
-                >
-                  <Smartphone size={13} />
-                  <span>Send WhatsApp</span>
-                </button>
-                <button
+                  type="button"
+                  id="send-email-btn"
                   onClick={handleShareEmail}
-                  className="flex-1 flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer border border-slate-700 shadow-sm"
+                  disabled={isSendingWhatsApp}
+                  className="w-full flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-900 text-white py-2 rounded-xl text-[11px] font-extrabold transition cursor-pointer border border-slate-700 shadow-sm"
                 >
                   <Mail size={13} />
                   <span>Send Email</span>

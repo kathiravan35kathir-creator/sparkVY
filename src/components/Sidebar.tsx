@@ -8,10 +8,6 @@ import {
   ShoppingBag,
   CreditCard,
   TrendingDown,
-  Droplet,
-  FlaskConical,
-  CheckSquare,
-  FileSignature,
   Boxes,
   Activity,
   UserCheck,
@@ -19,7 +15,14 @@ import {
   History,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ClipboardList,
+  RotateCcw,
+  Receipt,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Briefcase
 } from 'lucide-react';
 interface SidebarProps {
   activeTab: string;
@@ -43,7 +46,7 @@ export default function Sidebar({
     if (isAdmin) return true;
     // Staff (non-admin) has access to everything except sensitive system, settings, staff and financial reports
     return ![
-      'settings', 'audit_logs', 'staff', 'accounts', 'expenses', 'reports'
+      'settings', 'audit_logs', 'staff', 'accounts', 'expenses', 'reports', 'payment_out'
     ].includes(tab);
   };
 
@@ -55,44 +58,42 @@ export default function Sidebar({
       ]
     },
     {
-      title: 'BUSINESS',
+      title: 'PARTIES & ITEMS',
       items: [
         { id: 'parties', name: 'Parties (Clients/Vendors)', icon: Users },
-        { id: 'items', name: 'Items & Services', icon: Package },
+        { id: 'items', name: 'Items & Services', icon: Package }
+      ]
+    },
+    {
+      title: 'SALES',
+      items: [
         { id: 'quotations', name: 'Quotations', icon: FileSpreadsheet },
+        { id: 'proforma', name: 'Proforma Invoices', icon: ClipboardList },
         { id: 'sales', name: 'Sales & Invoices', icon: FileText },
-        { id: 'purchases', name: 'Purchases & Stock In', icon: ShoppingBag },
-        { id: 'payments', name: 'Payments', icon: CreditCard },
+        { id: 'returns', name: 'Sales Returns', icon: RotateCcw },
+        { id: 'credit_notes', name: 'Credit Notes', icon: Receipt }
+      ]
+    },
+    {
+      title: 'PURCHASES',
+      items: [
+        { id: 'procurement', name: 'Procurement Orders', icon: Briefcase },
+        { id: 'purchases', name: 'Purchases & Stock In', icon: ShoppingBag }
+      ]
+    },
+    {
+      title: 'CASH & BANK',
+      items: [
+        { id: 'payment_in', name: 'Payment In', icon: ArrowDownLeft },
+        { id: 'payment_out', name: 'Payment Out', icon: ArrowUpRight },
+        { id: 'accounts', name: 'Cash & Bank Accounts', icon: Boxes },
         { id: 'expenses', name: 'Expenses', icon: TrendingDown }
       ]
     },
     {
-      title: 'LAB MANAGEMENT',
+      title: 'REPORTS & SYSTEM',
       items: [
-        { id: 'samples', name: 'Samples Inbound', icon: Droplet },
-        { id: 'lab_tests', name: 'Technician Worklist', icon: FlaskConical },
-        { id: 'lab_reports', name: 'Laboratory Reports', icon: FileSignature }
-      ]
-    },
-    {
-      title: 'INVENTORY & INFRASTRUCTURE',
-      items: [
-        { id: 'equipment', name: 'Equipment Registers', icon: Activity }
-      ]
-    },
-    {
-      title: 'FINANCE',
-      items: [
-        { id: 'accounts', name: 'Cash & Bank Accounts', icon: Boxes },
-        { id: 'reports', name: 'Business Reports', icon: FileText }
-      ]
-    },
-    {
-      title: 'SYSTEM',
-      items: [
-        { id: 'staff', name: 'Staff & Roles', icon: UserCheck },
-        { id: 'notifications', name: 'Notifications', icon: Bell },
-        { id: 'audit_logs', name: 'Audit Logs', icon: History },
+        { id: 'reports', name: 'Business Reports', icon: Activity },
         { id: 'settings', name: 'Settings & DB Demo', icon: Settings }
       ]
     }
@@ -110,19 +111,19 @@ export default function Sidebar({
         {!collapsed && (
           <div className="flex items-center space-x-2">
             <div className="bg-[#2563EB] text-white px-2 py-0.5 rounded font-black flex items-center justify-center text-xs tracking-wider shadow shrink-0">
-              {settings?.company?.displayLabName ? settings.company.displayLabName.substring(0, 2).toUpperCase() : 'LB'}
+              {settings?.company?.displayCompanyName ? settings.company.displayCompanyName.substring(0, 2).toUpperCase() : 'BO'}
             </div>
             <div className="min-w-0">
-              <h1 className="font-extrabold text-[13px] tracking-tight text-white truncate max-w-[130px]" title={settings?.company?.displayLabName || settings?.company?.labName || 'LABBIZ'}>
-                {settings?.company?.displayLabName || settings?.company?.labName || 'LABBIZ'}
+              <h1 className="font-extrabold text-[13px] tracking-tight text-white truncate max-w-[130px]" title={settings?.company?.displayCompanyName || settings?.company?.companyName || 'BIZOPS'}>
+                {settings?.company?.displayCompanyName || settings?.company?.companyName || 'BIZOPS'}
               </h1>
-              <p className="text-[8px] text-blue-400 font-bold tracking-wider uppercase">ERP & LIMS</p>
+              <p className="text-[8px] text-blue-400 font-bold tracking-wider uppercase">ERP & CRM</p>
             </div>
           </div>
         )}
         {collapsed && (
           <div className="mx-auto bg-[#2563EB] text-white p-1.5 rounded font-bold text-[11px] uppercase">
-            {settings?.company?.displayLabName ? settings.company.displayLabName.substring(0, 2).toUpperCase() : 'LB'}
+            {settings?.company?.displayCompanyName ? settings.company.displayCompanyName.substring(0, 2).toUpperCase() : 'BO'}
           </div>
         )}
         <button
