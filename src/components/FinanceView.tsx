@@ -14,7 +14,8 @@ import {
   User,
   BookOpen,
   Calendar,
-  Printer
+  Printer,
+  X
 } from 'lucide-react';
 import { Expense, Payment, Party, PaymentMethod, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -100,19 +101,35 @@ export default function FinanceView({
 
   // Filter core lists
   const filteredExpenses = expenses.filter((ex) => {
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      (ex.vendorName && ex.vendorName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (ex.description && ex.description.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      (ex.vendorName && ex.vendorName.toLowerCase().includes(q)) ||
+      (ex.description && ex.description.toLowerCase().includes(q)) ||
+      (ex.category && ex.category.toLowerCase().includes(q)) ||
+      (ex.expenseNumber && ex.expenseNumber.toLowerCase().includes(q)) ||
+      (ex.paymentMethod && ex.paymentMethod.toLowerCase().includes(q)) ||
+      (ex.amount && ex.amount.toString().includes(q));
+
     const matchesCategory = filterExpenseCategory === 'All' || ex.category === filterExpenseCategory;
     const matchesDate = (!startDate || ex.expenseDate >= startDate) && (!endDate || ex.expenseDate <= endDate);
     return matchesSearch && matchesCategory && matchesDate;
   });
 
   const filteredPayments = payments.filter((p) => {
+    const q = searchQuery.trim().toLowerCase();
+    const party = parties.find(party => party.id === p.partyId);
     const matchesSearch =
-      (p.notes && p.notes.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      p.paymentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.partyName && p.partyName.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      (p.paymentNumber && p.paymentNumber.toLowerCase().includes(q)) ||
+      (p.partyName && p.partyName.toLowerCase().includes(q)) ||
+      (party?.phone && party.phone.toLowerCase().includes(q)) ||
+      (p.notes && p.notes.toLowerCase().includes(q)) ||
+      (p.referenceNumber && p.referenceNumber.toLowerCase().includes(q)) ||
+      (p.paymentMethod && p.paymentMethod.toLowerCase().includes(q)) ||
+      (p.accountName && p.accountName.toLowerCase().includes(q)) ||
+      (p.amount && p.amount.toString().includes(q));
+
     const matchesDate = (!startDate || p.paymentDate >= startDate) && (!endDate || p.paymentDate <= endDate);
     return matchesSearch && matchesDate;
   });
@@ -357,14 +374,31 @@ export default function FinanceView({
         <div className="space-y-4">
           {/* Quick Filters */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
-              <input
-                type="text"
-                placeholder="Search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none"
-              />
+            <div className="relative flex-1 min-w-[200px] flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by payee, category, notes, method, amount..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:outline-none placeholder:text-slate-400"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+                    title="Clear Search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {searchQuery.trim() && (
+                <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+                  {filteredExpenses.length} Matching
+                </span>
+              )}
             </div>
             
             <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
@@ -419,8 +453,8 @@ export default function FinanceView({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">
-                        No indirect cost expenses recorded.
+                      <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                        No matching records found.
                       </td>
                     </tr>
                   ) : (
@@ -465,14 +499,31 @@ export default function FinanceView({
         <div className="space-y-4">
           {/* Quick Search */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
-              <input
-                type="text"
-                placeholder="Search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none"
-              />
+            <div className="relative flex-1 min-w-[200px] flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by voucher #, party, phone, notes, method, amount..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:outline-none placeholder:text-slate-400"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+                    title="Clear Search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {searchQuery.trim() && (
+                <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+                  {filteredPayments.length} Matching
+                </span>
+              )}
             </div>
 
             <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
@@ -510,8 +561,8 @@ export default function FinanceView({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredPayments.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
-                        No financial payments logged inside search criteria.
+                      <td colSpan={6} className="py-12 text-center text-slate-500 font-medium">
+                        No matching records found.
                       </td>
                     </tr>
                   ) : (

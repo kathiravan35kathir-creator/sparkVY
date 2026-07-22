@@ -15,7 +15,8 @@ import {
   Calendar,
   User,
   DollarSign,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
 import { Payment, Party, AppSettings, PaymentMethod, PaymentType } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -84,13 +85,28 @@ export default function PaymentsView({
     setNotes('');
   };
 
-  const filteredPayments = payments.filter(p => 
-    p.paymentType === type && 
-    (p.paymentNumber.toLowerCase().includes(searchQuery.toLowerCase()) || 
-     p.partyName?.toLowerCase().includes(searchQuery.toLowerCase())) &&
-    (!startDate || p.paymentDate >= startDate) &&
-    (!endDate || p.paymentDate <= endDate)
-  );
+  const filteredPayments = payments.filter(p => {
+    const q = searchQuery.trim().toLowerCase();
+    const party = parties.find(party => party.id === p.partyId);
+    const matchesType = p.paymentType === type;
+    const matchesSearch =
+      !q ||
+      (p.paymentNumber && p.paymentNumber.toLowerCase().includes(q)) ||
+      (p.partyName && p.partyName.toLowerCase().includes(q)) ||
+      (party?.phone && party.phone.toLowerCase().includes(q)) ||
+      (party?.alternatePhone && party.alternatePhone.toLowerCase().includes(q)) ||
+      (p.referenceNumber && p.referenceNumber.toLowerCase().includes(q)) ||
+      (p.notes && p.notes.toLowerCase().includes(q)) ||
+      (p.paymentMethod && p.paymentMethod.toLowerCase().includes(q)) ||
+      (p.accountName && p.accountName.toLowerCase().includes(q)) ||
+      (p.id && p.id.toLowerCase().includes(q));
+
+    const matchesDate =
+      (!startDate || p.paymentDate >= startDate) &&
+      (!endDate || p.paymentDate <= endDate);
+
+    return matchesType && matchesSearch && matchesDate;
+  });
 
   if (isCreating) {
     return (
@@ -198,9 +214,30 @@ export default function PaymentsView({
       </div>
 
       <div className="bg-white rounded-xl border p-4 flex flex-wrap gap-3 shadow-sm items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <input type="text" placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by Payment #, Invoice #, Party, Method, Account..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 border rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+              title="Clear Search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {searchQuery.trim() && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+            {filteredPayments.length} Matching
+          </span>
+        )}
 
         <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
           <Calendar size={14} className="text-slate-400" />
@@ -235,7 +272,7 @@ export default function PaymentsView({
           </thead>
           <tbody className="divide-y text-xs text-slate-700">
             {filteredPayments.length === 0 ? (
-              <tr><td colSpan={7} className="p-12 text-center text-slate-400">No {type.toLowerCase()} transactions recorded.</td></tr>
+              <tr><td colSpan={7} className="p-12 text-center text-slate-500 font-medium">No matching records found.</td></tr>
             ) : (
               filteredPayments.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50 transition group">

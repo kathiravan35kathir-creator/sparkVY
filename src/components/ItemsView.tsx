@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   FileText,
   ChevronRight,
-  Bookmark
+  Bookmark,
+  X
 } from 'lucide-react';
 import { Item, ItemType, Party } from '../types';
 
@@ -151,10 +152,17 @@ export default function ItemsView({
   // Filter core logic
   const filteredItems = items.filter((it) => {
     // 1. Search Box
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      it.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      it.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      it.category.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      (it.name && it.name.toLowerCase().includes(q)) ||
+      (it.code && it.code.toLowerCase().includes(q)) ||
+      (it.category && it.category.toLowerCase().includes(q)) ||
+      (it.barcode && it.barcode.toLowerCase().includes(q)) ||
+      (it.hsnCode && it.hsnCode.toLowerCase().includes(q)) ||
+      (it.description && it.description.toLowerCase().includes(q)) ||
+      (it.storageLocation && it.storageLocation.toLowerCase().includes(q)) ||
+      (it.type && it.type.toLowerCase().includes(q));
 
     // 2. Category Filter
     const matchesCategory = filterCategory === 'All' || it.category === filterCategory;
@@ -505,17 +513,32 @@ export default function ItemsView({
       </div>
 
       {/* SEARCH AND FILTER BAR */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3 items-center">
         {/* Search */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 w-full">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search"
+            placeholder="Search items by Name, SKU, Barcode, HSN, Category, Brand/Type..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+              title="Clear Search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {searchQuery.trim() && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+            {filteredItems.length} Matching
+          </span>
+        )}
 
         {/* Category Filter */}
         <div className="flex items-center space-x-2">
@@ -568,8 +591,8 @@ export default function ItemsView({
             <tbody className="divide-y divide-slate-100 text-xs">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
-                    No products found matching query.
+                  <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                    No matching records found.
                   </td>
                 </tr>
               ) : (

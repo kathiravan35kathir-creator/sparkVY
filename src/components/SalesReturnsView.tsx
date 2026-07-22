@@ -12,7 +12,8 @@ import {
   History,
   Lock,
   ArrowDownLeft,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { SalesReturn, Party, Invoice, SalesReturnLineItem, AppSettings, SalesReturnReason, ItemCondition, PaymentMethod, SalesReturnLineItem as SRLineItem } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -145,7 +146,20 @@ export default function SalesReturnsView({
     setReturnItems([]);
   };
 
-  const filtered = salesReturns.filter(sr => sr.returnNumber.toLowerCase().includes(searchQuery.toLowerCase()) || sr.partyName.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = salesReturns.filter(sr => {
+    const q = searchQuery.trim().toLowerCase();
+    const party = parties.find(p => p.id === sr.partyId);
+    return (
+      !q ||
+      (sr.returnNumber && sr.returnNumber.toLowerCase().includes(q)) ||
+      (sr.partyName && sr.partyName.toLowerCase().includes(q)) ||
+      (party?.phone && party.phone.toLowerCase().includes(q)) ||
+      (sr.originalInvoiceNumber && sr.originalInvoiceNumber.toLowerCase().includes(q)) ||
+      (sr.notes && sr.notes.toLowerCase().includes(q)) ||
+      (sr.id && sr.id.toLowerCase().includes(q)) ||
+      (sr.items && sr.items.some(it => it.itemName.toLowerCase().includes(q) || (it.reason && it.reason.toLowerCase().includes(q))))
+    );
+  });
 
   if (isCreating) {
     const total = calculateTotal();
@@ -275,10 +289,31 @@ export default function SalesReturnsView({
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm">
+      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm items-center">
         <div className="relative flex-1">
-          <input type="text" placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search return #, customer, invoice #, reason, items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 border rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+              title="Clear Search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {searchQuery.trim() && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+            {filtered.length} Matching
+          </span>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border overflow-hidden shadow-sm">
@@ -296,7 +331,7 @@ export default function SalesReturnsView({
           </thead>
           <tbody className="divide-y text-xs text-slate-700">
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="p-12 text-center text-slate-400">No sales return records found.</td></tr>
+              <tr><td colSpan={7} className="p-12 text-center text-slate-500 font-medium">No matching records found.</td></tr>
             ) : (
               filtered.map((sr) => (
                 <tr key={sr.id} className="hover:bg-slate-50 transition">

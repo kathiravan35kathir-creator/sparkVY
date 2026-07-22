@@ -13,7 +13,8 @@ import {
   Calculator,
   User,
   PlusCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
 import { Quotation, QuotationLineItem, Party, Item, QuotationStatus, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -191,9 +192,18 @@ export default function QuotationsView({
 
   // Filter core list
   const filteredQuotations = quotations.filter((q) => {
+    const query = searchQuery.trim().toLowerCase();
+    const party = parties.find(p => p.id === q.partyId);
     const matchesSearch =
-      q.quotationNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      q.partyName.toLowerCase().includes(searchQuery.toLowerCase());
+      !query ||
+      (q.quotationNumber && q.quotationNumber.toLowerCase().includes(query)) ||
+      (q.partyName && q.partyName.toLowerCase().includes(query)) ||
+      (party?.phone && party.phone.toLowerCase().includes(query)) ||
+      (party?.alternatePhone && party.alternatePhone.toLowerCase().includes(query)) ||
+      (q.stage && q.stage.toLowerCase().includes(query)) ||
+      (q.notes && q.notes.toLowerCase().includes(query)) ||
+      (q.id && q.id.toLowerCase().includes(query)) ||
+      (q.items && q.items.some(it => it.itemName.toLowerCase().includes(query) || it.itemCode.toLowerCase().includes(query)));
     const matchesStatus = filterStatus === 'All' || q.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -502,16 +512,31 @@ export default function QuotationsView({
           </div>
 
           {/* Search/Filters */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3">
-            <div className="relative flex-1">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3 items-center">
+            <div className="relative flex-1 w-full">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search"
+                placeholder="Search quote #, customer, phone, stage, notes, items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+                  title="Clear Search"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
+            {searchQuery.trim() && (
+              <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+                {filteredQuotations.length} Matching
+              </span>
+            )}
             <div className="flex items-center space-x-2">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</span>
               <select
@@ -551,8 +576,8 @@ export default function QuotationsView({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredQuotations.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
-                        No quotations recorded.
+                      <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                        No matching records found.
                       </td>
                     </tr>
                   ) : (

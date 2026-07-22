@@ -31,7 +31,8 @@ import {
   Info,
   Building,
   Smartphone,
-  MessageSquare
+  MessageSquare,
+  X
 } from 'lucide-react';
 import {
   Party,
@@ -315,16 +316,20 @@ export default function PartyLedgerView({
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       // Search term
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
+      if (searchTerm.trim()) {
+        const term = searchTerm.trim().toLowerCase();
         const matchesSearch = 
-          t.reference?.toLowerCase().includes(term) ||
-          t.type?.toLowerCase().includes(term) ||
-          t.description?.toLowerCase().includes(term) ||
-          t.status?.toLowerCase().includes(term) ||
-          party.name.toLowerCase().includes(term) ||
-          party.phone.includes(term) ||
-          party.gstNumber?.toLowerCase().includes(term);
+          (t.reference && t.reference.toLowerCase().includes(term)) ||
+          (t.type && t.type.toLowerCase().includes(term)) ||
+          (t.description && t.description.toLowerCase().includes(term)) ||
+          (t.status && t.status.toLowerCase().includes(term)) ||
+          (t.debit && t.debit.toString().includes(term)) ||
+          (t.credit && t.credit.toString().includes(term)) ||
+          (t.runningBalance && t.runningBalance.toString().includes(term)) ||
+          (t.date && t.date.includes(term)) ||
+          (party.name && party.name.toLowerCase().includes(term)) ||
+          (party.phone && party.phone.toLowerCase().includes(term)) ||
+          (party.gstNumber && party.gstNumber.toLowerCase().includes(term));
         
         if (!matchesSearch) return false;
       }
@@ -948,15 +953,31 @@ export default function PartyLedgerView({
           <div className="space-y-4 animate-fade-in" id="ledger_tab_panel">
             {/* Control Panel (Search, Filter toggler, Sharing, Downloads) */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col md:flex-row items-center justify-between gap-3">
-              <div className="relative w-full md:w-80">
-                {/* Search string has word Search ONLY as requested by user constraint #2 */}
-                <input
-                  type="text"
-                  placeholder="Search"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 w-full text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+              <div className="relative w-full md:w-96 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by Voucher #, Type, Details, Status, Ref..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-white border border-slate-200 rounded-lg pl-9 pr-8 py-1.5 w-full text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+                      title="Clear Search"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {searchTerm.trim() && (
+                  <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+                    {filteredTransactions.length} Matching
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
@@ -1110,8 +1131,8 @@ export default function PartyLedgerView({
                   <tbody className="divide-y divide-slate-100 text-xs">
                     {filteredTransactions.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400 font-medium italic">
-                          No matching transactions detected in this ledger interval
+                        <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                          No matching records found.
                         </td>
                       </tr>
                     ) : (

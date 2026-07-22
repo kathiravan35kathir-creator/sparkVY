@@ -13,7 +13,8 @@ import {
   Lock,
   ArrowDownLeft,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { CreditNote, Party, Invoice, AppSettings, CreditNoteStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -40,7 +41,20 @@ export default function CreditNotesView({
   const [adjustingNote, setAdjustingNote] = useState<CreditNote | null>(null);
   const [refundingNote, setRefundingNote] = useState<CreditNote | null>(null);
 
-  const filtered = creditNotes.filter(cn => cn.creditNoteNumber.toLowerCase().includes(searchQuery.toLowerCase()) || cn.partyName.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = creditNotes.filter(cn => {
+    const q = searchQuery.trim().toLowerCase();
+    const party = parties.find(p => p.id === cn.partyId);
+    return (
+      !q ||
+      (cn.creditNoteNumber && cn.creditNoteNumber.toLowerCase().includes(q)) ||
+      (cn.partyName && cn.partyName.toLowerCase().includes(q)) ||
+      (party?.phone && party.phone.toLowerCase().includes(q)) ||
+      (party?.alternatePhone && party.alternatePhone.toLowerCase().includes(q)) ||
+      (cn.reason && cn.reason.toLowerCase().includes(q)) ||
+      (cn.notes && cn.notes.toLowerCase().includes(q)) ||
+      (cn.id && cn.id.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -54,10 +68,31 @@ export default function CreditNotesView({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm">
+      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm items-center">
         <div className="relative flex-1">
-          <input type="text" placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search credit note #, customer, phone, reason, notes..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 border rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+              title="Clear Search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {searchQuery.trim() && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+            {filtered.length} Matching
+          </span>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border overflow-hidden shadow-sm">
@@ -76,7 +111,7 @@ export default function CreditNotesView({
           </thead>
           <tbody className="divide-y text-xs text-slate-700">
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="p-12 text-center text-slate-400 font-medium">No credit notes found.</td></tr>
+              <tr><td colSpan={8} className="p-12 text-center text-slate-500 font-medium">No matching records found.</td></tr>
             ) : (
               filtered.map((cn) => {
                 const balance = cn.total - cn.adjustedAmount - cn.refundAmount;

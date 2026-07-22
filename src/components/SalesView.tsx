@@ -14,7 +14,8 @@ import {
   History,
   Lock,
   DollarSign,
-  Calendar
+  Calendar,
+  X
 } from 'lucide-react';
 import { Invoice, Party, Item, InvoiceStatus, InvoiceLineItem, PaymentMethod, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -211,9 +212,18 @@ export default function SalesView({
 
   // Filter core list
   const filteredInvoices = invoices.filter((i) => {
+    const q = searchQuery.trim().toLowerCase();
+    const party = parties.find(p => p.id === i.partyId);
     const matchesSearch =
-      i.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      i.partyName.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      (i.invoiceNumber && i.invoiceNumber.toLowerCase().includes(q)) ||
+      (i.partyName && i.partyName.toLowerCase().includes(q)) ||
+      (party?.phone && party.phone.toLowerCase().includes(q)) ||
+      (party?.alternatePhone && party.alternatePhone.toLowerCase().includes(q)) ||
+      (i.relatedQuotationNumber && i.relatedQuotationNumber.toLowerCase().includes(q)) ||
+      (i.notes && i.notes.toLowerCase().includes(q)) ||
+      (i.id && i.id.toLowerCase().includes(q)) ||
+      (i.items && i.items.some(it => it.itemName.toLowerCase().includes(q) || it.itemCode.toLowerCase().includes(q)));
     const matchesStatus = filterStatus === 'All' || i.status === filterStatus;
     const matchesDate = (!startDate || i.invoiceDate >= startDate) && (!endDate || i.invoiceDate <= endDate);
     return matchesSearch && matchesStatus && matchesDate;
@@ -531,16 +541,31 @@ export default function SalesView({
           </div>
 
           {/* Filters */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3">
-            <div className="relative flex-1">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3 items-center">
+            <div className="relative flex-1 w-full">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search"
+                placeholder="Search invoice by Invoice #, Customer, Mobile, Ref #, Items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+                  title="Clear Search"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
+            {searchQuery.trim() && (
+              <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+                {filteredInvoices.length} Matching
+              </span>
+            )}
             
             <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">
               <Calendar size={14} className="text-slate-400" />
@@ -603,8 +628,8 @@ export default function SalesView({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400 font-medium">
-                        No invoices registered in sales ledger.
+                      <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                        No matching records found.
                       </td>
                     </tr>
                   ) : (

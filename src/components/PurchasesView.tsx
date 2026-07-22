@@ -11,7 +11,8 @@ import {
   FileText,
   DollarSign,
   ChevronRight,
-  Printer
+  Printer,
+  X
 } from 'lucide-react';
 import { Purchase, Party, Item, PurchaseLineItem, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -179,10 +180,18 @@ export default function PurchasesView({
   };
 
   const filteredPurchases = purchases.filter((p) => {
+    const q = searchQuery.trim().toLowerCase();
+    const party = parties.find(party => party.id === p.partyId);
     const matchesSearch =
-      p.partyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.purchaseNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.supplierInvoiceNumber && p.supplierInvoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      (p.purchaseNumber && p.purchaseNumber.toLowerCase().includes(q)) ||
+      (p.partyName && p.partyName.toLowerCase().includes(q)) ||
+      (party?.phone && party.phone.toLowerCase().includes(q)) ||
+      (party?.alternatePhone && party.alternatePhone.toLowerCase().includes(q)) ||
+      (p.supplierInvoiceNumber && p.supplierInvoiceNumber.toLowerCase().includes(q)) ||
+      (p.notes && p.notes.toLowerCase().includes(q)) ||
+      (p.id && p.id.toLowerCase().includes(q)) ||
+      (p.items && p.items.some(it => it.itemName.toLowerCase().includes(q) || (it.batchNumber && it.batchNumber.toLowerCase().includes(q))));
 
     const matchesStatus = filterStatus === 'All' || p.paymentStatus === filterStatus;
     const matchesDate = (!startDate || p.purchaseDate >= startDate) && (!endDate || p.purchaseDate <= endDate);
@@ -521,15 +530,30 @@ export default function PurchasesView({
           {/* List Table panel */}
           <div className="col-span-1 lg:col-span-8 bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between bg-slate-50/50">
-              <div className="relative max-w-xs w-full flex-1">
+              <div className="relative max-w-sm w-full flex-1">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search"
-                  className="px-3 pr-3 py-1.5 w-full bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
+                  placeholder="Search purchase #, supplier, ref #, items..."
+                  className="pl-9 pr-8 py-1.5 w-full bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500 placeholder:text-slate-400"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+                    title="Clear Search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
+              {searchQuery.trim() && (
+                <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+                  {filteredPurchases.length} Matching
+                </span>
+              )}
 
               <div className="flex items-center space-x-2 border-l border-slate-200 pl-3">
                 <Calendar size={13} className="text-slate-400" />
@@ -585,7 +609,14 @@ export default function PurchasesView({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredPurchases.map((p) => (
+                    {filteredPurchases.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                          No matching records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPurchases.map((p) => (
                       <tr key={p.id} className="hover:bg-slate-50/50 transition cursor-pointer" onClick={() => setSelectedPurchase(p)}>
                         <td className="p-3 font-bold text-blue-600 font-mono">{p.purchaseNumber}</td>
                         <td className="p-3">
@@ -612,7 +643,8 @@ export default function PurchasesView({
                           <ChevronRight size={14} className="text-slate-400 inline" />
                         </td>
                       </tr>
-                    ))}
+                      ))
+                    )}
                   </tbody>
                 </table>
               )}

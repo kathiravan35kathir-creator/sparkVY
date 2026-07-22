@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   MapPin,
   Clock,
-  Printer
+  Printer,
+  X
 } from 'lucide-react';
 import { Equipment, EquipmentStatus } from '../types';
 
@@ -87,11 +88,16 @@ export default function EquipmentView({
   };
 
   const filteredEquipment = equipment.filter((eq) => {
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      eq.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      eq.equipmentCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (eq.location && eq.location.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (eq.serialNumber && eq.serialNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      (eq.name && eq.name.toLowerCase().includes(q)) ||
+      (eq.equipmentCode && eq.equipmentCode.toLowerCase().includes(q)) ||
+      (eq.location && eq.location.toLowerCase().includes(q)) ||
+      (eq.serialNumber && eq.serialNumber.toLowerCase().includes(q)) ||
+      (eq.model && eq.model.toLowerCase().includes(q)) ||
+      (eq.manufacturer && eq.manufacturer.toLowerCase().includes(q)) ||
+      (eq.category && eq.category.toLowerCase().includes(q));
 
     const matchesCond = filterCondition === 'All' || eq.status === filterCondition;
     return matchesSearch && matchesCond;
@@ -299,14 +305,31 @@ export default function EquipmentView({
           {/* List panel */}
           <div className="col-span-1 lg:col-span-8 bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between bg-slate-50/50">
-              <div className="relative max-w-xs w-full">
-                <input
-                  type="text"
-                  placeholder="Search"
-                  className="px-3 pr-3 py-1.5 w-full bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+              <div className="relative max-w-md w-full flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search asset name, code, serial, location, model..."
+                    className="pl-9 pr-8 py-1.5 w-full bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500 placeholder:text-slate-400"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition"
+                      title="Clear Search"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {searchQuery.trim() && (
+                  <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+                    {filteredEquipment.length} Matching
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -337,7 +360,14 @@ export default function EquipmentView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                  {filteredEquipment.map((eq) => (
+                  {filteredEquipment.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-12 text-center text-slate-500 font-medium">
+                        No matching records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredEquipment.map((eq) => (
                     <tr
                       key={eq.id}
                       onClick={() => setSelectedEquip(eq)}
@@ -370,7 +400,8 @@ export default function EquipmentView({
                         </span>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

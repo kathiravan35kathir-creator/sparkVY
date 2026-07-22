@@ -78,6 +78,7 @@ import FinanceView from './components/FinanceView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import SecurityPinDialog from './components/SecurityPinDialog';
+import CommandPaletteModal from './components/CommandPaletteModal';
 // Auth Components
 import LoginView from './components/auth/LoginView';
 import OnboardingView from './components/auth/OnboardingView';
@@ -109,9 +110,11 @@ export default function App() {
   const [authStep, setAuthStep] = useState<'login' | 'onboarding' | 'dashboard'>('login');
   const [isLoadingAuth, setIsLoadingAuth] = useState(false);
 
-  // 3. Navigation states
+  // 3. Navigation & Search states
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   // Sync back to local storage and Firestore whenever DB state is modified
   useEffect(() => {
@@ -1194,8 +1197,11 @@ export default function App() {
           notifications={db.notifications}
           onMarkNotificationRead={handleMarkRead}
           onMarkAllRead={handleMarkAllRead}
-          globalSearchQuery=""
-          onGlobalSearchChange={() => {}}
+          globalSearchQuery={globalSearchQuery}
+          onGlobalSearchChange={(q) => {
+            setGlobalSearchQuery(q);
+            if (q) setIsCommandPaletteOpen(true);
+          }}
           onLogout={handleLogout}
           activeTab={activeTab}
         />
@@ -1438,6 +1444,17 @@ export default function App() {
             />
           )}
         </main>
+        <CommandPaletteModal
+          isOpen={isCommandPaletteOpen || !!globalSearchQuery}
+          onClose={() => {
+            setIsCommandPaletteOpen(false);
+            setGlobalSearchQuery('');
+          }}
+          query={globalSearchQuery}
+          onQueryChange={setGlobalSearchQuery}
+          db={db}
+          onNavigateTab={(tabId) => setActiveTab(tabId)}
+        />
         <SecurityPinDialog
           isOpen={!!pinAction}
           onClose={() => setPinAction(null)}

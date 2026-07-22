@@ -11,7 +11,8 @@ import {
   ChevronRight,
   ClipboardList,
   Lock,
-  ArrowRight
+  ArrowRight,
+  X
 } from 'lucide-react';
 import { ProformaInvoice, Party, Item, InvoiceLineItem, AppSettings, ProformaStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -156,7 +157,20 @@ export default function ProformaInvoicesView({
   };
 
   const filtered = proformaInvoices.filter((i) => {
-    const matchesSearch = i.proformaNumber.toLowerCase().includes(searchQuery.toLowerCase()) || i.partyName.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.trim().toLowerCase();
+    const party = parties.find(p => p.id === i.partyId);
+    const matchesSearch =
+      !q ||
+      (i.proformaNumber && i.proformaNumber.toLowerCase().includes(q)) ||
+      (i.partyName && i.partyName.toLowerCase().includes(q)) ||
+      (party?.phone && party.phone.toLowerCase().includes(q)) ||
+      (party?.alternatePhone && party.alternatePhone.toLowerCase().includes(q)) ||
+      (i.reference && i.reference.toLowerCase().includes(q)) ||
+      (i.salesperson && i.salesperson.toLowerCase().includes(q)) ||
+      (i.notes && i.notes.toLowerCase().includes(q)) ||
+      (i.id && i.id.toLowerCase().includes(q)) ||
+      (i.items && i.items.some(it => it.itemName.toLowerCase().includes(q) || it.itemCode.toLowerCase().includes(q)));
+
     const matchesStatus = filterStatus === 'All' || i.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -281,10 +295,31 @@ export default function ProformaInvoicesView({
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm">
+      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm items-center">
         <div className="relative flex-1">
-          <input type="text" placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by Proforma #, Customer, Ref, Notes, Items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 border rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+              title="Clear Search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {searchQuery.trim() && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+            {filtered.length} Matching
+          </span>
+        )}
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-50 border rounded-lg px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none">
           <option value="All">All Statuses</option>
           <option value="Draft">Draft</option>
@@ -309,7 +344,7 @@ export default function ProformaInvoicesView({
           </thead>
           <tbody className="divide-y text-xs text-slate-700">
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} className="p-12 text-center text-slate-400">No proforma invoices found.</td></tr>
+              <tr><td colSpan={6} className="p-12 text-center text-slate-500 font-medium">No matching records found.</td></tr>
             ) : (
               filtered.map((pi) => (
                 <tr key={pi.id} className="hover:bg-slate-50 transition">

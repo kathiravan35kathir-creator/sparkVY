@@ -13,7 +13,8 @@ import {
   CheckCircle2,
   Lock,
   ArrowRight,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
 import { ProcurementOrder, Party, Item, PurchaseLineItem, AppSettings, ProcurementStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -151,7 +152,19 @@ export default function ProcurementOrdersView({
   };
 
   const filtered = procurementOrders.filter((o) => {
-    const matchesSearch = o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) || o.partyName.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.trim().toLowerCase();
+    const supplier = parties.find(p => p.id === o.partyId);
+    const matchesSearch =
+      !q ||
+      (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
+      (o.partyName && o.partyName.toLowerCase().includes(q)) ||
+      (supplier?.phone && supplier.phone.toLowerCase().includes(q)) ||
+      (supplier?.alternatePhone && supplier.alternatePhone.toLowerCase().includes(q)) ||
+      (o.referenceNumber && o.referenceNumber.toLowerCase().includes(q)) ||
+      (o.internalNotes && o.internalNotes.toLowerCase().includes(q)) ||
+      (o.id && o.id.toLowerCase().includes(q)) ||
+      (o.items && o.items.some(it => it.itemName.toLowerCase().includes(q)));
+
     const matchesStatus = filterStatus === 'All' || o.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -290,10 +303,31 @@ export default function ProcurementOrdersView({
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm">
+      <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm items-center">
         <div className="relative flex-1">
-          <input type="text" placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search PO #, supplier, phone, ref #, items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-50 border rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+              title="Clear Search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {searchQuery.trim() && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+            {filtered.length} Matching
+          </span>
+        )}
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-50 border rounded-lg px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none">
           <option value="All">All Statuses</option>
           <option value="Draft">Draft</option>
@@ -319,7 +353,7 @@ export default function ProcurementOrdersView({
           </thead>
           <tbody className="divide-y text-xs text-slate-700">
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="p-12 text-center text-slate-400 font-medium">No procurement orders logged.</td></tr>
+              <tr><td colSpan={7} className="p-12 text-center text-slate-500 font-medium">No matching records found.</td></tr>
             ) : (
               filtered.map((po) => (
                 <tr key={po.id} className="hover:bg-slate-50 transition group">

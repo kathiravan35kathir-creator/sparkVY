@@ -11,7 +11,8 @@ import {
   Copy,
   ChevronRight,
   Eye,
-  ArrowUpDown
+  ArrowUpDown,
+  X
 } from 'lucide-react';
 import { Party, PartyType, BalanceType } from '../types';
 import { AppState } from '../data';
@@ -275,11 +276,19 @@ export default function PartiesView({
 
   const filteredParties = parties
     .filter((p) => {
+      const q = searchQuery.trim().toLowerCase();
       const matchSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.phone.includes(searchQuery) ||
-        p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.companyName && p.companyName.toLowerCase().includes(searchQuery.toLowerCase()));
+        !q ||
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.companyName && p.companyName.toLowerCase().includes(q)) ||
+        (p.phone && p.phone.toLowerCase().includes(q)) ||
+        (p.alternatePhone && p.alternatePhone.toLowerCase().includes(q)) ||
+        (p.code && p.code.toLowerCase().includes(q)) ||
+        (p.gstNumber && p.gstNumber.toLowerCase().includes(q)) ||
+        (p.email && p.email.toLowerCase().includes(q)) ||
+        (p.billingAddress && p.billingAddress.toLowerCase().includes(q)) ||
+        (p.shippingAddress && p.shippingAddress.toLowerCase().includes(q)) ||
+        (p.id && p.id.toLowerCase().includes(q));
 
       const matchType = filterType === 'All' || p.type === filterType || p.type === 'Both';
       const matchStatus =
@@ -908,20 +917,38 @@ export default function PartiesView({
       </div>
 
       {/* FILTER & SEARCH BAR */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3 items-center">
         {/* Search Input */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 w-full">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search"
+            placeholder="Search party by Name, Mobile, GST, Email, City, Reference Code..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
           />
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setCurrentPage(1);
+              }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200 transition"
+              title="Clear Search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+        {searchQuery.trim() && (
+          <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg shrink-0">
+            {filteredParties.length} Matching
+          </span>
+        )}
 
         {/* Filter Type */}
         <div className="flex items-center space-x-2">
@@ -992,8 +1019,8 @@ export default function PartiesView({
             <tbody className="divide-y divide-slate-100 text-xs">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">
-                    No matching parties found in the database.
+                  <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                    No matching records found.
                   </td>
                 </tr>
               ) : (
