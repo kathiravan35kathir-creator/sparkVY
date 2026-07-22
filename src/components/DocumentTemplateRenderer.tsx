@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export interface DocumentTemplateRendererProps {
-  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'transaction_list' | 'report' | 'sample_label' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher';
+  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'transaction_list' | 'report' | 'sample_label' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher' | 'party_ledger';
   data?: any; // The document object
   settings: AppSettings;
   customizationOverride?: any;
@@ -130,7 +130,7 @@ export default function DocumentTemplateRenderer({
   const company = settings.company;
   
   // Normalize types from other calling views
-  const normType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'transaction_list' = (documentType as any);
+  const normType: any = documentType;
 
   const docData = data || getDemoData(normType, company);
 
@@ -346,6 +346,143 @@ export default function DocumentTemplateRenderer({
 
         <div className="text-center text-[9px] text-slate-400 mt-8 pt-2 border-t border-slate-100 uppercase tracking-wider font-semibold">
           Generated via BizOps Cloud ERP • {company.legalName || company.companyName}
+        </div>
+      </div>
+    );
+  }
+
+  // -----------------------------------------------------------------
+  // RENDER PARTY LEDGER (Detailed Statement)
+  // -----------------------------------------------------------------
+  if (normType === 'party_ledger') {
+    return (
+      <div
+        id="printed-document-root"
+        className={`bg-white text-slate-800 shadow-sm relative border border-slate-100 ${fontClass} ${baseTextSize} ${marginClass} flex flex-col justify-between`}
+        style={{
+          width: '100%',
+          maxWidth: '820px',
+          minHeight: '1050px',
+          margin: '0 auto',
+        }}
+      >
+        <div>
+          {/* Header with Company Logo / Info */}
+          <div className="border-b-2 border-slate-900 pb-4 mb-4 flex justify-between items-start">
+            <div>
+              <h1 className="font-extrabold text-base text-slate-900 tracking-wide uppercase">{company.companyName}</h1>
+              <p className="text-[10px] text-slate-500 whitespace-pre-line">{company.address}</p>
+              {company.gstNumber && <p className="text-[10px] text-slate-500 font-bold">GSTIN: {company.gstNumber}</p>}
+              {company.primaryPhone && <p className="text-[10px] text-slate-500">Phone: {company.primaryPhone}</p>}
+            </div>
+            <div className="text-right">
+              <h2 className="text-sm font-black text-blue-600 uppercase tracking-widest">Party Ledger Statement</h2>
+              <p className="text-[10px] text-slate-500 font-bold">Ledger Mode: {docData.ledgerMode} Account</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mt-2">Statement Period</p>
+              <p className="text-xs font-bold text-slate-800 font-mono">{docData.dateRange}</p>
+              <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold">Generated: {new Date().toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Party Details Card */}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 mb-4 grid grid-cols-2 gap-4 text-[10px]">
+            <div>
+              <span className="block font-bold text-slate-400 uppercase tracking-wider text-[8px] mb-0.5">Account Holder</span>
+              <strong className="text-xs text-slate-800 font-extrabold block">{docData.partyName}</strong>
+              <p className="text-slate-500 mt-1">{docData.partyAddress}</p>
+            </div>
+            <div className="text-right space-y-1">
+              {docData.partyPhone && (
+                <p className="text-slate-600 font-mono">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider text-[8px] mr-1">Phone:</span>
+                  {docData.partyPhone}
+                </p>
+              )}
+              {docData.partyGst && (
+                <p className="text-slate-600 font-mono">
+                  <span className="font-bold text-slate-400 uppercase tracking-wider text-[8px] mr-1">GSTIN:</span>
+                  {docData.partyGst}
+                </p>
+              )}
+              <div className="pt-2 border-t border-slate-200 mt-2">
+                <span className="text-slate-400 font-bold uppercase text-[8px] mr-1">Opening Balance:</span>
+                <strong className="text-slate-800 font-mono text-xs">₹{docData.openingBalance.toLocaleString()}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Ledger Statement Table */}
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-left border-collapse font-mono text-[9px]">
+              <thead>
+                <tr className="border-b border-slate-200 text-[8px] font-black uppercase text-slate-400 bg-slate-50 tracking-wider">
+                  <th className={`${tablePadding} w-8`}>#</th>
+                  <th className={tablePadding}>Date</th>
+                  <th className={tablePadding}>Reference</th>
+                  <th className={tablePadding}>Type</th>
+                  <th className={tablePadding}>Description</th>
+                  <th className={`${tablePadding} text-right`}>Debit (Dr)</th>
+                  <th className={`${tablePadding} text-right`}>Credit (Cr)</th>
+                  <th className={`${tablePadding} text-right`}>Balance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-150 text-[9px]">
+                {docData.rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-slate-400 font-medium italic">
+                      No transactional records found for the selected interval.
+                    </td>
+                  </tr>
+                ) : (
+                  docData.rows.map((row: any[], idx: number) => {
+                    const isDr = row[4] > 0;
+                    const isCr = row[5] > 0;
+                    return (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className={`${tablePadding} font-mono text-slate-400`}>{idx + 1}</td>
+                        <td className={`${tablePadding} font-mono text-slate-500 whitespace-nowrap`}>{row[0]}</td>
+                        <td className={`${tablePadding} font-mono font-bold text-slate-700`}>{row[1]}</td>
+                        <td className={`${tablePadding} font-semibold text-slate-600`}>{row[2]}</td>
+                        <td className={`${tablePadding} text-slate-500 max-w-[150px] truncate`}>{row[3]}</td>
+                        <td className={`${tablePadding} text-right font-mono ${isDr ? 'text-slate-800 font-bold' : 'text-slate-300'}`}>
+                          {isDr ? `₹${row[4].toLocaleString()}` : '—'}
+                        </td>
+                        <td className={`${tablePadding} text-right font-mono ${isCr ? 'text-emerald-600 font-bold' : 'text-slate-300'}`}>
+                          {isCr ? `₹${row[5].toLocaleString()}` : '—'}
+                        </td>
+                        <td className={`${tablePadding} text-right font-mono font-bold text-slate-900 bg-slate-50/30`}>
+                          ₹{row[6].toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+              {docData.totals && (
+                <tfoot>
+                  <tr className="bg-slate-50 border-t border-slate-300 font-black text-slate-950 text-[10px]">
+                    <td colSpan={5} className={`${tablePadding} text-right uppercase tracking-wider text-[8px] font-black`}>
+                      Statement Totals
+                    </td>
+                    <td className={`${tablePadding} text-right font-mono text-slate-900`}>
+                      ₹{docData.totals[4].toLocaleString()}
+                    </td>
+                    <td className={`${tablePadding} text-right font-mono text-emerald-700`}>
+                      ₹{docData.totals[5].toLocaleString()}
+                    </td>
+                    <td className={`${tablePadding} text-right font-mono text-[#2563EB]`}>
+                      Closing: ₹{docData.totals[6].toLocaleString()}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center text-[9px] text-slate-400 mt-8 pt-2 border-t border-slate-100 uppercase tracking-wider font-semibold">
+          <span>Generated via BizOps Cloud ERP • {company.legalName || company.companyName}</span>
+          <span className="font-mono">Page 1 of 1</span>
         </div>
       </div>
     );

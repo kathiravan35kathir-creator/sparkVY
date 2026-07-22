@@ -199,8 +199,7 @@ export default function PaymentsView({
 
       <div className="bg-white rounded-xl border p-4 flex flex-wrap gap-3 shadow-sm items-center">
         <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="Search by number, party, or reference..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg pl-9 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
+          <input type="text" placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
         </div>
 
         <div className="flex items-center space-x-2 border-l border-slate-100 pl-3">

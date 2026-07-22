@@ -533,13 +533,12 @@ export default function SalesView({
           {/* Filters */}
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search invoices by invoice number, customer name..."
+                placeholder="Search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
               />
             </div>
             

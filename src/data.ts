@@ -17,7 +17,8 @@ import {
   ProformaInvoice,
   SalesReturn,
   CreditNote,
-  Sample
+  Sample,
+  PartyAdjustment
 } from './types';
 
 export interface AppState {
@@ -41,6 +42,7 @@ export interface AppState {
   communicationLogs: CommunicationLog[];
   samples: Sample[];
   settings: AppSettings;
+  adjustments: PartyAdjustment[];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -302,7 +304,8 @@ export function getInitialState(): AppState {
     ],
     communicationLogs: [],
     samples: [],
-    settings: DEFAULT_SETTINGS
+    settings: DEFAULT_SETTINGS,
+    adjustments: []
   };
 }
 
@@ -766,6 +769,7 @@ export function getDemoData(state: AppState): AppState {
     payments: demoPayments,
     expenses: demoExpenses,
     stockMovements: demoStockMovements,
+    adjustments: [],
     auditLogs: [...demoAuditLogs, ...state.auditLogs],
     notifications: [...demoNotifications, ...state.notifications],
     accounts: state.accounts.map(acc => {

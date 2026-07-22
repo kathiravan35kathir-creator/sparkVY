@@ -87,13 +87,12 @@ export default function Header({
 
         {/* Global Search */}
         <div className="relative max-w-xs w-full">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search system..."
+            placeholder="Search"
             value={globalSearchQuery}
             onChange={(e) => onGlobalSearchChange(e.target.value)}
-            className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-md pl-8 pr-4 py-1 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+            className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-md px-3 pr-4 py-1 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
           />
           {globalSearchQuery && (
             <button

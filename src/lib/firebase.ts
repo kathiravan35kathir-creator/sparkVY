@@ -2,7 +2,7 @@
 
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, doc, getDocFromServer } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
@@ -23,7 +23,28 @@ console.log("[DEBUG] measurementId:", config.measurementId);
 const app = getApps().length ? getApp() : initializeApp(config);
 
 const auth = getAuth(app);
-const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+let db: ReturnType<typeof getFirestore>;
+try {
+  db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  }, firebaseConfig.firestoreDatabaseId);
+} catch (_e) {
+  db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
+
+// Connection validation check as per Firebase guidelines
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn("Firestore running in offline mode. Local storage fallback active.");
+    }
+  }
+}
+testConnection();
+
 const storage = getStorage(app);
 
 let analytics: any = null;

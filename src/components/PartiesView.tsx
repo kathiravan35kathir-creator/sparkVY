@@ -14,6 +14,8 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import { Party, PartyType, BalanceType } from '../types';
+import { AppState } from '../data';
+import PartyLedgerView from './PartyLedgerView';
 
 interface PartiesViewProps {
   parties: Party[];
@@ -22,6 +24,8 @@ interface PartiesViewProps {
   onDeactivateParty: (id: string) => void;
   onReactivateParty: (id: string) => void;
   isAdmin: boolean;
+  db?: AppState;
+  currentUser?: any;
 }
 
 export default function PartiesView({
@@ -30,9 +34,12 @@ export default function PartiesView({
   onEditParty,
   onDeactivateParty,
   onReactivateParty,
-  isAdmin
+  isAdmin,
+  db,
+  currentUser
 }: PartiesViewProps) {
   // Navigation & Search States
+  const [selectedPartyForLedger, setSelectedPartyForLedger] = useState<Party | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('All');
   const [filterStatus, setFilterStatus] = useState<string>('Active');
@@ -855,6 +862,23 @@ export default function PartiesView({
     );
   }
 
+  if (selectedPartyForLedger && db) {
+    return (
+      <PartyLedgerView
+        party={selectedPartyForLedger}
+        onBack={() => setSelectedPartyForLedger(null)}
+        db={db}
+        isAdmin={isAdmin}
+        onUpdateParty={(id, updatedFields) => {
+          onEditParty(id, updatedFields);
+          // Sync local selection state
+          setSelectedPartyForLedger(prev => prev ? { ...prev, ...updatedFields } : null);
+        }}
+        currentUser={currentUser}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -887,16 +911,15 @@ export default function PartiesView({
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-2xs flex flex-col md:flex-row gap-3">
         {/* Search Input */}
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search party by code, name, phone, or company..."
+            placeholder="Search"
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
           />
         </div>
 
@@ -979,7 +1002,12 @@ export default function PartiesView({
                     <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{party.code}</td>
                     <td className="py-3.5 px-4">
                       <div>
-                        <p className="font-bold text-slate-800">{party.name}</p>
+                        <button
+                          onClick={() => setSelectedPartyForLedger(party)}
+                          className="font-bold text-[#2563EB] hover:underline hover:text-blue-800 text-left cursor-pointer"
+                        >
+                          {party.name}
+                        </button>
                         {party.companyName && <p className="text-[10px] text-slate-400 mt-0.5">{party.companyName}</p>}
                       </div>
                     </td>
@@ -1199,7 +1227,17 @@ export default function PartiesView({
               </div>
 
               {/* Close Footer */}
-              <div className="p-4.5 bg-slate-50 border-t border-slate-150 flex justify-end">
+              <div className="p-4.5 bg-slate-50 border-t border-slate-150 flex justify-between gap-2">
+                <button
+                  onClick={() => {
+                    const p = viewingParty;
+                    setViewingParty(null);
+                    setSelectedPartyForLedger(p);
+                  }}
+                  className="px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition"
+                >
+                  Open Full Ledger Tab
+                </button>
                 <button
                   onClick={() => setViewingParty(null)}
                   className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition"

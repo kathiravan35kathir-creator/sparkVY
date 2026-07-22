@@ -292,8 +292,7 @@ export default function ProcurementOrdersView({
 
       <div className="bg-white rounded-xl border p-4 flex gap-3 shadow-sm">
         <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="Search by number or supplier..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg pl-9 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
+          <input type="text" placeholder="Search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full bg-slate-50 border rounded-lg px-3 pr-4 py-2 text-xs focus:bg-white focus:outline-none transition-all" />
         </div>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-50 border rounded-lg px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none">
           <option value="All">All Statuses</option>

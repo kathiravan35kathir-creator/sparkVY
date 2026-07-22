@@ -75,10 +75,12 @@ function resolveToRgba(colorStr: string): string {
 }
 
 interface DocumentPrintViewProps {
-  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'report' | 'sample_label' | 'transaction_list' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher';
+  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'report' | 'sample_label' | 'transaction_list' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher' | 'party_ledger';
   data: any; 
   settings: AppSettings;
   onClose: () => void;
+  isOpen?: boolean;
+  extraActions?: React.ReactNode;
   onCheckPin?: (action: string, onConfirm: () => void) => void;
   onLogCommunication?: (log: any) => void;
 }
@@ -106,6 +108,7 @@ export default function DocumentPrintView({
   data,
   settings,
   onClose,
+  extraActions,
   onCheckPin,
   onLogCommunication
 }: DocumentPrintViewProps) {
@@ -203,6 +206,7 @@ export default function DocumentPrintView({
     if (documentType === 'receipt') docNum = data.receiptNumber || '';
     if (documentType === 'purchase') docNum = data.purchaseNumber || '';
     if (documentType === 'report') docNum = data.reportNumber || '';
+    if (documentType === 'party_ledger') docNum = data.partyName || '';
     
     document.title = `${documentType.toUpperCase()}_${docNum}`;
     window.print();
@@ -398,6 +402,7 @@ export default function DocumentPrintView({
       else if (documentType === 'receipt') docNum = data.receiptNumber || '';
       else if (documentType === 'purchase') docNum = data.purchaseNumber || '';
       else if (documentType === 'report') docNum = data.reportNumber || '';
+      else if (documentType === 'party_ledger') docNum = data.partyName || '';
       else docNum = data.id || 'DOC';
 
       const fileName = `${documentType}_${docNum}.pdf`;
@@ -590,6 +595,8 @@ export default function DocumentPrintView({
               <Download size={13} />
               <span>{isGeneratingPdf ? 'Preparing PDF...' : 'PDF Download'}</span>
             </button>
+
+            {extraActions}
 
             <button
               onClick={() => setIsShareConfigOpen(!isShareConfigOpen)}

@@ -65,6 +65,8 @@ export interface Party {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  notesList?: Array<{ id: string; content: string; createdBy: string; createdAt: string }>;
+  documentsList?: Array<{ id: string; name: string; size: number; type: string; url?: string; uploadedAt: string }>;
 }
 
 export type ItemType = 'Inventory Product' | 'Equipment' | 'Asset' | 'Consumable' | 'Material' | 'Supply';
@@ -669,4 +671,17 @@ export interface CommunicationLog {
   content: string;
   direction: 'Outbound' | 'Inbound';
   timestamp: string;
+}
+
+export interface PartyAdjustment {
+  id: string;
+  partyId: string;
+  partyName: string;
+  adjustmentDate: string;
+  adjustmentType: 'Debit' | 'Credit';
+  amount: number;
+  referenceNumber: string;
+  description: string;
+  createdBy: string;
+  createdAt: string;
 }

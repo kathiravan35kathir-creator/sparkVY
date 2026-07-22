@@ -22,7 +22,8 @@ import {
   Wallet,
   ArrowUpRight,
   ArrowDownLeft,
-  Briefcase
+  Briefcase,
+  BookOpen
 } from 'lucide-react';
 interface SidebarProps {
   activeTab: string;
@@ -61,6 +62,7 @@ export default function Sidebar({
       title: 'PARTIES & ITEMS',
       items: [
         { id: 'parties', name: 'Parties (Clients/Vendors)', icon: Users },
+        { id: 'party_ledger', name: '⭐ Party Ledger', icon: BookOpen },
         { id: 'items', name: 'Items & Services', icon: Package }
       ]
     },

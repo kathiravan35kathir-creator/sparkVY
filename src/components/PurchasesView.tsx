@@ -522,11 +522,10 @@ export default function PurchasesView({
           <div className="col-span-1 lg:col-span-8 bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex flex-wrap gap-3 items-center justify-between bg-slate-50/50">
               <div className="relative max-w-xs w-full flex-1">
-                <Search className="absolute left-2.5 top-2.5 text-slate-400" size={13} />
                 <input
                   type="text"
-                  placeholder="Search supplier, bill code..."
-                  className="pl-8 pr-3 py-1.5 w-full bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
+                  placeholder="Search"
+                  className="px-3 pr-3 py-1.5 w-full bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />

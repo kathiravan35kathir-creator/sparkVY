@@ -10,7 +10,7 @@ import {
 import { Party, Item, Quotation, Invoice, Expense, Payment, ProformaInvoice, ProformaStatus, ProcurementOrder, ProcurementStatus, SalesReturn, CreditNote, CreditNoteStatus, StockMovement, PaymentMethod, CommunicationLog } from './types';
 import { listenToAuthChanges, signOutUser } from './services/authService';
 import { auth, firestoreDb } from './lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 enum OperationType {
   CREATE = 'create',
@@ -64,6 +64,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardView from './components/DashboardView';
 import PartiesView from './components/PartiesView';
+import PartyLedgerHomeView from './components/PartyLedgerHomeView';
 import ItemsView from './components/ItemsView';
 import QuotationsView from './components/QuotationsView';
 import ProformaInvoicesView from './components/ProformaInvoicesView';
@@ -82,6 +83,9 @@ import LoginView from './components/auth/LoginView';
 import OnboardingView from './components/auth/OnboardingView';
 
 export default function App() {
+  // Ref to prevent circular updates between onSnapshot listener and state sync effect
+  const lastSavedStrRef = React.useRef<string>("");
+
   // 1. Core database state loaded from LocalStorage or generated defaults
   const [db, setDb] = useState<AppState>(() => {
     const loaded = loadState();
@@ -109,14 +113,40 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Sync back to local storage whenever DB state is modified
+  // Sync back to local storage and Firestore whenever DB state is modified
   useEffect(() => {
-    saveState(db, currentUser?.id);
+    if (!currentUser?.id) {
+      saveState(db, currentUser?.id);
+      return;
+    }
+
+    const serialized = JSON.stringify(db);
+    if (serialized !== lastSavedStrRef.current) {
+      lastSavedStrRef.current = serialized;
+      saveState(db, currentUser.id);
+
+      const syncToFirestore = async () => {
+        try {
+          await setDoc(doc(firestoreDb, "appData", currentUser.id), db);
+        } catch (err) {
+          console.error("Failed to sync state to Firestore:", err);
+        }
+      };
+      syncToFirestore();
+    }
   }, [db, currentUser?.id]);
 
   // Check auth session
   useEffect(() => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
     const unsubscribe = listenToAuthChanges(async (firebaseUser) => {
+      // Clean up previous subscription if any
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
       if (firebaseUser) {
         try {
           // Fetch user profile from Firestore directly
@@ -160,7 +190,33 @@ export default function App() {
           };
 
           setCurrentUser(userObj);
-          setDb(loadState(firebaseUser.uid) || getInitialState());
+
+          // Realtime snapshot listener for ERP data from Firestore
+          const appDataRef = doc(firestoreDb, "appData", firebaseUser.uid);
+          unsubscribeSnapshot = onSnapshot(appDataRef, (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data() as AppState;
+              const serialized = JSON.stringify(data);
+              if (serialized !== lastSavedStrRef.current) {
+                lastSavedStrRef.current = serialized;
+                setDb(data);
+              }
+            } else {
+              // Document does not exist yet. Initialize from LocalStorage or getInitialState()
+              const initialData = loadState(firebaseUser.uid) || getInitialState();
+              const serialized = JSON.stringify(initialData);
+              lastSavedStrRef.current = serialized;
+              setDb(initialData);
+              // Save to Firestore so it exists
+              setDoc(appDataRef, initialData).catch(err => {
+                console.error("Failed to initialize appData document:", err);
+              });
+            }
+          }, (err) => {
+            console.error("appData onSnapshot error:", err);
+            // Fallback to local storage if permission is denied or missing
+            setDb(loadState(firebaseUser.uid) || getInitialState());
+          });
           
           if (onboardingCompleted) {
             setAuthStep('dashboard');
@@ -181,7 +237,10 @@ export default function App() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, []);
 
   const handleGoogleSuccess = async (user: any) => {
@@ -1149,6 +1208,14 @@ export default function App() {
               parties={db.parties}
               items={db.items}
               invoices={db.invoices}
+              purchases={db.purchases}
+              expenses={db.expenses}
+              payments={db.payments}
+              quotations={db.quotations || []}
+              procurementOrders={db.procurementOrders || []}
+              proformaInvoices={db.proformaInvoices || []}
+              salesReturns={db.salesReturns || []}
+              creditNotes={db.creditNotes || []}
               accounts={db.accounts}
               onQuickAction={(actionId) => setActiveTab(actionId)}
               onNavigateToTab={(tabId) => setActiveTab(tabId)}
@@ -1164,6 +1231,18 @@ export default function App() {
               onDeactivateParty={handleDeactivateParty}
               onReactivateParty={handleReactivateParty}
               isAdmin={currentUser.isAdmin}
+              db={db}
+              currentUser={currentUser}
+            />
+          )}
+
+          {activeTab === 'party_ledger' && (
+            <PartyLedgerHomeView
+              db={db}
+              isAdmin={currentUser.isAdmin}
+              onUpdateParty={handleEditParty}
+              currentUser={currentUser}
+              onNavigateToTab={(tabId) => setActiveTab(tabId)}
             />
           )}
 
