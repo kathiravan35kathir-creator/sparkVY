@@ -365,6 +365,82 @@ export default function SettingsView({
     });
   };
 
+  // General features change handler
+  const handleGeneralFeatureChange = (field: string, value: any) => {
+    setLocalSettings((prev) => {
+      const updated = {
+        ...prev,
+        generalFeatures: {
+          ...(prev.generalFeatures || {
+            passcodeEnabled: false,
+            currencyCode: 'INR',
+            currencySymbol: '₹',
+            amountDecimalPlaces: 2,
+            gstinEnabled: true,
+            stopSaleOnNegativeStock: false,
+            blockNewItemsFromTransaction: false,
+            blockNewPartiesFromTransaction: false,
+            estimateQuotationEnabled: true,
+            proformaInvoiceEnabled: true,
+            salesOrderEnabled: true,
+            procurementOrderEnabled: true,
+            otherIncomeEnabled: false,
+            fixedAssetsEnabled: false,
+            deliveryChallanEnabled: true,
+            goodsReturnOnDeliveryChallanEnabled: false,
+            printAmountOnDeliveryChallan: false,
+            multiCompanyEnabled: false,
+            autoBackupEnabled: false,
+            auditTrailEnabled: true,
+            godownManagementEnabled: false,
+            screenScale: 100
+          }),
+          [field]: value
+        }
+      };
+      
+      // Auto-sync certain fields to existing settings for compatibility
+      if (field === 'currencyCode') {
+        const currencySymbols: Record<string, string> = {
+          INR: '₹',
+          USD: '$',
+          EUR: '€',
+          GBP: '£',
+          AED: 'د.إ',
+          SGD: 'S$'
+        };
+        const symbol = currencySymbols[value] || '₹';
+        updated.generalFeatures.currencySymbol = symbol;
+        updated.system = {
+          ...updated.system,
+          currencyFormat: value,
+          currencySymbol: symbol
+        };
+      }
+      if (field === 'amountDecimalPlaces') {
+        updated.system = {
+          ...updated.system,
+          decimalPlaces: value
+        };
+      }
+      if (field === 'gstinEnabled') {
+        updated.tax = {
+          ...updated.tax,
+          enableGst: value
+        };
+      }
+      if (field === 'stopSaleOnNegativeStock') {
+        updated.system = {
+          ...updated.system,
+          allowNegativeStock: !value
+        };
+      }
+
+      setHasChanges(true);
+      return updated;
+    });
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateSettings(localSettings);
@@ -401,11 +477,12 @@ export default function SettingsView({
         import('../lib/firebase').then(({ firestoreDb }) => {
           import('firebase/firestore').then(({ doc, setDoc }) => {
             if (currentUser?.id) {
-               setDoc(doc(firestoreDb, "users", currentUser.id), {
-                 full_name: payload.full_name,
-                 designation: payload.designation,
-                 mobile: payload.mobile
-               }, { merge: true }).then(() => {
+               const userProfileData: Record<string, any> = {};
+               if (payload.full_name !== undefined) userProfileData.full_name = payload.full_name || '';
+               if (payload.designation !== undefined) userProfileData.designation = payload.designation || '';
+               if (payload.mobile !== undefined) userProfileData.mobile = payload.mobile || '';
+
+               setDoc(doc(firestoreDb, "users", currentUser.id), userProfileData, { merge: true }).then(() => {
                  onUpdateUser && onUpdateUser({ ...currentUser, ...payload });
                  alert("Profile updated.");
                }).catch(e => {
@@ -827,52 +904,469 @@ export default function SettingsView({
 
               {/* B. GENERAL SETTINGS */}
               {activePage === 'general_settings' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Default Operating Branch Name</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.system.defaultBranchName}
-                        onChange={(e) => handleFieldChange('system', 'defaultBranchName', e.target.value)}
-                      />
+                <div className="space-y-6">
+                  {/* Category 1: Regional & System defaults */}
+                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">1. Regional & System Defaults</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Default Operating Branch Name</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 text-sm"
+                          value={localSettings.system.defaultBranchName}
+                          onChange={(e) => handleFieldChange('system', 'defaultBranchName', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">First Day of Work Week</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold text-sm"
+                          value={localSettings.system.firstDayOfWeek}
+                          onChange={(e) => handleFieldChange('system', 'firstDayOfWeek', e.target.value)}
+                        >
+                          <option value="Monday">Monday</option>
+                          <option value="Sunday">Sunday</option>
+                          <option value="Saturday">Saturday</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Fiscal Year Starting Month</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold text-sm"
+                          value={localSettings.system.financialYearStartMonth}
+                          onChange={(e) => handleFieldChange('system', 'financialYearStartMonth', e.target.value)}
+                        >
+                          <option value="April">April (Indian Standard)</option>
+                          <option value="January">January (Calendar Year)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">System Start Page</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold text-sm"
+                          value={localSettings.system.appStartPage}
+                          onChange={(e) => handleFieldChange('system', 'appStartPage', e.target.value)}
+                        >
+                          <option value="dashboard">Operations Dashboard</option>
+                          <option value="sales">Sales & Billing Ledger</option>
+                          <option value="business">Business Operations Intake</option>
+                          <option value="inventory">Inventory Hub</option>
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">First Day of Work Week</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.system.firstDayOfWeek}
-                        onChange={(e) => handleFieldChange('system', 'firstDayOfWeek', e.target.value)}
-                      >
-                        <option value="Monday">Monday</option>
-                        <option value="Sunday">Sunday</option>
-                        <option value="Saturday">Saturday</option>
-                      </select>
+                  </div>
+
+                  {/* Category 2: Sizing, Localization & Currency */}
+                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">2. Sizing, Localization & Currency</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Business Currency</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold text-sm"
+                          value={localSettings.generalFeatures?.currencyCode || 'INR'}
+                          onChange={(e) => handleGeneralFeatureChange('currencyCode', e.target.value)}
+                        >
+                          <option value="INR">INR (₹) - Indian Rupee</option>
+                          <option value="USD">USD ($) - US Dollar</option>
+                          <option value="EUR">EUR (€) - Euro</option>
+                          <option value="GBP">GBP (£) - British Pound</option>
+                          <option value="AED">AED (د.إ) - UAE Dirham</option>
+                          <option value="SGD">SGD (S$) - Singapore Dollar</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Amount Decimal Places</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold text-sm"
+                          value={localSettings.generalFeatures?.amountDecimalPlaces ?? 2}
+                          onChange={(e) => handleGeneralFeatureChange('amountDecimalPlaces', parseInt(e.target.value, 10))}
+                        >
+                          <option value={0}>0 (e.g. 100)</option>
+                          <option value={1}>1 (e.g. 100.0)</option>
+                          <option value={2}>2 (e.g. 100.00)</option>
+                          <option value={3}>3 (e.g. 100.000)</option>
+                          <option value={4}>4 (e.g. 100.0000)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Application Screen Scale</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold text-sm"
+                          value={localSettings.generalFeatures?.screenScale || 100}
+                          onChange={(e) => handleGeneralFeatureChange('screenScale', parseInt(e.target.value, 10))}
+                        >
+                          <option value={80}>80% (Compact)</option>
+                          <option value={90}>90% (Medium Compact)</option>
+                          <option value={100}>100% (Standard Layout)</option>
+                          <option value={110}>110% (Medium Enlarged)</option>
+                          <option value={120}>120% (Comfortable Scale)</option>
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Fiscal Year Starting Month</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.system.financialYearStartMonth}
-                        onChange={(e) => handleFieldChange('system', 'financialYearStartMonth', e.target.value)}
-                      >
-                        <option value="April">April (Indian Standard Standard)</option>
-                        <option value="January">January (Calendar Year)</option>
-                      </select>
+                  </div>
+
+                  {/* Category 3: Security & Audit Controls */}
+                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">3. Security & Audit Controls</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Passcode toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Security Passcode</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Connects to 4-6 digit transaction PIN system</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('passcodeEnabled', !localSettings.generalFeatures?.passcodeEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.passcodeEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.passcodeEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Audit Trail toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Audit Trail Logging</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Record administrative actions and database changes</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('auditTrailEnabled', !localSettings.generalFeatures?.auditTrailEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.auditTrailEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.auditTrailEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Auto Backup toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 sm:col-span-2">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Automated DB Backup cron</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Backend services required to run server-side backup cron tasks automatically.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('autoBackupEnabled', !localSettings.generalFeatures?.autoBackupEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.autoBackupEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.autoBackupEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">System Start Page</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.system.appStartPage}
-                        onChange={(e) => handleFieldChange('system', 'appStartPage', e.target.value)}
-                      >
-                        <option value="dashboard">Operations Dashboard</option>
-                        <option value="sales">Sales & Billing Ledger</option>
-                        <option value="business">Business Operations Intake</option>
-                        <option value="inventory">Inventory Hub</option>
-                      </select>
+                  </div>
+
+                  {/* Category 4: Transaction & Data Constraints */}
+                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">4. Transaction & Data Constraints</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Enable GSTIN Toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable GSTIN System</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Enable GST calculation fields and reports system-wide</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('gstinEnabled', !localSettings.generalFeatures?.gstinEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.gstinEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.gstinEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Stop Sale on Negative Stock */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Stop Sale on Negative Stock</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Verify stock level and block sales of out-of-stock items</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('stopSaleOnNegativeStock', !localSettings.generalFeatures?.stopSaleOnNegativeStock)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.stopSaleOnNegativeStock ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.stopSaleOnNegativeStock ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Block New Items from Transaction forms */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Block Add Item in Billing Forms</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Hide on-the-fly item creation option in transactions</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('blockNewItemsFromTransaction', !localSettings.generalFeatures?.blockNewItemsFromTransaction)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.blockNewItemsFromTransaction ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.blockNewItemsFromTransaction ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Block New Parties from Transaction forms */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Block Add Party in Billing Forms</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Hide on-the-fly party creation option in transactions</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('blockNewPartiesFromTransaction', !localSettings.generalFeatures?.blockNewPartiesFromTransaction)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.blockNewPartiesFromTransaction ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.blockNewPartiesFromTransaction ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 5: Module & Document Enablement */}
+                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
+                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">5. Module & Document Enablement</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Estimate / Quotation toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Quotations & Estimates</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Show quotations module and generation screens</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('estimateQuotationEnabled', !localSettings.generalFeatures?.estimateQuotationEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.estimateQuotationEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.estimateQuotationEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Proforma Invoice toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Proforma Invoices</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Show proforma invoice module and billing screens</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('proformaInvoiceEnabled', !localSettings.generalFeatures?.proformaInvoiceEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.proformaInvoiceEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.proformaInvoiceEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Sales Order toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Sales Orders</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Track sales orders and confirm before stock issue</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('salesOrderEnabled', !localSettings.generalFeatures?.salesOrderEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.salesOrderEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.salesOrderEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Procurement order toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Procurement / Purchase Orders</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Show procurement order module and tracking screens</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('procurementOrderEnabled', !localSettings.generalFeatures?.procurementOrderEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.procurementOrderEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.procurementOrderEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Other Income ledger toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Other Income Ledgers</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Allow recording miscellaneous non-operating income</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('otherIncomeEnabled', !localSettings.generalFeatures?.otherIncomeEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.otherIncomeEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.otherIncomeEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Fixed Assets classification toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Fixed Assets Classification</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Track non-current capital assets inside items module</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('fixedAssetsEnabled', !localSettings.generalFeatures?.fixedAssetsEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.fixedAssetsEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.fixedAssetsEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Godown Multi-warehouse toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Godown Management</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Track stock multiple warehouse locations & transfers</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('godownManagementEnabled', !localSettings.generalFeatures?.godownManagementEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.godownManagementEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.godownManagementEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Multi company workspace toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Multi-Company Workspace</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Configure and switch between multiple legal company spaces</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('multiCompanyEnabled', !localSettings.generalFeatures?.multiCompanyEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.multiCompanyEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.multiCompanyEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Delivery Challan toggle */}
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 sm:col-span-2">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Enable Delivery Challans</p>
+                          <p className="text-[10px] text-slate-400 font-medium">Generate Delivery Challan alongside Invoices and tracking</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleGeneralFeatureChange('deliveryChallanEnabled', !localSettings.generalFeatures?.deliveryChallanEnabled)}
+                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.deliveryChallanEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                            localSettings.generalFeatures?.deliveryChallanEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+
+                      {/* Goods Return on Delivery Challan (depends on Delivery Challan) */}
+                      {localSettings.generalFeatures?.deliveryChallanEnabled !== false && (
+                        <>
+                          <div className="flex items-center justify-between p-3 bg-blue-50/40 rounded-lg border border-blue-100/50">
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">Enable Goods Return on Delivery Challans</p>
+                              <p className="text-[10px] text-slate-400 font-medium">Process item returns directly referencing a delivery challan</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleGeneralFeatureChange('goodsReturnOnDeliveryChallanEnabled', !localSettings.generalFeatures?.goodsReturnOnDeliveryChallanEnabled)}
+                              className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                                localSettings.generalFeatures?.goodsReturnOnDeliveryChallanEnabled ? 'bg-blue-600' : 'bg-slate-300'
+                              }`}
+                            >
+                              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                                localSettings.generalFeatures?.goodsReturnOnDeliveryChallanEnabled ? 'translate-x-5' : 'translate-x-0'
+                              }`} />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between p-3 bg-blue-50/40 rounded-lg border border-blue-100/50">
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">Print Financial Amount on Challan</p>
+                              <p className="text-[10px] text-slate-400 font-medium">Include price column and totals on delivery challan printouts</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleGeneralFeatureChange('printAmountOnDeliveryChallan', !localSettings.generalFeatures?.printAmountOnDeliveryChallan)}
+                              className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                                localSettings.generalFeatures?.printAmountOnDeliveryChallan ? 'bg-blue-600' : 'bg-slate-300'
+                              }`}
+                            >
+                              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
+                                localSettings.generalFeatures?.printAmountOnDeliveryChallan ? 'translate-x-5' : 'translate-x-0'
+                              }`} />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -193,6 +193,19 @@ export default function SalesView({
       return;
     }
 
+    // Stop Sale on Negative Stock check
+    if (settings?.generalFeatures?.stopSaleOnNegativeStock) {
+      for (const line of mappedItems) {
+        const itemObj = items.find((it) => it.id === line.itemId);
+        if (itemObj) {
+          if (itemObj.currentStock < line.quantity) {
+            alert(`Cannot complete sale: '${line.itemName}' has insufficient stock. Current stock is ${itemObj.currentStock}, but you are selling ${line.quantity}.`);
+            return;
+          }
+        }
+      }
+    }
+
     onAddInvoice({
       partyId,
       partyName: selectedParty.name,

@@ -38,6 +38,25 @@ interface FirestoreErrorInfo {
   }
 }
 
+function sanitizeFirestoreData(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== 'object') return obj;
+  if (obj.constructor && obj.constructor.name !== 'Object' && !Array.isArray(obj)) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => item === undefined ? null : sanitizeFirestoreData(item));
+  }
+  const clean: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (val !== undefined) {
+      clean[key] = sanitizeFirestoreData(val);
+    }
+  }
+  return clean;
+}
+
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -98,7 +117,13 @@ export default function App() {
   const [pinAction, setPinAction] = useState<{ name: string; onConfirm: () => void } | null>(null);
 
   const checkPin = (action: string, onConfirm: () => void) => {
-    if (db.settings.security.protectedActions.includes(action) && db.settings.security.transactionPinHash) {
+    // If passcode is explicitly disabled, bypass immediately
+    if (db.settings.generalFeatures?.passcodeEnabled === false) {
+      onConfirm();
+      return;
+    }
+    // If passcode is enabled, enforce security checks
+    if (db.settings.generalFeatures?.passcodeEnabled || (db.settings.security.protectedActions.includes(action) && db.settings.security.transactionPinHash)) {
       setPinAction({ name: action, onConfirm });
     } else {
       onConfirm();
@@ -131,7 +156,7 @@ export default function App() {
 
       const syncToFirestore = async () => {
         try {
-          await setDoc(doc(firestoreDb, "appData", currentUser.id), db);
+          await setDoc(doc(firestoreDb, "appData", currentUser.id), sanitizeFirestoreData(db));
         } catch (err) {
           console.error("Failed to sync state to Firestore:", err);
         }
@@ -174,7 +199,7 @@ export default function App() {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
               };
-              await setDoc(doc(firestoreDb, "users", firebaseUser.uid), initialData, { merge: true });
+              await setDoc(doc(firestoreDb, "users", firebaseUser.uid), sanitizeFirestoreData(initialData), { merge: true });
               userDocData = initialData;
             }
           } catch (fsErr) {
@@ -212,7 +237,7 @@ export default function App() {
               lastSavedStrRef.current = serialized;
               setDb(initialData);
               // Save to Firestore so it exists
-              setDoc(appDataRef, initialData).catch(err => {
+              setDoc(appDataRef, sanitizeFirestoreData(initialData)).catch(err => {
                 console.error("Failed to initialize appData document:", err);
               });
             }
@@ -284,8 +309,8 @@ export default function App() {
       // Save to Firestore directly
       console.log("[DEBUG] Saving onboarding data to Firestore...");
       await Promise.all([
-        setDoc(doc(firestoreDb, "users", uid), { uid, ...firestoreUserData }, { merge: true }),
-        setDoc(doc(firestoreDb, "companySettings", uid), { ownerUid: uid, ...firestoreCompanyData }, { merge: true })
+        setDoc(doc(firestoreDb, "users", uid), sanitizeFirestoreData({ uid, ...firestoreUserData }), { merge: true }),
+        setDoc(doc(firestoreDb, "companySettings", uid), sanitizeFirestoreData({ ownerUid: uid, ...firestoreCompanyData }), { merge: true })
       ]);
       console.log("[DEBUG] Firestore save completed.");
 

@@ -65,3 +65,23 @@ export function normalizePastedNumeric(
   const cleaned = raw.replace(/[^0-9.-]/g, '');
   return sanitizeNumericInput(cleaned, { allowDecimal, allowNegative });
 }
+
+/**
+ * Formats a number with currency symbol and dynamic decimal places
+ */
+export function formatCurrency(
+  amount: number | string | null | undefined,
+  settings?: any
+): string {
+  const num = toSafeNumber(amount);
+  const symbol = settings?.generalFeatures?.currencySymbol || settings?.system?.currencySymbol || '₹';
+  const decimals = settings?.generalFeatures?.amountDecimalPlaces ?? settings?.system?.decimalPlaces ?? 2;
+  
+  const formattedNum = num.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  
+  return `${symbol}${formattedNum}`;
+}
+

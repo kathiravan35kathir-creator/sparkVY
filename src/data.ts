@@ -244,6 +244,30 @@ const DEFAULT_SETTINGS: AppSettings = {
       defaultSenderName: 'BizOps ERP',
       apiVersion: 'v18.0'
     }
+  },
+  generalFeatures: {
+    passcodeEnabled: false,
+    currencyCode: 'INR',
+    currencySymbol: '₹',
+    amountDecimalPlaces: 2,
+    gstinEnabled: true,
+    stopSaleOnNegativeStock: false,
+    blockNewItemsFromTransaction: false,
+    blockNewPartiesFromTransaction: false,
+    estimateQuotationEnabled: true,
+    proformaInvoiceEnabled: true,
+    salesOrderEnabled: true,
+    procurementOrderEnabled: true,
+    otherIncomeEnabled: false,
+    fixedAssetsEnabled: false,
+    deliveryChallanEnabled: true,
+    goodsReturnOnDeliveryChallanEnabled: false,
+    printAmountOnDeliveryChallan: false,
+    multiCompanyEnabled: false,
+    autoBackupEnabled: false,
+    auditTrailEnabled: true,
+    godownManagementEnabled: false,
+    screenScale: 100
   }
 };
 
@@ -359,6 +383,7 @@ export function loadState(uid?: string): AppState {
           bank: { ...DEFAULT_SETTINGS.bank, ...parsed.settings.bank },
           numbering: { ...DEFAULT_SETTINGS.numbering, ...parsed.settings.numbering },
           print: { ...DEFAULT_SETTINGS.print, ...parsed.settings.print },
+          generalFeatures: { ...DEFAULT_SETTINGS.generalFeatures, ...parsed.settings.generalFeatures },
         };
       }
       return parsed;

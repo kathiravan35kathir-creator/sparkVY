@@ -44,6 +44,12 @@ export default function Sidebar({
 }: SidebarProps) {
   // Check permission of current role for sidebar tabs
   const hasAccess = (tab: string): boolean => {
+    if (settings?.generalFeatures) {
+      if (tab === 'quotations' && settings.generalFeatures.estimateQuotationEnabled === false) return false;
+      if (tab === 'proforma' && settings.generalFeatures.proformaInvoiceEnabled === false) return false;
+      if (tab === 'procurement' && settings.generalFeatures.procurementOrderEnabled === false) return false;
+    }
+
     if (isAdmin) return true;
     // Staff (non-admin) has access to everything except sensitive system, settings, staff, financial reports and trash
     return ![

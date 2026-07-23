@@ -665,6 +665,30 @@ export interface AppSettings {
       apiVersion: string;
     };
   };
+  generalFeatures?: {
+    passcodeEnabled: boolean;
+    currencyCode: string;
+    currencySymbol: string;
+    amountDecimalPlaces: number;
+    gstinEnabled: boolean;
+    stopSaleOnNegativeStock: boolean;
+    blockNewItemsFromTransaction: boolean;
+    blockNewPartiesFromTransaction: boolean;
+    estimateQuotationEnabled: boolean;
+    proformaInvoiceEnabled: boolean;
+    salesOrderEnabled: boolean;
+    procurementOrderEnabled: boolean;
+    otherIncomeEnabled: boolean;
+    fixedAssetsEnabled: boolean;
+    deliveryChallanEnabled: boolean;
+    goodsReturnOnDeliveryChallanEnabled: boolean;
+    printAmountOnDeliveryChallan: boolean;
+    multiCompanyEnabled: boolean;
+    autoBackupEnabled: boolean;
+    auditTrailEnabled: boolean;
+    godownManagementEnabled: boolean;
+    screenScale: number;
+  };
 }
 
 export interface CommunicationLog {
