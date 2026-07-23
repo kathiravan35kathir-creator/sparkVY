@@ -46,6 +46,23 @@ export interface User {
 export type PartyType = 'Customer' | 'Supplier' | 'Both';
 export type BalanceType = 'Receivable' | 'Payable';
 
+export interface AlternateWhatsAppNumber {
+  id: string;
+  number: string;
+  label?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface PhoneHistoryEntry {
+  id: string;
+  previousNumber: string;
+  newNumber: string;
+  changedBy: string;
+  changedAt: string;
+  reason?: string;
+}
+
 export interface Party extends BaseDeletedEntity {
   id: string;
   code: string;
@@ -56,6 +73,8 @@ export interface Party extends BaseDeletedEntity {
   contactPerson?: string;
   phone: string;
   alternatePhone?: string;
+  alternateWhatsAppNumbers?: AlternateWhatsAppNumber[];
+  phoneHistory?: PhoneHistoryEntry[];
   email?: string;
   gstRegistration: 'Registered' | 'Unregistered' | 'Composite';
   gstNumber?: string;

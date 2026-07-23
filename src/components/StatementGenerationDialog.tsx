@@ -19,6 +19,7 @@ import { Party } from '../types';
 import { AppState } from '../data';
 import DocumentPrintView from './DocumentPrintView';
 import { sendWhatsAppMessage } from '../services/communicationService';
+import WhatsAppShareModal, { WhatsAppDocumentData } from './WhatsAppShareModal';
 
 interface StatementGenerationDialogProps {
   party: Party;
@@ -254,22 +255,6 @@ export default function StatementGenerationDialog({
     const msg = `Dear ${party.name},\n\nPlease find your Account Statement with ${db.settings.company.companyName} for period (${generatedData.dateRange}):\n\nOpening Balance: ₹${generatedData.openingBalance.toLocaleString()}\nClosing Outstanding: ₹${generatedData.closingBalance.toLocaleString()}\nTotal Debit: ₹${generatedData.totals[4].toLocaleString()}\nTotal Credit: ₹${generatedData.totals[5].toLocaleString()}\n\nThank you for your business!`;
     setWhatsappMsg(msg);
     setShowWhatsAppModal(true);
-  };
-
-  const handleSendWhatsApp = () => {
-    const action = () => {
-      sendWhatsAppMessage({ to: whatsappPhone, body: whatsappMsg }, db.settings, (log) => {
-        if (onLogCommunication) onLogCommunication(log);
-      });
-      alert(`Account Statement sent via WhatsApp to ${whatsappPhone}`);
-      setShowWhatsAppModal(false);
-    };
-
-    if (onCheckPin) {
-      onCheckPin('send_whatsapp_statement', action);
-    } else {
-      action();
-    }
   };
 
   // Export CSV
@@ -520,56 +505,25 @@ export default function StatementGenerationDialog({
 
       {/* WhatsApp Modal */}
       {showWhatsAppModal && (
-        <div className="fixed inset-0 bg-slate-900/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
-                <Share2 size={16} className="text-emerald-600" />
-                <span>Send Statement via WhatsApp</span>
-              </h3>
-              <button onClick={() => setShowWhatsAppModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-600 mb-1">Recipient Mobile Number</label>
-                <input
-                  type="text"
-                  value={whatsappPhone}
-                  onChange={(e) => setWhatsappPhone(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 font-mono text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-600 mb-1">Message Preview</label>
-                <textarea
-                  rows={6}
-                  value={whatsappMsg}
-                  onChange={(e) => setWhatsappMsg(e.target.value)}
-                  className="w-full border rounded-lg p-2 font-sans text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t">
-              <button
-                onClick={() => setShowWhatsAppModal(false)}
-                className="px-4 py-2 border rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendWhatsApp}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold shadow"
-              >
-                Send via WhatsApp
-              </button>
-            </div>
-          </div>
-        </div>
+        <WhatsAppShareModal
+          isOpen={showWhatsAppModal}
+          onClose={() => setShowWhatsAppModal(false)}
+          documentData={{
+            documentType: 'Account Statement',
+            documentId: party.id,
+            documentNumber: `STATEMENT_${startDate}_${endDate}`,
+            partyId: party.id,
+            partyName: party.name,
+            savedPhone: party.phone,
+            pdfFileName: `Account_Statement_${party.name.replace(/\s+/g, '_')}_${startDate}_${endDate}.pdf`,
+            amount: generatedData?.closingBalance || 0,
+            date: `${startDate} to ${endDate}`,
+            greetingText: whatsappMsg
+          }}
+          settings={db.settings}
+          party={party}
+          onLogCommunication={onLogCommunication}
+        />
       )}
     </div>
   );

@@ -156,3 +156,37 @@ tr:hover td {
   background: #94A3B8;
 }
 
+/* Screen Scale System */
+[data-app-scale="80"] {
+  --app-scale: 0.8;
+  zoom: 0.8;
+}
+
+[data-app-scale="90"] {
+  --app-scale: 0.9;
+  zoom: 0.9;
+}
+
+[data-app-scale="100"] {
+  --app-scale: 1;
+  zoom: 1;
+}
+
+[data-app-scale="110"] {
+  --app-scale: 1.1;
+  zoom: 1.1;
+}
+
+[data-app-scale="120"] {
+  --app-scale: 1.2;
+  zoom: 1.2;
+}
+
+@media print {
+  html, body, #root, [data-app-scale] {
+    zoom: 1 !important;
+    transform: none !important;
+  }
+}
+
+

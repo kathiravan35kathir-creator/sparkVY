@@ -16,6 +16,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { AppState } from '../data';
+import { formatCurrency } from '../utils/numericUtils';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -227,7 +228,7 @@ export default function CommandPaletteModal({
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs font-black font-mono text-slate-800">₹{inv.total.toLocaleString()}</p>
+                        <p className="text-xs font-black font-mono text-slate-800">{formatCurrency(inv.total, db.settings)}</p>
                         <span className={`inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded ${
                           inv.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
                           inv.status === 'Overdue' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'

@@ -67,6 +67,36 @@ export function normalizePastedNumeric(
 }
 
 /**
+ * Helper to get active currency symbol from settings
+ */
+export function getCurrencySymbol(settings?: any): string {
+  return settings?.generalFeatures?.currencySymbol || settings?.system?.currencySymbol || '₹';
+}
+
+/**
+ * Helper to get active amount decimal places from settings
+ */
+export function getAmountDecimals(settings?: any): number {
+  return settings?.generalFeatures?.amountDecimalPlaces ?? settings?.system?.decimalPlaces ?? 2;
+}
+
+/**
+ * Formats a number with dynamic decimal places without symbol
+ */
+export function formatAmount(
+  amount: number | string | null | undefined,
+  settings?: any,
+  decimalsOverride?: number
+): string {
+  const num = toSafeNumber(amount);
+  const decimals = decimalsOverride ?? getAmountDecimals(settings);
+  return num.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+/**
  * Formats a number with currency symbol and dynamic decimal places
  */
 export function formatCurrency(
@@ -74,8 +104,8 @@ export function formatCurrency(
   settings?: any
 ): string {
   const num = toSafeNumber(amount);
-  const symbol = settings?.generalFeatures?.currencySymbol || settings?.system?.currencySymbol || '₹';
-  const decimals = settings?.generalFeatures?.amountDecimalPlaces ?? settings?.system?.decimalPlaces ?? 2;
+  const symbol = getCurrencySymbol(settings);
+  const decimals = getAmountDecimals(settings);
   
   const formattedNum = num.toLocaleString(undefined, {
     minimumFractionDigits: decimals,
@@ -84,4 +114,5 @@ export function formatCurrency(
   
   return `${symbol}${formattedNum}`;
 }
+
 

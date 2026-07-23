@@ -15,7 +15,8 @@ import {
   Briefcase,
   DollarSign
 } from 'lucide-react';
-import { Invoice, Purchase, Expense, Payment, Sample, Item, Party, Quotation } from '../types';
+import { Invoice, Purchase, Expense, Payment, Sample, Item, Party, Quotation, AppSettings } from '../types';
+import { formatCurrency } from '../utils/numericUtils';
 
 interface ReportsViewProps {
   invoices: Invoice[];
@@ -27,6 +28,7 @@ interface ReportsViewProps {
   parties: Party[];
   quotations: Quotation[];
   isAdmin: boolean;
+  settings?: AppSettings;
 }
 
 type ReportTab = 'finance' | 'inventory' | 'crm';
@@ -39,7 +41,8 @@ export default function ReportsView({
   items,
   parties,
   quotations,
-  isAdmin
+  isAdmin,
+  settings
 }: ReportsViewProps) {
   const [activeTab, setActiveTab] = useState<ReportTab>('finance');
   const [startDate, setStartDate] = useState('2026-01-01');
@@ -232,8 +235,8 @@ export default function ReportsView({
                 <span className="text-slate-500 font-bold block uppercase text-[10px]">Sales Revenue (Billed)</span>
                 <TrendingUp size={16} className="text-emerald-500" />
               </div>
-              <p className="text-lg font-black text-slate-800 mt-2">₹{totalInvoicedSales.toLocaleString()}</p>
-              <span className="text-[10px] text-slate-400 block mt-1">₹{totalReceivedSales.toLocaleString()} cash collected</span>
+              <p className="text-lg font-black text-slate-800 mt-2">{formatCurrency(totalInvoicedSales, settings)}</p>
+              <span className="text-[10px] text-slate-400 block mt-1">{formatCurrency(totalReceivedSales, settings)} cash collected</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
@@ -241,8 +244,8 @@ export default function ReportsView({
                 <span className="text-slate-500 font-bold block uppercase text-[10px]">Suppliers Material Cost</span>
                 <ShoppingBag size={16} className="text-amber-500" />
               </div>
-              <p className="text-lg font-black text-slate-800 mt-2">₹{totalPurchasesCost.toLocaleString()}</p>
-              <span className="text-[10px] text-slate-400 block mt-1">₹{totalPurchasesPaid.toLocaleString()} paid out</span>
+              <p className="text-lg font-black text-slate-800 mt-2">{formatCurrency(totalPurchasesCost, settings)}</p>
+              <span className="text-[10px] text-slate-400 block mt-1">{formatCurrency(totalPurchasesPaid, settings)} paid out</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
@@ -250,7 +253,7 @@ export default function ReportsView({
                 <span className="text-slate-500 font-bold block uppercase text-[10px]">Indirect Expenditures</span>
                 <TrendingDown size={16} className="text-red-500" />
               </div>
-              <p className="text-lg font-black text-slate-800 mt-2">₹{totalIndirectExpenses.toLocaleString()}</p>
+              <p className="text-lg font-black text-slate-800 mt-2">{formatCurrency(totalIndirectExpenses, settings)}</p>
               <span className="text-[10px] text-slate-400 block mt-1">Consumables & utility payouts</span>
             </div>
 
@@ -260,7 +263,7 @@ export default function ReportsView({
                 <DollarSign size={16} className={profitOrLoss >= 0 ? 'text-emerald-500' : 'text-red-500'} />
               </div>
               <p className={`text-lg font-black mt-2 ${profitOrLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                ₹{profitOrLoss.toLocaleString()}
+                {formatCurrency(profitOrLoss, settings)}
               </p>
               <span className="text-[10px] text-slate-400 block mt-1">Calculated as (Sales - Purchases - Expenses)</span>
             </div>
@@ -271,7 +274,7 @@ export default function ReportsView({
             <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4">
               <h3 className="font-extrabold text-slate-800 mb-3 text-xs uppercase tracking-wider flex items-center justify-between border-b border-slate-100 pb-2">
                 <span>Receivables Ledger (Client Outstandings)</span>
-                <span className="text-red-600 font-black">₹{totalReceivables.toLocaleString()} Due</span>
+                <span className="text-red-600 font-black">{formatCurrency(totalReceivables, settings)} Due</span>
               </h3>
               <div className="overflow-y-auto max-h-60 divide-y divide-slate-100 text-xs">
                 {filteredInvoices.filter((x) => x.balanceDue > 0).map((inv) => (
@@ -280,7 +283,7 @@ export default function ReportsView({
                       <p className="font-bold text-slate-700">{inv.partyName}</p>
                       <p className="text-[10px] text-slate-400">Invoice: {inv.invoiceNumber} | Due: {inv.dueDate}</p>
                     </div>
-                    <span className="font-extrabold text-red-600">₹{inv.balanceDue.toLocaleString()}</span>
+                    <span className="font-extrabold text-red-600">{formatCurrency(inv.balanceDue, settings)}</span>
                   </div>
                 ))}
               </div>
@@ -290,7 +293,7 @@ export default function ReportsView({
             <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs p-4">
               <h3 className="font-extrabold text-slate-800 mb-3 text-xs uppercase tracking-wider flex items-center justify-between border-b border-slate-100 pb-2">
                 <span>Payables Ledger (Supplier Outstandings)</span>
-                <span className="text-red-600 font-black">₹{totalPayables.toLocaleString()} Due</span>
+                <span className="text-red-600 font-black">{formatCurrency(totalPayables, settings)} Due</span>
               </h3>
               <div className="overflow-y-auto max-h-60 divide-y divide-slate-100 text-xs">
                 {filteredPurchases.filter((x) => x.balanceDue > 0).map((pur) => (
@@ -299,7 +302,7 @@ export default function ReportsView({
                       <p className="font-bold text-slate-700">{pur.partyName}</p>
                       <p className="text-[10px] text-slate-400">Purchase ID: {pur.purchaseNumber} | Due: {pur.dueDate}</p>
                     </div>
-                    <span className="font-extrabold text-red-600 font-mono">₹{pur.balanceDue.toLocaleString()}</span>
+                    <span className="font-extrabold text-red-600 font-mono">{formatCurrency(pur.balanceDue, settings)}</span>
                   </div>
                 ))}
               </div>
@@ -313,7 +316,7 @@ export default function ReportsView({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
               <span className="text-slate-400 font-bold block uppercase text-[10px]">Physical Stocks Asset Value</span>
-              <p className="text-lg font-black text-slate-800 mt-1">₹{totalStockValue.toLocaleString()}</p>
+              <p className="text-lg font-black text-slate-800 mt-1">{formatCurrency(totalStockValue, settings)}</p>
               <p className="text-[10px] text-slate-400 mt-1">Valued across {physicalItems.length} warehouse items at purchase cost.</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
@@ -385,7 +388,7 @@ export default function ReportsView({
                         <p className="text-[10px] text-slate-400">{q.quotationNumber} | {q.quotationDate}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-black text-emerald-600">₹{q.total.toLocaleString()}</p>
+                        <p className="font-black text-emerald-600">{formatCurrency(q.total, settings)}</p>
                       </div>
                     </div>
                   ))}
@@ -406,7 +409,7 @@ export default function ReportsView({
                         <p className="text-[10px] text-slate-400">{q.quotationNumber} | {q.status}</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-black text-rose-600">₹{q.total.toLocaleString()}</p>
+                        <p className="font-black text-rose-600">{formatCurrency(q.total, settings)}</p>
                       </div>
                     </div>
                   ))}

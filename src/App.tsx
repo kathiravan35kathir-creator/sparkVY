@@ -142,6 +142,26 @@ export default function App() {
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
+  // Apply Screen Scale globally to document root whenever changed
+  useEffect(() => {
+    const scale = db.settings.generalFeatures?.screenScale || 100;
+    document.documentElement.setAttribute('data-app-scale', String(scale));
+    document.documentElement.style.setProperty('--app-scale', String(scale / 100));
+  }, [db.settings.generalFeatures?.screenScale]);
+
+  // Direct Route Protection: redirect away from disabled feature tabs
+  useEffect(() => {
+    const gf = db.settings.generalFeatures;
+    if (!gf) return;
+    if (activeTab === 'quotations' && gf.estimateQuotationEnabled === false) {
+      setActiveTab('dashboard');
+    } else if (activeTab === 'proforma' && gf.proformaInvoiceEnabled === false) {
+      setActiveTab('dashboard');
+    } else if (activeTab === 'procurement' && gf.procurementOrderEnabled === false) {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab, db.settings.generalFeatures]);
+
   // Sync back to local storage and Firestore whenever DB state is modified
   useEffect(() => {
     if (!currentUser?.id) {
@@ -1632,6 +1652,7 @@ export default function App() {
               onQuickAction={(actionId) => setActiveTab(actionId)}
               onNavigateToTab={(tabId) => setActiveTab(tabId)}
               currentUser={currentUser}
+              settings={db.settings}
             />
           )}
 
@@ -1646,6 +1667,7 @@ export default function App() {
               isAdmin={currentUser.isAdmin}
               db={db}
               currentUser={currentUser}
+              settings={db.settings}
             />
           )}
 
@@ -1675,6 +1697,7 @@ export default function App() {
               onReactivateItem={() => {}}
               onDeleteItem={handleDeleteItem}
               isAdmin={currentUser.isAdmin}
+              settings={db.settings}
             />
           )}
 
@@ -1854,6 +1877,7 @@ export default function App() {
               quotations={(db.quotations || []).filter(q => !q.isDeleted)}
               isAdmin={currentUser.isAdmin}
               samples={[]}
+              settings={db.settings}
             />
           )}
 

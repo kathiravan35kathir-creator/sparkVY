@@ -44,8 +44,10 @@ import {
   PartyAdjustment
 } from '../types';
 import { AppState } from '../data';
+import { formatCurrency, getCurrencySymbol } from '../utils/numericUtils';
 import DocumentPrintView from './DocumentPrintView';
 import { sendWhatsAppMessage } from '../services/communicationService';
+import WhatsAppShareModal, { WhatsAppDocumentData } from './WhatsAppShareModal';
 
 interface PartyLedgerViewProps {
   party: Party;
@@ -607,12 +609,12 @@ export default function PartyLedgerView({
     }
   };
 
+  // WhatsApp Modal state
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+
   // Send WhatsApp sharing
   const handleWhatsAppShare = () => {
-    const text = `Dear ${party.name},\n\nYour ledger summary with ${db.settings.company.companyName} is compiled below:\n\nOpening Balance: ₹${metrics.opening.toLocaleString()}\nCurrent Outstanding: ₹${metrics.closingBalance.toLocaleString()}\nLast Transaction Date: ${metrics.lastTxnDate}\n\nThank you!\n${db.settings.company.companyName}`;
-    sendWhatsAppMessage({ to: party.phone, body: text }, db.settings, (log) => {
-      console.log('WhatsApp sharing logged:', log);
-    });
+    setShowWhatsAppModal(true);
   };
 
   return (
@@ -741,7 +743,7 @@ export default function PartyLedgerView({
                 <span>Opening Balance</span>
               </span>
               <div className="mt-2.5">
-                <span className="text-lg font-black text-slate-800 font-mono">₹{metrics.opening.toLocaleString()}</span>
+                <span className="text-lg font-black text-slate-800 font-mono">{formatCurrency(metrics.opening, db.settings)}</span>
                 <span className="text-[9px] text-slate-400 block mt-0.5 font-semibold">
                   Type: {party.balanceType === 'Receivable' ? 'Receivable (Dr)' : 'Payable (Cr)'}
                 </span>
@@ -756,7 +758,7 @@ export default function PartyLedgerView({
               </span>
               <div className="mt-2.5">
                 <span className="text-lg font-black text-[#2563EB] font-mono">
-                  ₹{(ledgerMode === 'Customer' ? metrics.sales : metrics.purchases).toLocaleString()}
+                  {formatCurrency(ledgerMode === 'Customer' ? metrics.sales : metrics.purchases, db.settings)}
                 </span>
                 <span className="text-[9px] text-slate-400 block mt-0.5 font-semibold">
                   Total valid transaction count
@@ -772,7 +774,7 @@ export default function PartyLedgerView({
               </span>
               <div className="mt-2.5">
                 <span className="text-lg font-black text-emerald-600 font-mono">
-                  ₹{(ledgerMode === 'Customer' ? metrics.receipts : metrics.payments).toLocaleString()}
+                  {formatCurrency(ledgerMode === 'Customer' ? metrics.receipts : metrics.payments, db.settings)}
                 </span>
                 <span className="text-[9px] text-slate-400 block mt-0.5 font-semibold font-mono">
                   Real-time cleared checks
@@ -788,7 +790,7 @@ export default function PartyLedgerView({
               </span>
               <div className="mt-2.5">
                 <span className="text-lg font-black text-rose-600 font-mono">
-                  ₹{metrics.deductions.toLocaleString()}
+                  {formatCurrency(metrics.deductions, db.settings)}
                 </span>
                 <span className="text-[9px] text-slate-400 block mt-0.5 font-semibold">
                   Returns / adjustments subtracted
@@ -804,7 +806,7 @@ export default function PartyLedgerView({
               </span>
               <div className="mt-2.5">
                 <span className="text-xl font-black text-slate-900 font-mono">
-                  ₹{metrics.closingBalance.toLocaleString()}
+                  {formatCurrency(metrics.closingBalance, db.settings)}
                 </span>
                 <span className="text-[9px] text-blue-600 block mt-0.5 font-black uppercase tracking-wide">
                   Live Closing balance
@@ -853,7 +855,7 @@ export default function PartyLedgerView({
                     <div className="flex justify-between text-xs font-bold font-mono">
                       <span className="text-slate-500">Utilized</span>
                       <span className="text-slate-800">
-                        ₹{metrics.closingBalance.toLocaleString()} / ₹{party.creditLimit.toLocaleString()}
+                        {formatCurrency(metrics.closingBalance, db.settings)} / ₹{party.creditLimit.toLocaleString()}
                       </span>
                     </div>
                     {/* Progress Bar */}
@@ -1092,7 +1094,7 @@ export default function PartyLedgerView({
                     <span className="block font-bold text-slate-400 mb-1 uppercase tracking-wider text-[9px]">Min Amount</span>
                     <input
                       type="number"
-                      placeholder="Min ₹"
+                      placeholder={`Min ${getCurrencySymbol(db.settings)}`}
                       value={minAmount}
                       onChange={(e) => setMinAmount(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1 font-mono text-slate-700"
@@ -1102,7 +1104,7 @@ export default function PartyLedgerView({
                     <span className="block font-bold text-slate-400 mb-1 uppercase tracking-wider text-[9px]">Max Amount</span>
                     <input
                       type="number"
-                      placeholder="Max ₹"
+                      placeholder={`Max ${getCurrencySymbol(db.settings)}`}
                       value={maxAmount}
                       onChange={(e) => setMaxAmount(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1 font-mono text-slate-700"
@@ -1159,13 +1161,13 @@ export default function PartyLedgerView({
                               {t.description}
                             </td>
                             <td className={`py-3 px-3 text-right font-mono ${isDrVal ? 'text-slate-800 font-bold' : 'text-slate-300'}`}>
-                              {isDrVal ? `₹${t.debit.toLocaleString()}` : '—'}
+                              {isDrVal ? formatCurrency(t.debit, db.settings) : '—'}
                             </td>
                             <td className={`py-3 px-3 text-right font-mono ${isCrVal ? 'text-emerald-600 font-bold' : 'text-slate-300'}`}>
-                              {isCrVal ? `₹${t.credit.toLocaleString()}` : '—'}
+                              {isCrVal ? formatCurrency(t.credit, db.settings) : '—'}
                             </td>
                             <td className="py-3 px-3 text-right font-bold font-mono text-slate-900 bg-slate-50/30">
-                              ₹{t.runningBalance.toLocaleString()}
+                              {formatCurrency(t.runningBalance, db.settings)}
                             </td>
                             <td className="py-3 px-3 text-center">
                               {t.type !== 'Opening Balance' && (
@@ -1191,13 +1193,13 @@ export default function PartyLedgerView({
                           Visible Totals
                         </td>
                         <td className="py-3 px-3 text-right font-mono text-slate-900">
-                          ₹{visibleTotals.debits.toLocaleString()}
+                          {formatCurrency(visibleTotals.debits, db.settings)}
                         </td>
                         <td className="py-3 px-3 text-right font-mono text-emerald-700">
-                          ₹{visibleTotals.credits.toLocaleString()}
+                          {formatCurrency(visibleTotals.credits, db.settings)}
                         </td>
                         <td colSpan={2} className="py-3 px-3 text-right font-mono font-black text-[#2563EB]">
-                          Closing: ₹{metrics.closingBalance.toLocaleString()}
+                          Closing: {formatCurrency(metrics.closingBalance, db.settings)}
                         </td>
                       </tr>
                     </tfoot>
@@ -1240,10 +1242,10 @@ export default function PartyLedgerView({
                           <td className="py-3 px-3 font-bold font-mono text-slate-700">{inv.reference}</td>
                           <td className="py-3 px-3 font-medium text-slate-600">{inv.type}</td>
                           <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
-                            ₹{(inv.debit || inv.credit).toLocaleString()}
+                            {formatCurrency(inv.debit || inv.credit, db.settings)}
                           </td>
                           <td className="py-3 px-3 text-right font-mono text-rose-600 font-bold">
-                            ₹{(inv.original?.balanceDue || 0).toLocaleString()}
+                            {formatCurrency(inv.original?.balanceDue || 0, db.settings)}
                           </td>
                           <td className="py-3 px-3 text-center">
                             <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
@@ -1295,7 +1297,7 @@ export default function PartyLedgerView({
                           <td className="py-3 px-3 font-medium text-slate-600">{pay.original?.paymentMethod}</td>
                           <td className="py-3 px-3 text-slate-500">{pay.description}</td>
                           <td className="py-3 px-3 text-right font-mono text-emerald-600 font-bold">
-                            ₹{(pay.debit || pay.credit).toLocaleString()}
+                            {formatCurrency(pay.debit || pay.credit, db.settings)}
                           </td>
                         </tr>
                       ))
@@ -1336,7 +1338,7 @@ export default function PartyLedgerView({
                           <td className="py-3 px-3 font-bold font-mono text-slate-700">{ret.reference}</td>
                           <td className="py-3 px-3 font-medium text-slate-600">{ret.original?.items?.length || 0} items</td>
                           <td className="py-3 px-3 text-right font-mono text-rose-600 font-bold">
-                            ₹{ret.credit.toLocaleString()}
+                            {formatCurrency(ret.credit, db.settings)}
                           </td>
                         </tr>
                       ))
@@ -1379,7 +1381,7 @@ export default function PartyLedgerView({
                           <td className="py-3 px-3 font-mono text-slate-500">{cn.original?.invoiceNumber || 'Manual'}</td>
                           <td className="py-3 px-3 font-medium text-slate-600">{cn.original?.reason}</td>
                           <td className="py-3 px-3 text-right font-mono text-rose-600 font-bold">
-                            ₹{cn.credit.toLocaleString()}
+                            {formatCurrency(cn.credit, db.settings)}
                           </td>
                         </tr>
                       ))
@@ -1567,7 +1569,7 @@ export default function PartyLedgerView({
 
               {/* Amount */}
               <div>
-                <span className="block font-bold text-slate-400 mb-1 uppercase tracking-wider text-[9px]">Amount (₹)</span>
+                <span className="block font-bold text-slate-400 mb-1 uppercase tracking-wider text-[9px]">Amount ({getCurrencySymbol(db.settings)})</span>
                 <input
                   type="number"
                   placeholder="0.00"
@@ -1625,6 +1627,31 @@ export default function PartyLedgerView({
           data={printingTxn}
           settings={db.settings}
           onClose={() => setPrintingTxn(null)}
+          party={party}
+          currentUser={currentUser}
+          onEditParty={onUpdateParty}
+        />
+      )}
+
+      {showWhatsAppModal && (
+        <WhatsAppShareModal
+          isOpen={showWhatsAppModal}
+          onClose={() => setShowWhatsAppModal(false)}
+          documentData={{
+            documentType: 'Party Ledger',
+            documentId: party.id,
+            documentNumber: party.code || 'LEDGER',
+            partyId: party.id,
+            partyName: party.name,
+            savedPhone: party.phone,
+            pdfFileName: `Party_Ledger_${party.name.replace(/\s+/g, '_')}.pdf`,
+            amount: metrics.closingBalance,
+            greetingText: `Dear ${party.name},\n\nYour party ledger summary with ${db.settings.company.companyName} is compiled below:\n\nOpening Balance: ${formatCurrency(metrics.opening, db.settings)}\nCurrent Outstanding: ${formatCurrency(metrics.closingBalance, db.settings)}\nLast Transaction Date: ${metrics.lastTxnDate}\n\nThank you for your business!\n${db.settings.company.companyName}`
+          }}
+          settings={db.settings}
+          party={party}
+          currentUser={currentUser}
+          onEditParty={onUpdateParty}
         />
       )}
     </div>

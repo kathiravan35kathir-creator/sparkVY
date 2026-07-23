@@ -28,8 +28,10 @@ import {
   ProcurementOrder,
   ProformaInvoice,
   SalesReturn,
-  CreditNote
+  CreditNote,
+  AppSettings
 } from '../types';
+import { formatCurrency, getCurrencySymbol } from '../utils/numericUtils';
 
 interface DashboardViewProps {
   isAdmin: boolean;
@@ -48,6 +50,7 @@ interface DashboardViewProps {
   onQuickAction: (actionId: string) => void;
   onNavigateToTab: (tabId: string) => void;
   currentUser?: any;
+  settings?: AppSettings;
 }
 
 type DateFilterType = 'Today' | 'Yesterday' | 'Week' | 'Month' | 'Quarter' | 'Year' | 'Custom';
@@ -69,7 +72,8 @@ export default function DashboardView({
   accounts,
   onQuickAction,
   onNavigateToTab,
-  currentUser
+  currentUser,
+  settings
 }: DashboardViewProps) {
   // 1. Date Filtering state
   const [dateFilter, setDateFilter] = useState<DateFilterType>('Month');
@@ -460,10 +464,10 @@ export default function DashboardView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Range Sales</span>
                 <span className="bg-blue-50 text-blue-600 p-1.5 rounded-lg"><TrendingUp size={14} /></span>
               </div>
-              <p className="text-lg font-black text-[#163A5F] font-mono">₹{salesVal.toLocaleString()}</p>
+              <p className="text-lg font-black text-[#163A5F] font-mono">{formatCurrency(salesVal, settings)}</p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>{rangeInvoices.length} transactions</span>
-                <span className="text-emerald-600 font-bold">Today: ₹{todaySalesVal.toLocaleString()}</span>
+                <span className="text-emerald-600 font-bold">Today: {formatCurrency(todaySalesVal, settings)}</span>
               </div>
             </div>
 
@@ -473,10 +477,10 @@ export default function DashboardView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Range Purchases</span>
                 <span className="bg-amber-50 text-amber-600 p-1.5 rounded-lg"><ShoppingBag size={14} /></span>
               </div>
-              <p className="text-lg font-black text-[#163A5F] font-mono">₹{purchaseVal.toLocaleString()}</p>
+              <p className="text-lg font-black text-[#163A5F] font-mono">{formatCurrency(purchaseVal, settings)}</p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>{rangePurchases.length} bills</span>
-                <span className="text-amber-600 font-bold">Today: ₹{todayPurchaseVal.toLocaleString()}</span>
+                <span className="text-amber-600 font-bold">Today: {formatCurrency(todayPurchaseVal, settings)}</span>
               </div>
             </div>
 
@@ -487,11 +491,11 @@ export default function DashboardView({
                 <span className="bg-emerald-50 text-emerald-600 p-1.5 rounded-lg"><DollarSign size={14} /></span>
               </div>
               <p className={`text-lg font-black font-mono ${profitVal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                ₹{profitVal.toLocaleString()}
+                {formatCurrency(profitVal, settings)}
               </p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>Margins: {salesVal > 0 ? Math.round((profitVal / salesVal) * 100) : 0}%</span>
-                <span className="text-emerald-600 font-bold">Month Profit: ₹{monthlyProfitVal.toLocaleString()}</span>
+                <span className="text-emerald-600 font-bold">Month Profit: {formatCurrency(monthlyProfitVal, settings)}</span>
               </div>
             </div>
 
@@ -501,10 +505,10 @@ export default function DashboardView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Range Expenses</span>
                 <span className="bg-rose-50 text-rose-600 p-1.5 rounded-lg"><ArrowUpRight size={14} /></span>
               </div>
-              <p className="text-lg font-black text-[#163A5F] font-mono">₹{expenseVal.toLocaleString()}</p>
+              <p className="text-lg font-black text-[#163A5F] font-mono">{formatCurrency(expenseVal, settings)}</p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>{rangeExpenses.length} expense lines</span>
-                <span className="text-rose-500 font-bold">Today: ₹{todayExpenseVal.toLocaleString()}</span>
+                <span className="text-rose-500 font-bold">Today: {formatCurrency(todayExpenseVal, settings)}</span>
               </div>
             </div>
 
@@ -514,7 +518,7 @@ export default function DashboardView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Receivables</span>
                 <span className="bg-rose-50 text-rose-600 p-1.5 rounded-lg"><ArrowDownRight size={14} /></span>
               </div>
-              <p className="text-lg font-black text-rose-600 font-mono">₹{totalReceivables.toLocaleString()}</p>
+              <p className="text-lg font-black text-rose-600 font-mono">{formatCurrency(totalReceivables, settings)}</p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>Unpaid Customer balance</span>
                 <span className="font-bold">{pendingDueInvoices.length} invoices pending</span>
@@ -527,7 +531,7 @@ export default function DashboardView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Payables</span>
                 <span className="bg-amber-50 text-amber-600 p-1.5 rounded-lg"><AlertTriangle size={14} /></span>
               </div>
-              <p className="text-lg font-black text-amber-600 font-mono">₹{totalPayables.toLocaleString()}</p>
+              <p className="text-lg font-black text-amber-600 font-mono">{formatCurrency(totalPayables, settings)}</p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>Owed to active Suppliers</span>
                 <span className="font-bold">Overage balance</span>
@@ -540,10 +544,10 @@ export default function DashboardView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cash Register</span>
                 <span className="bg-teal-50 text-teal-600 p-1.5 rounded-lg"><CreditCard size={14} /></span>
               </div>
-              <p className="text-lg font-black text-[#163A5F] font-mono">₹{cashBalance.toLocaleString()}</p>
+              <p className="text-lg font-black text-[#163A5F] font-mono">{formatCurrency(cashBalance, settings)}</p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>Petty registers & cash drawer</span>
-                <span className="text-emerald-600 font-bold">In today: ₹{todayPaymentIn.toLocaleString()}</span>
+                <span className="text-emerald-600 font-bold">In today: {formatCurrency(todayPaymentIn, settings)}</span>
               </div>
             </div>
 
@@ -553,10 +557,10 @@ export default function DashboardView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Balance</span>
                 <span className="bg-indigo-50 text-indigo-600 p-1.5 rounded-lg"><Briefcase size={14} /></span>
               </div>
-              <p className="text-lg font-black text-[#163A5F] font-mono">₹{bankBalance.toLocaleString()}</p>
+              <p className="text-lg font-black text-[#163A5F] font-mono">{formatCurrency(bankBalance, settings)}</p>
               <div className="flex items-center justify-between mt-1 text-[9px] text-slate-500 font-medium">
                 <span>UPI & Current Accounts</span>
-                <span className="text-rose-500 font-bold">Out today: ₹{todayPaymentOut.toLocaleString()}</span>
+                <span className="text-rose-500 font-bold">Out today: {formatCurrency(todayPaymentOut, settings)}</span>
               </div>
             </div>
           </div>

@@ -15,7 +15,7 @@ import {
   Copy,
   X
 } from 'lucide-react';
-import { Item, ItemType, Party } from '../types';
+import { Item, ItemType, Party, AppSettings } from '../types';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
 
@@ -28,6 +28,7 @@ interface ItemsViewProps {
   onReactivateItem: (id: string) => void;
   onDeleteItem?: (id: string) => void;
   isAdmin: boolean;
+  settings?: AppSettings;
 }
 
 export default function ItemsView({

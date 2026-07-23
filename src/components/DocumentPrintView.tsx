@@ -17,9 +17,10 @@ import {
   ChevronUp,
   MessageSquare
 } from 'lucide-react';
-import { AppSettings } from '../types';
+import { AppSettings, Party } from '../types';
 import DocumentTemplateRenderer from './DocumentTemplateRenderer';
 import { sendWhatsAppMessage } from '../services/communicationService';
+import WhatsAppShareModal, { WhatsAppDocumentData } from './WhatsAppShareModal';
 
 // Global color cache to speed up canvas-based color resolution
 const colorCache = new Map<string, string>();
@@ -75,7 +76,7 @@ function resolveToRgba(colorStr: string): string {
 }
 
 interface DocumentPrintViewProps {
-  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'report' | 'sample_label' | 'transaction_list' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher' | 'party_ledger';
+  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'report' | 'sample_label' | 'transaction_list' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher' | 'party_ledger' | 'estimate_quotation' | 'delivery_challan' | 'account_statement' | (string & {});
   data: any; 
   settings: AppSettings;
   onClose: () => void;
@@ -83,6 +84,11 @@ interface DocumentPrintViewProps {
   extraActions?: React.ReactNode;
   onCheckPin?: (action: string, onConfirm: () => void) => void;
   onLogCommunication?: (log: any) => void;
+  party?: Party | null;
+  currentUser?: any;
+  onEditParty?: (partyId: string, updates: Partial<Party>) => void;
+  onAddAuditLog?: (log: any) => void;
+  onSaveSettings?: (settings: AppSettings) => void;
 }
 
 const SHARE_PRESETS = [
@@ -110,13 +116,21 @@ export default function DocumentPrintView({
   onClose,
   extraActions,
   onCheckPin,
-  onLogCommunication
+  onLogCommunication,
+  party,
+  currentUser,
+  onEditParty,
+  onAddAuditLog,
+  onSaveSettings
 }: DocumentPrintViewProps) {
   const printRef = useRef<HTMLDivElement>(null);
   const [shareSuccess, setShareSuccess] = useState<string | null>(null);
   const [selectedLabel, setSelectedLabel] = useState<string>(
     settings.print.printCopyLabels[0] || 'Original for Buyer'
   );
+
+  // Unified WhatsApp Share Modal State
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
   // Sharing Engine state
   const [isShareConfigOpen, setIsShareConfigOpen] = useState(false);
@@ -440,87 +454,13 @@ export default function DocumentPrintView({
     }
   };
 
-  // WhatsApp sender using customized, compiled text
+  // Unified WhatsApp Share trigger
   const handleShareWhatsApp = () => {
-    const doShare = () => {
-      const targetPhone = data.phone || data.mobile || '';
-      const url = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(compiledText)}`;
-      window.open(url, '_blank');
-      
-      if (onLogCommunication) {
-        onLogCommunication({
-          type: 'WhatsApp',
-          recipient: data.partyName || 'Unknown',
-          recipientNumber: targetPhone,
-          status: 'Sent',
-          subject: `${documentType.toUpperCase()} Dispatch`,
-          content: compiledText,
-          direction: 'Outbound'
-        });
-      }
-      
-      setShareSuccess('Redirecting to WhatsApp web...');
-      setTimeout(() => setShareSuccess(null), 3000);
-    };
-
-    if (settings.whatsappSettings.requirePinForShare && onCheckPin) {
-      onCheckPin('share_document', doShare);
-    } else {
-      doShare();
-    }
+    setShowWhatsAppModal(true);
   };
 
-  // Enterprise WhatsApp Business API sender
-  const handleShareWhatsAppEnterprise = async () => {
-    if (!recipientPhone) {
-      alert('Please enter a recipient phone number.');
-      return;
-    }
-    
-    setIsSendingWhatsApp(true);
-    setShareSuccess('Generating PDF & sending via Enterprise API...');
-    
-    let docNum = '';
-    if (documentType === 'invoice') docNum = data.invoiceNumber || '';
-    else if (documentType === 'quotation') docNum = data.quotationNumber || '';
-    else if (documentType === 'receipt') docNum = data.receiptNumber || '';
-    else if (documentType === 'purchase') docNum = data.purchaseNumber || '';
-    else if (documentType === 'report') docNum = data.reportNumber || '';
-    else docNum = data.id || 'DOC';
-
-    const docTypeStr = documentType.charAt(0).toUpperCase() + documentType.slice(1);
-    
-    try {
-      const res = await fetch('/api/whatsapp/send-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipientPhone: recipientPhone,
-          docType: docTypeStr,
-          docNumber: docNum,
-          date: data.invoiceDate || data.quotationDate || data.paymentDate || new Date().toISOString().slice(0, 10),
-          partyName: data.partyName || data.supplierName || 'Customer',
-          amount: data.total || data.amountPaid || data.amount || 0,
-          items: data.items || [],
-          caption: compiledText
-        })
-      });
-
-      const result = await res.json();
-      if (res.ok && result.success) {
-        setShareSuccess('Dispatched via Enterprise WhatsApp API successfully!');
-      } else {
-        alert(`Failed to send: ${result.error || 'Unknown error'}`);
-        setShareSuccess(null);
-      }
-    } catch (err: any) {
-      console.error('Enterprise WhatsApp dispatch failed:', err);
-      alert(`Error sending: ${err.message || err}`);
-      setShareSuccess(null);
-    } finally {
-      setIsSendingWhatsApp(false);
-      setTimeout(() => setShareSuccess(null), 4000);
-    }
+  const handleShareWhatsAppEnterprise = () => {
+    setShowWhatsAppModal(true);
   };
 
   // Email sender using customized, compiled text
@@ -768,6 +708,49 @@ export default function DocumentPrintView({
           </div>
         </div>
       </div>
+
+      {showWhatsAppModal && (() => {
+        let docNum = '';
+        if (documentType === 'invoice') docNum = data.invoiceNumber || '';
+        else if (documentType === 'quotation') docNum = data.quotationNumber || '';
+        else if (documentType === 'receipt') docNum = data.receiptNumber || '';
+        else if (documentType === 'purchase') docNum = data.purchaseNumber || '';
+        else if (documentType === 'report') docNum = data.reportNumber || '';
+        else docNum = data.documentNumber || data.id || 'DOC';
+
+        const formattedDocType = documentType
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase());
+
+        const whatsappDocData: WhatsAppDocumentData = {
+          documentType: formattedDocType,
+          documentId: data.id || docNum,
+          documentNumber: docNum,
+          partyId: data.partyId || data.supplierId,
+          partyName: data.partyName || data.supplierName || 'Customer',
+          savedPhone: recipientPhone || data.phone || data.mobile || data.partyPhone || '',
+          pdfFileName: `${formattedDocType.replace(/\s+/g, '_')}_${docNum.replace(/[/\\?%*:|"<>]/g, '-')}.pdf`,
+          amount: data.total || data.amountPaid || data.amount || 0,
+          date: data.invoiceDate || data.quotationDate || data.paymentDate || new Date().toISOString().slice(0, 10),
+          items: data.items || [],
+          greetingText: compiledText
+        };
+
+        return (
+          <WhatsAppShareModal
+            isOpen={showWhatsAppModal}
+            onClose={() => setShowWhatsAppModal(false)}
+            documentData={whatsappDocData}
+            settings={settings}
+            party={party || null}
+            currentUser={currentUser}
+            onEditParty={onEditParty}
+            onAddAuditLog={onAddAuditLog}
+            onLogCommunication={onLogCommunication}
+            onSaveSettings={onSaveSettings}
+          />
+        );
+      })()}
     </div>
   );
 }

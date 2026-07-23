@@ -14,7 +14,7 @@ import {
   ArrowUpDown,
   X
 } from 'lucide-react';
-import { Party, PartyType, BalanceType } from '../types';
+import { Party, PartyType, BalanceType, AppSettings } from '../types';
 import { AppState } from '../data';
 import PartyLedgerView from './PartyLedgerView';
 import { NumericInput } from './NumericInput';
@@ -30,6 +30,7 @@ interface PartiesViewProps {
   isAdmin: boolean;
   db?: AppState;
   currentUser?: any;
+  settings?: AppSettings;
 }
 
 export default function PartiesView({

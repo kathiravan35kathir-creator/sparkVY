@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppSettings } from '../types';
+import { formatCurrency, getCurrencySymbol } from '../utils/numericUtils';
 import {
   ShieldAlert,
   FileText,
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 
 export interface DocumentTemplateRendererProps {
-  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'transaction_list' | 'report' | 'sample_label' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher' | 'party_ledger';
+  documentType: 'invoice' | 'quotation' | 'receipt' | 'purchase' | 'transaction_list' | 'report' | 'sample_label' | 'credit_note' | 'sales_return' | 'procurement_order' | 'proforma_invoice' | 'payment_receipt' | 'payment_voucher' | 'party_ledger' | 'estimate_quotation' | 'delivery_challan' | 'account_statement' | (string & {});
   data?: any; // The document object
   settings: AppSettings;
   customizationOverride?: any;
@@ -321,7 +322,7 @@ export default function DocumentTemplateRenderer({
                       <td className={`${tablePadding} font-mono text-slate-400`}>{idx + 1}</td>
                       {row.map((cell: any, cidx: number) => (
                         <td key={cidx} className={`${tablePadding} ${typeof cell === 'number' ? 'text-right font-mono' : ''}`}>
-                          {typeof cell === 'number' ? `₹${cell.toLocaleString()}` : cell}
+                          {typeof cell === 'number' ? formatCurrency(cell, settings) : cell}
                         </td>
                       ))}
                     </tr>
@@ -334,7 +335,7 @@ export default function DocumentTemplateRenderer({
                     <td className={tablePadding}></td>
                     {docData.totals.map((t: any, tidx: number) => (
                       <td key={tidx} className={`${tablePadding} ${typeof t === 'number' ? 'text-right font-mono' : ''}`}>
-                        {typeof t === 'number' ? `₹${t.toLocaleString()}` : t}
+                        {typeof t === 'number' ? formatCurrency(t, settings) : t}
                       </td>
                     ))}
                   </tr>
@@ -406,7 +407,7 @@ export default function DocumentTemplateRenderer({
               )}
               <div className="pt-2 border-t border-slate-200 mt-2">
                 <span className="text-slate-400 font-bold uppercase text-[8px] mr-1">Opening Balance:</span>
-                <strong className="text-slate-800 font-mono text-xs">₹{docData.openingBalance.toLocaleString()}</strong>
+                <strong className="text-slate-800 font-mono text-xs">{formatCurrency(docData.openingBalance, settings)}</strong>
               </div>
             </div>
           </div>
@@ -445,13 +446,13 @@ export default function DocumentTemplateRenderer({
                         <td className={`${tablePadding} font-semibold text-slate-600`}>{row[2]}</td>
                         <td className={`${tablePadding} text-slate-500 max-w-[150px] truncate`}>{row[3]}</td>
                         <td className={`${tablePadding} text-right font-mono ${isDr ? 'text-slate-800 font-bold' : 'text-slate-300'}`}>
-                          {isDr ? `₹${row[4].toLocaleString()}` : '—'}
+                          {isDr ? formatCurrency(row[4], settings) : '—'}
                         </td>
                         <td className={`${tablePadding} text-right font-mono ${isCr ? 'text-emerald-600 font-bold' : 'text-slate-300'}`}>
-                          {isCr ? `₹${row[5].toLocaleString()}` : '—'}
+                          {isCr ? formatCurrency(row[5], settings) : '—'}
                         </td>
                         <td className={`${tablePadding} text-right font-mono font-bold text-slate-900 bg-slate-50/30`}>
-                          ₹{row[6].toLocaleString()}
+                          {formatCurrency(row[6], settings)}
                         </td>
                       </tr>
                     );
@@ -465,13 +466,13 @@ export default function DocumentTemplateRenderer({
                       Statement Totals
                     </td>
                     <td className={`${tablePadding} text-right font-mono text-slate-900`}>
-                      ₹{docData.totals[4].toLocaleString()}
+                      {formatCurrency(docData.totals[4], settings)}
                     </td>
                     <td className={`${tablePadding} text-right font-mono text-emerald-700`}>
-                      ₹{docData.totals[5].toLocaleString()}
+                      {formatCurrency(docData.totals[5], settings)}
                     </td>
                     <td className={`${tablePadding} text-right font-mono text-[#2563EB]`}>
-                      Closing: ₹{docData.totals[6].toLocaleString()}
+                      Closing: {formatCurrency(docData.totals[6], settings)}
                     </td>
                   </tr>
                 </tfoot>
@@ -720,10 +721,10 @@ export default function DocumentTemplateRenderer({
                 Acknowledged with thanks from <strong className="text-slate-900">{docData.partyName}</strong>
               </p>
               <p className="text-2xl font-black text-slate-950 tracking-tight font-mono">
-                ₹{docData.amount?.toLocaleString()}
+                {formatCurrency(docData.amount, settings)}
               </p>
               <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">
-                Rupees Three Thousand Only
+                Payment Acknowledgment Receipt
               </p>
             </div>
 
@@ -768,10 +769,10 @@ export default function DocumentTemplateRenderer({
                     </td>
                     {showHsnSac && <td className={`${tablePadding} text-center font-mono text-slate-600`}>{it.hsn || '998346'}</td>}
                     <td className={`${tablePadding} text-center font-mono font-bold text-slate-800`}>{it.quantity}</td>
-                    <td className={`${tablePadding} text-right font-mono`}>₹{it.rate?.toLocaleString()}</td>
+                    <td className={`${tablePadding} text-right font-mono`}>{formatCurrency(it.rate, settings)}</td>
                     {showDiscount && <td className={`${tablePadding} text-right font-mono text-emerald-600`}>{it.discountPercent || 0}%</td>}
                     {showTaxColumns && <td className={`${tablePadding} text-right font-mono text-slate-500`}>{it.taxPercent || 18}%</td>}
-                    <td className={`${tablePadding} text-right font-mono font-bold text-slate-900`}>₹{it.amount?.toLocaleString()}</td>
+                    <td className={`${tablePadding} text-right font-mono font-bold text-slate-900`}>{formatCurrency(it.amount, settings)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -812,13 +813,13 @@ export default function DocumentTemplateRenderer({
             <div className="w-60 space-y-1 text-[11px]">
               <div className="flex justify-between text-slate-500 font-medium">
                 <span>Items Subtotal:</span>
-                <span className="font-mono text-slate-700">₹{docData.subtotal?.toLocaleString()}</span>
+                <span className="font-mono text-slate-700">{formatCurrency(docData.subtotal, settings)}</span>
               </div>
 
               {showDiscount && docData.discountAmount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-semibold">
                   <span>Aggregate Discount:</span>
-                  <span className="font-mono">- ₹{docData.discountAmount?.toLocaleString()}</span>
+                  <span className="font-mono">- {formatCurrency(docData.discountAmount, settings)}</span>
                 </div>
               )}
 
@@ -829,17 +830,17 @@ export default function DocumentTemplateRenderer({
                     <>
                       <div className="flex justify-between text-slate-400 font-mono text-[10px]">
                         <span>CGST (9%):</span>
-                        <span>+ ₹{(docData.taxAmount / 2)?.toLocaleString()}</span>
+                        <span>+ {formatCurrency(docData.taxAmount / 2, settings)}</span>
                       </div>
                       <div className="flex justify-between text-slate-400 font-mono text-[10px] pb-1 border-b border-dashed border-slate-200">
                         <span>SGST (9%):</span>
-                        <span>+ ₹{(docData.taxAmount / 2)?.toLocaleString()}</span>
+                        <span>+ {formatCurrency(docData.taxAmount / 2, settings)}</span>
                       </div>
                     </>
                   ) : (
                     <div className="flex justify-between text-slate-500 font-medium">
-                      <span>Accrued GST (18%):</span>
-                      <span className="font-mono text-slate-700">+ ₹{docData.taxAmount?.toLocaleString()}</span>
+                      <span>Accrued GST ({settings.tax?.defaultGstRate || 18}%):</span>
+                      <span className="font-mono text-slate-700">+ {formatCurrency(docData.taxAmount, settings)}</span>
                     </div>
                   )}
                 </div>
@@ -848,24 +849,24 @@ export default function DocumentTemplateRenderer({
               {docData.additionalCharges > 0 && (
                 <div className="flex justify-between text-slate-500 font-medium">
                   <span>Logistics/Expedite Charge:</span>
-                  <span className="font-mono text-slate-700">+ ₹{docData.additionalCharges?.toLocaleString()}</span>
+                  <span className="font-mono text-slate-700">+ {formatCurrency(docData.additionalCharges, settings)}</span>
                 </div>
               )}
 
               <div className="border-t border-slate-900 pt-1.5 flex justify-between font-black text-xs text-slate-950 uppercase tracking-wide">
                 <span>Grand Aggregate Total:</span>
-                <span className="font-mono text-sm" style={primaryText}>₹{docData.total?.toLocaleString()}</span>
+                <span className="font-mono text-sm" style={primaryText}>{formatCurrency(docData.total, settings)}</span>
               </div>
 
               {normType === 'invoice' && (
                 <div className="pt-1.5 space-y-1">
                   <div className="flex justify-between font-semibold text-emerald-600">
                     <span>Amount Acknowledged:</span>
-                    <span className="font-mono">₹{docData.amountPaid?.toLocaleString()}</span>
+                    <span className="font-mono">{formatCurrency(docData.amountPaid, settings)}</span>
                   </div>
                   <div className="border-t border-dashed border-slate-200 pt-1.5 flex justify-between font-black text-rose-600 text-xs">
                     <span>Balance Due Recurrent:</span>
-                    <span className="font-mono">₹{docData.balanceDue?.toLocaleString()}</span>
+                    <span className="font-mono">{formatCurrency(docData.balanceDue, settings)}</span>
                   </div>
                 </div>
               )}
