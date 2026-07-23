@@ -36,6 +36,8 @@ interface SalesViewProps {
   settings: AppSettings;
   onCheckPin?: (action: string, onConfirm: () => void) => void;
   onLogCommunication?: (log: any) => void;
+  onAddParty?: (partyPayload: any) => void;
+  onAddItem?: (itemPayload: any) => void;
 }
 
 export default function SalesView({
@@ -50,12 +52,22 @@ export default function SalesView({
   isAdmin,
   settings,
   onCheckPin,
-  onLogCommunication
+  onLogCommunication,
+  onAddParty,
+  onAddItem
 }: SalesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Quick Add modal states
+  const [showQuickAddParty, setShowQuickAddParty] = useState(false);
+  const [showQuickAddItem, setShowQuickAddItem] = useState(false);
+  const [quickPartyName, setQuickPartyName] = useState('');
+  const [quickPartyPhone, setQuickPartyPhone] = useState('');
+  const [quickItemName, setQuickItemName] = useState('');
+  const [quickItemPrice, setQuickItemPrice] = useState(0);
 
   // Active view toggles
   const [isCreating, setIsCreating] = useState(false);
@@ -193,6 +205,20 @@ export default function SalesView({
       return;
     }
 
+    if (settings?.general?.stopSaleOnNegativeStock) {
+      for (const line of mappedItems) {
+        const matchingItem = items.find((it) => it.id === line.itemId);
+        if (matchingItem) {
+          const requestedQty = line.quantity;
+          const availableStock = matchingItem.currentStock || 0;
+          if (availableStock < requestedQty) {
+            alert(`Error: Stop Sale on Negative Stock is active. Item "${matchingItem.name}" has insufficient stock (Available: ${availableStock}, Requested: ${requestedQty}).`);
+            return;
+          }
+        }
+      }
+    }
+
     onAddInvoice({
       partyId,
       partyName: selectedParty.name,
@@ -314,6 +340,15 @@ export default function SalesView({
                     </option>
                   ))}
                 </select>
+                {!settings?.general?.blockNewPartiesFromTransaction && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAddParty(true)}
+                    className="text-[10px] text-blue-600 hover:text-blue-700 font-bold mt-1.5 flex items-center gap-1 cursor-pointer transition"
+                  >
+                    + Quick Add Customer Party
+                  </button>
+                )}
               </div>
 
               <div>
@@ -376,6 +411,15 @@ export default function SalesView({
                             </option>
                           ))}
                         </select>
+                        {!settings?.general?.blockNewItemsFromTransaction && (
+                          <button
+                            type="button"
+                            onClick={() => setShowQuickAddItem(true)}
+                            className="text-[9px] text-blue-600 hover:text-blue-700 font-bold mt-1 block cursor-pointer transition"
+                          >
+                            + Quick Add Catalog Item
+                          </button>
+                        )}
                       </td>
                       <td className="py-3.5 px-3">
                         <NumericInput
@@ -925,6 +969,162 @@ export default function SalesView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Party Modal */}
+      {showQuickAddParty && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full space-y-4 shadow-xl">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Quick Add Customer</h4>
+              <button onClick={() => setShowQuickAddParty(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Customer / Party Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter contact name"
+                  value={quickPartyName}
+                  onChange={(e) => setQuickPartyName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Mobile / Phone Number</label>
+                <input
+                  type="text"
+                  placeholder="Enter contact phone"
+                  value={quickPartyPhone}
+                  onChange={(e) => setQuickPartyPhone(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickAddParty(false);
+                  setQuickPartyName('');
+                  setQuickPartyPhone('');
+                }}
+                className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!quickPartyName.trim()) {
+                    alert('Please enter a party name.');
+                    return;
+                  }
+                  if (onAddParty) {
+                    onAddParty({
+                      name: quickPartyName,
+                      phone: quickPartyPhone,
+                      email: '',
+                      companyName: '',
+                      type: 'Customer',
+                      billingAddress: '',
+                      shippingAddress: '',
+                      gstType: 'Unregistered',
+                      openingBalance: 0,
+                      balanceType: 'Receive',
+                    });
+                    setShowQuickAddParty(false);
+                    setQuickPartyName('');
+                    setQuickPartyPhone('');
+                  }
+                }}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black uppercase tracking-wider"
+              >
+                Create Customer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Catalog Item Modal */}
+      {showQuickAddItem && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 max-w-sm w-full space-y-4 shadow-xl">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">Quick Add Catalog Item</h4>
+              <button onClick={() => setShowQuickAddItem(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Item / Product Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter product/service name"
+                  value={quickItemName}
+                  onChange={(e) => setQuickItemName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Standard Selling Price (₹) *</label>
+                <NumericInput
+                  value={quickItemPrice}
+                  onChange={(val) => setQuickItemPrice(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickAddItem(false);
+                  setQuickItemName('');
+                  setQuickItemPrice(0);
+                }}
+                className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!quickItemName.trim()) {
+                    alert('Please enter an item name.');
+                    return;
+                  }
+                  if (onAddItem) {
+                    onAddItem({
+                      code: `ITEM-${Math.floor(1000 + Math.random() * 9000)}`,
+                      name: quickItemName,
+                      category: 'Services',
+                      type: 'Service',
+                      unit: 'PCS',
+                      purchasePrice: Math.round(quickItemPrice * 0.7),
+                      sellingPrice: quickItemPrice,
+                      taxRate: 18,
+                      openingStock: 100,
+                      currentStock: 100,
+                      minimumStock: 5,
+                    });
+                    setShowQuickAddItem(false);
+                    setQuickItemName('');
+                    setQuickItemPrice(0);
+                  }
+                }}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-black uppercase tracking-wider"
+              >
+                Create Product
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -83,7 +83,7 @@ export default function Header({
       case 'reports':
         return 'Finance > Analytical Business Reports';
       case 'settings':
-        return 'System > Settings & Database Demo';
+        return 'System > Settings & Database';
       default:
         return 'Operations Hub';
     }

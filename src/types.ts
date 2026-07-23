@@ -458,7 +458,34 @@ export interface DocumentNumberConfig {
   resetByFinancialYear: boolean;
 }
 
+export interface GeneralSettings {
+  passcodeEnabled: boolean;
+  currencyCode: string;
+  currencySymbol: string;
+  amountDecimalPlaces: number;
+  gstinEnabled: boolean;
+  stopSaleOnNegativeStock: boolean;
+  blockNewItemsFromTransaction: boolean;
+  blockNewPartiesFromTransaction: boolean;
+  estimateQuotationEnabled: boolean;
+  proformaInvoiceEnabled: boolean;
+  salesOrderEnabled: boolean;
+  purchaseOrderEnabled: boolean;
+  otherIncomeEnabled: boolean;
+  fixedAssetsEnabled: boolean;
+  deliveryChallanEnabled: boolean;
+  goodsReturnOnDeliveryChallanEnabled: boolean;
+  printAmountOnDeliveryChallan: boolean;
+  multiCompanyEnabled: boolean;
+  selectedCompanyId: string | null;
+  godownManagementEnabled: boolean;
+  autoBackupEnabled: boolean;
+  auditTrailEnabled: boolean;
+  screenScale: number;
+}
+
 export interface AppSettings {
+  general?: GeneralSettings;
   company: {
     companyName: string;
     legalName: string;

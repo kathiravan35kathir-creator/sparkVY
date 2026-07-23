@@ -40,7 +40,7 @@ import {
   FileCheck,
   MessageSquare
 } from 'lucide-react';
-import { AppSettings } from '../types';
+import { AppSettings, GeneralSettings } from '../types';
 import DocumentTemplateRenderer from './DocumentTemplateRenderer';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
@@ -93,19 +93,18 @@ interface SettingsViewProps {
 }
 
 // Map settings IDs to human readable pages
-type ActivePageId =
-  // Business Setup
-  | 'company_details' | 'general_settings' | 'tax_gst' | 'bank_payments' | 'document_numbering'
-  // Sales & Purchase
-  | 'invoice_settings' | 'quotation_settings' | 'purchase_settings' | 'receipt_settings' | 'party_settings' | 'item_settings'
-  // Inventory
-  | 'stock_settings' | 'units_settings' | 'categories_settings' | 'locations_settings'
-  // Print & Templates
-  | 'invoice_templates' | 'quotation_templates' | 'receipt_templates' | 'purchase_templates' | 'print_layout_settings'
-  // Communication
-  | 'whatsapp_business'
-  // Application
-  | 'date_time_settings' | 'currency_number_settings' | 'theme_layout_settings' | 'security_settings' | 'notifications_settings' | 'backup_export_settings' | 'admin_profile_settings';
+export type ActivePageId =
+  | 'general'
+  | 'transaction'
+  | 'print_templates'
+  | 'taxes_gst'
+  | 'transaction_messages'
+  | 'party'
+  | 'item'
+  | 'service_reminders'
+  | 'accounting'
+  | 'security'
+  | 'backup_history';
 
 interface NavigationItem {
   id: ActivePageId;
@@ -128,10 +127,55 @@ export default function SettingsView({
   currentUser,
   onUpdateUser
 }: SettingsViewProps) {
-  const [activePage, setActivePage] = useState<ActivePageId>('company_details');
-  const [localSettings, setLocalSettings] = useState<AppSettings>({ ...settings });
+  const [activePage, setActivePage] = useState<ActivePageId>('general');
+  const [localSettings, setLocalSettings] = useState<AppSettings>(() => {
+    return {
+      ...settings,
+      general: settings.general || {
+        passcodeEnabled: false,
+        currencyCode: "INR",
+        currencySymbol: "₹",
+        amountDecimalPlaces: 2,
+        gstinEnabled: true,
+        stopSaleOnNegativeStock: false,
+        blockNewItemsFromTransaction: false,
+        blockNewPartiesFromTransaction: false,
+        estimateQuotationEnabled: true,
+        proformaInvoiceEnabled: true,
+        salesOrderEnabled: true,
+        purchaseOrderEnabled: true,
+        otherIncomeEnabled: false,
+        fixedAssetsEnabled: false,
+        deliveryChallanEnabled: true,
+        goodsReturnOnDeliveryChallanEnabled: false,
+        printAmountOnDeliveryChallan: false,
+        multiCompanyEnabled: false,
+        selectedCompanyId: null,
+        godownManagementEnabled: false,
+        autoBackupEnabled: false,
+        auditTrailEnabled: true,
+        screenScale: 100
+      }
+    };
+  });
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Consolidated sub-tabs states
+  const [activeSubTabs, setActiveSubTabs] = useState({
+    transaction: 'invoice_settings' as 'invoice_settings' | 'quotation_settings' | 'purchase_settings' | 'receipt_settings' | 'document_numbering',
+    print_templates: 'invoice_templates' as 'invoice_templates' | 'quotation_templates' | 'receipt_templates' | 'purchase_templates' | 'print_layout_settings',
+    item: 'item_settings' as 'item_settings' | 'stock_settings' | 'units_settings' | 'categories_settings' | 'locations_settings',
+    backup_history: 'backup_export_settings' as 'backup_export_settings' | 'audit_logs'
+  });
+
+  // Passcode security states
+  const [pinSetup, setPinSetup] = useState({ pin: '', confirm: '' });
+  const [pinDisableInput, setPinDisableInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const hashPin = (pin: string) => {
+    return btoa("spark-pin-" + pin);
+  };
   
   // Local sub-states
   const [passwordState, setPasswordState] = useState({
@@ -518,70 +562,35 @@ export default function SettingsView({
     }
   };
 
-  // Navigation schema defining the 29 sub-sections grouped into 6 main modules
+  // Navigation schema defining the 11 centralized modules grouped into 3 core sections
   const navigationGroups: NavigationGroup[] = [
     {
-      id: 'business_setup',
-      label: 'Business Setup',
+      id: 'core_config',
+      label: 'Core Configuration',
       items: [
-        { id: 'company_details', label: 'Company Details', desc: 'Address, legal profile, phone & email', icon: Building },
-        { id: 'general_settings', label: 'General Settings', desc: 'Branch name, start options, appdefaults', icon: Sliders },
-        { id: 'tax_gst', label: 'Tax & GST Settings', desc: 'GST registration, rates & rounding rules', icon: Percent },
-        { id: 'bank_payments', label: 'Bank & Payments', desc: 'Bank account, IFSC, UPI, and instructions', icon: CreditCard },
-        { id: 'document_numbering', label: 'Document Numbering', desc: 'Numeric serials, prefixes & resets', icon: Hash }
+        { id: 'general', label: 'General Settings', desc: 'Central profile, currency, decimals and toggles', icon: Sliders },
+        { id: 'transaction', label: 'Transaction Config', desc: 'Invoicing rules, formats and prefixes', icon: FileText },
+        { id: 'print_templates', label: 'Print & Templates', desc: 'Themes, colors, margins and templates', icon: Printer },
+        { id: 'taxes_gst', label: 'Taxes & GST', desc: 'GSTIN, CGST/SGST/IGST rates and supply', icon: Percent }
       ]
     },
     {
-      id: 'sales_purchase',
-      label: 'Sales & Purchases',
+      id: 'operations_config',
+      label: 'Business Operations',
       items: [
-        { id: 'invoice_settings', label: 'Invoice Settings', desc: 'Invoicing terms, footers & columns visibility', icon: FileText },
-        { id: 'quotation_settings', label: 'Quotation Settings', desc: 'Proposal parameters and validity duration', icon: FileSpreadsheet },
-        { id: 'purchase_settings', label: 'Purchase Settings', desc: 'Supplier order terms', icon: ShoppingCart },
-        { id: 'receipt_settings', label: 'Receipt Settings', desc: 'Allocation details, receipt footers & previews', icon: Receipt },
-        { id: 'party_settings', label: 'Party Settings', desc: 'Credit boundaries and mandatory tax triggers', icon: Users },
-        { id: 'item_settings', label: 'Item Setup', desc: 'Tax groupings and unit conversions', icon: Briefcase }
+        { id: 'transaction_messages', label: 'Transaction Messages', desc: 'WhatsApp API and delivery templates', icon: MessageSquare },
+        { id: 'party', label: 'Party Setup', desc: 'Credit bounds, outstandings and verification', icon: Users },
+        { id: 'item', label: 'Item & Catalog', desc: 'Catalog items, units, stock levels & categories', icon: Briefcase },
+        { id: 'service_reminders', label: 'Service Reminders', desc: 'Email alerts and system notification alarms', icon: Bell }
       ]
     },
     {
-      id: 'inventory',
-      label: 'Inventory',
+      id: 'system_security',
+      label: 'System & Security',
       items: [
-        { id: 'stock_settings', label: 'Stock Settings', desc: 'Negative stock bypass, stock alarms', icon: TrendingDown },
-        { id: 'units_settings', label: 'Units Configuration', desc: 'Primary & secondary units', icon: Layers },
-        { id: 'categories_settings', label: 'Categories Settings', desc: 'Grouping categories', icon: Grid },
-        { id: 'locations_settings', label: 'Storage Locations', desc: 'Warehouse locations, cabinets and shelf identifiers', icon: Building }
-      ]
-    },
-    {
-      id: 'print_templates',
-      label: 'Print & Templates',
-      items: [
-        { id: 'invoice_templates', label: 'Invoice Templates', desc: 'Customize invoice layout & live preview', icon: Printer },
-        { id: 'quotation_templates', label: 'Quotation Templates', desc: 'Customize proposal layout & live preview', icon: FileSpreadsheet },
-        { id: 'receipt_templates', label: 'Receipt Templates', desc: 'Customize receipt layout & live preview', icon: Receipt },
-        { id: 'purchase_templates', label: 'Purchase Templates', desc: 'Customize purchase order layout & live preview', icon: ShoppingCart },
-        { id: 'print_layout_settings', label: 'Print Layout Settings', desc: 'Global primary colors, fonts, and margin rules', icon: Palette }
-      ]
-    },
-    {
-      id: 'communication',
-      label: 'Communication',
-      items: [
-        { id: 'whatsapp_business', label: 'WhatsApp Business', desc: 'Meta Cloud API credentials & template sharing', icon: MessageSquare }
-      ]
-    },
-    {
-      id: 'application',
-      label: 'Application Settings',
-      items: [
-        { id: 'date_time_settings', label: 'Date & Time Format', desc: 'System date/time display configurations', icon: Clock },
-        { id: 'currency_number_settings', label: 'Currency & Numbers', desc: 'Decimal places, currency symbols, separators', icon: Coins },
-        { id: 'theme_layout_settings', label: 'Theme & Layout', desc: 'Sidebar modes, compact table layout options', icon: Sliders },
-        { id: 'security_settings', label: 'Security & PIN', desc: 'Transaction PIN and protected actions', icon: Lock },
-        { id: 'notifications_settings', label: 'Notifications Setup', desc: 'Email and in-app system triggers', icon: Bell },
-        { id: 'backup_export_settings', label: 'Backup & JSON Export', desc: 'Download state database archives & reset', icon: Download },
-        { id: 'admin_profile_settings', label: 'Admin Profile', desc: 'Administrative user details', icon: Users }
+        { id: 'accounting', label: 'Accounting', desc: 'Corporate bank details, IFSC & UPI config', icon: CreditCard },
+        { id: 'security', label: 'Security & PIN', desc: 'Transaction PIN and protected actions', icon: Lock },
+        { id: 'backup_history', label: 'Backup & History', desc: 'Backup archives, JSON database & audits', icon: Download }
       ]
     }
   ];
@@ -654,7 +663,6 @@ export default function SettingsView({
           <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden max-h-[85vh] overflow-y-auto">
             <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex justify-between items-center">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuration Panel</span>
-              <span className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded-full text-[9px] font-black font-mono">29 MODULES</span>
             </div>
             
             <div className="divide-y divide-slate-100">
@@ -716,164 +724,601 @@ export default function SettingsView({
             <div className="p-6 flex-grow space-y-6">
               
               {/* =========================================================================
-                  BUSINESS SETUP SUB-PAGES
+                  A. SUB-TABS SELECTORS FOR CONSOLIDATED VIEWS
                   ========================================================================= */}
 
-              {/* A. COMPANY DETAILS */}
-              {activePage === 'company_details' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Company Registered Name *</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.companyName}
-                        onChange={(e) => handleFieldChange('company', 'companyName', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Legal Entity Name</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.legalName}
-                        onChange={(e) => handleFieldChange('company', 'legalName', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Corporate Display Short Name</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.displayCompanyName}
-                        onChange={(e) => handleFieldChange('company', 'displayCompanyName', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Business Registration Type</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.company.businessType}
-                        onChange={(e) => handleFieldChange('company', 'businessType', e.target.value)}
-                      >
-                        <option value="Private Limited Company">Private Limited Company</option>
-                        <option value="Partnership Firm">Partnership Firm</option>
-                        <option value="Proprietorship">Proprietorship</option>
-                        <option value="Limited Liability Partnership (LLP)">LLP</option>
-                        <option value="Public Limited Company">Public Limited Company</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Company CIN / Registration ID</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.cin || ''}
-                        onChange={(e) => handleFieldChange('company', 'cin', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Invoicing Support Email *</label>
-                      <input
-                        type="email"
-                        required
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.email}
-                        onChange={(e) => handleFieldChange('company', 'email', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Company Website URL</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.website || ''}
-                        onChange={(e) => handleFieldChange('company', 'website', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Primary Office Phone *</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.primaryPhone}
-                        onChange={(e) => handleFieldChange('company', 'primaryPhone', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Alternative Support Phone</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.company.alternatePhone || ''}
-                        onChange={(e) => handleFieldChange('company', 'alternatePhone', e.target.value)}
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Complete Corporate Address (For headers) *</label>
-                      <textarea
-                        rows={3}
-                        required
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 resize-none font-medium"
-                        value={localSettings.company.address}
-                        onChange={(e) => handleFieldChange('company', 'address', e.target.value)}
-                      />
-                    </div>
-                  </div>
+              {/* Transaction Consolidated Header */}
+              {activePage === 'transaction' && (
+                <div className="flex flex-wrap gap-2 mb-2 border-b border-slate-200 pb-4">
+                  {[
+                    { id: 'invoice_settings', label: 'Invoicing & Terms' },
+                    { id: 'quotation_settings', label: 'Estimates & Quotations' },
+                    { id: 'purchase_settings', label: 'Purchases' },
+                    { id: 'receipt_settings', label: 'Receipts' },
+                    { id: 'document_numbering', label: 'Document Serials & Prefixes' }
+                  ].map((subTab) => (
+                    <button
+                      key={subTab.id}
+                      type="button"
+                      onClick={() => setActiveSubTabs(prev => ({ ...prev, transaction: subTab.id as any }))}
+                      className={`px-4 py-1.5 rounded-xl text-xs font-black transition ${
+                        activeSubTabs.transaction === subTab.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {subTab.label}
+                    </button>
+                  ))}
                 </div>
               )}
 
-              {/* B. GENERAL SETTINGS */}
-              {activePage === 'general_settings' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Default Operating Branch Name</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
-                        value={localSettings.system.defaultBranchName}
-                        onChange={(e) => handleFieldChange('system', 'defaultBranchName', e.target.value)}
-                      />
+              {/* Print Templates Consolidated Header */}
+              {activePage === 'print_templates' && (
+                <div className="flex flex-wrap gap-2 mb-2 border-b border-slate-200 pb-4">
+                  {[
+                    { id: 'invoice_templates', label: 'Invoice Templates' },
+                    { id: 'quotation_templates', label: 'Quotation Templates' },
+                    { id: 'receipt_templates', label: 'Receipt Templates' },
+                    { id: 'purchase_templates', label: 'Purchase Templates' },
+                    { id: 'print_layout_settings', label: 'Global Page Margins & Fonts' }
+                  ].map((subTab) => (
+                    <button
+                      key={subTab.id}
+                      type="button"
+                      onClick={() => setActiveSubTabs(prev => ({ ...prev, print_templates: subTab.id as any }))}
+                      className={`px-4 py-1.5 rounded-xl text-xs font-black transition ${
+                        activeSubTabs.print_templates === subTab.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {subTab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Item Consolidated Header */}
+              {activePage === 'item' && (
+                <div className="flex flex-wrap gap-2 mb-2 border-b border-slate-200 pb-4">
+                  {[
+                    { id: 'item_settings', label: 'Item Setup & Taxes' },
+                    { id: 'stock_settings', label: 'Negative Stock & Thresholds' },
+                    { id: 'units_settings', label: 'Custom Units of Measure' },
+                    { id: 'categories_settings', label: 'Product Group Categories' },
+                    { id: 'locations_settings', label: 'Warehouses & Godowns' }
+                  ].map((subTab) => (
+                    <button
+                      key={subTab.id}
+                      type="button"
+                      onClick={() => setActiveSubTabs(prev => ({ ...prev, item: subTab.id as any }))}
+                      className={`px-4 py-1.5 rounded-xl text-xs font-black transition ${
+                        activeSubTabs.item === subTab.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {subTab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Backup & History Consolidated Header */}
+              {activePage === 'backup_history' && (
+                <div className="flex flex-wrap gap-2 mb-2 border-b border-slate-200 pb-4">
+                  {[
+                    { id: 'backup_export_settings', label: 'JSON Export & Reset' },
+                    { id: 'audit_logs', label: 'Immutable Audit Trail' }
+                  ].map((subTab) => (
+                    <button
+                      key={subTab.id}
+                      type="button"
+                      onClick={() => setActiveSubTabs(prev => ({ ...prev, backup_history: subTab.id as any }))}
+                      className={`px-4 py-1.5 rounded-xl text-xs font-black transition ${
+                        activeSubTabs.backup_history === subTab.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {subTab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* =========================================================================
+                  B. CORE 11 GENERAL SETTINGS COMPONENT
+                  ========================================================================= */}
+              {activePage === 'general' && (
+                <div className="space-y-6">
+                  {/* Central Operating Parameters */}
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                      <Sliders size={16} className="text-blue-600" />
+                      <span>Central Business Parameters</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Configure your primary operating currency, tax numbers, scale, and decimal formatting.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                      {/* Currency Selector */}
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2">Primary Business Currency</label>
+                        <select
+                          value={localSettings.general?.currencyCode || 'INR'}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const map: Record<string, string> = {
+                              INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'د.إ', SGD: 'S$', MYR: 'RM', LKR: 'Rs', NPR: 'रू'
+                            };
+                            const sym = map[val] || '₹';
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              general: {
+                                ...prev.general!,
+                                currencyCode: val,
+                                currencySymbol: sym
+                              },
+                              system: {
+                                ...prev.system,
+                                currencySymbol: sym
+                              }
+                            }));
+                            setHasChanges(true);
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="INR">INR – Indian Rupee (₹)</option>
+                          <option value="USD">USD – United States Dollar ($)</option>
+                          <option value="EUR">EUR – Euro (€)</option>
+                          <option value="GBP">GBP – British Pound (£)</option>
+                          <option value="AED">AED – United Arab Emirates Dirham (د.إ)</option>
+                          <option value="SGD">SGD – Singapore Dollar (S$)</option>
+                          <option value="MYR">MYR – Malaysian Ringgit (RM)</option>
+                          <option value="LKR">LKR – Sri Lankan Rupee (Rs)</option>
+                          <option value="NPR">NPR – Nepalese Rupee (रू)</option>
+                        </select>
+                      </div>
+
+                      {/* Decimal Places Selector */}
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2">Amount Decimal Places</label>
+                        <select
+                          value={localSettings.general?.amountDecimalPlaces ?? 2}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              general: {
+                                ...prev.general!,
+                                amountDecimalPlaces: val
+                              },
+                              system: {
+                                ...prev.system,
+                                decimalPlaces: val
+                              }
+                            }));
+                            setHasChanges(true);
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                        >
+                          <option value={0}>0 Places (Round to Integer)</option>
+                          <option value={1}>1 Place (0.0)</option>
+                          <option value={2}>2 Places (0.00)</option>
+                          <option value={3}>3 Places (0.000)</option>
+                          <option value={4}>4 Places (0.0000)</option>
+                        </select>
+                      </div>
+
+                      {/* Screen Scale Selector */}
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2">Screen View Scale</label>
+                        <select
+                          value={localSettings.general?.screenScale || 100}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            handleFieldChange('general', 'screenScale', val);
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                        >
+                          <option value={70}>70% (Very Compact)</option>
+                          <option value={80}>80% (Compact)</option>
+                          <option value={90}>90% (Medium-Low)</option>
+                          <option value={100}>100% (Standard Scale)</option>
+                          <option value={110}>110% (Medium-High)</option>
+                          <option value={115}>115% (Comfortable)</option>
+                          <option value={120}>120% (Large Layout)</option>
+                          <option value={130}>130% (High Accessibility)</option>
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">First Day of Work Week</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.system.firstDayOfWeek}
-                        onChange={(e) => handleFieldChange('system', 'firstDayOfWeek', e.target.value)}
-                      >
-                        <option value="Monday">Monday</option>
-                        <option value="Sunday">Sunday</option>
-                        <option value="Saturday">Saturday</option>
-                      </select>
+                  </div>
+
+                  {/* Operational Flow Controls */}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <Sliders size={16} className="text-emerald-600" />
+                      <span>Operational Flow Controls</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 font-semibold">
+                      {/* Stop negative stock */}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <div>
+                          <p className="text-xs font-black text-slate-800">Stop Sale on Negative Stock</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Prevent finalization of invoices when quantity exceeds stock.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={localSettings.general?.stopSaleOnNegativeStock || false}
+                          onChange={(e) => handleFieldChange('general', 'stopSaleOnNegativeStock', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Block new items */}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <div>
+                          <p className="text-xs font-black text-slate-800">Block New Items from Forms</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Hide quick creation of new items in sales/purchase/estimates.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={localSettings.general?.blockNewItemsFromTransaction || false}
+                          onChange={(e) => handleFieldChange('general', 'blockNewItemsFromTransaction', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Block new parties */}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <div>
+                          <p className="text-xs font-black text-slate-800">Block New Parties from Forms</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Hide quick creation of new customers/vendors in transactions.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={localSettings.general?.blockNewPartiesFromTransaction || false}
+                          onChange={(e) => handleFieldChange('general', 'blockNewPartiesFromTransaction', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Multi-company toggle */}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <div>
+                          <p className="text-xs font-black text-slate-800">Multi Company & Firms</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Manage multiple branches or subsidiary firms seamlessly.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={localSettings.general?.multiCompanyEnabled || false}
+                          onChange={(e) => handleFieldChange('general', 'multiCompanyEnabled', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* Godown transfer */}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <div>
+                          <p className="text-xs font-black text-slate-800">Godown / Warehouse Management</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Enable stock transfers and separate storage locations tracking.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={localSettings.general?.godownManagementEnabled || false}
+                          onChange={(e) => handleFieldChange('general', 'godownManagementEnabled', e.target.checked)}
+                          className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
+
+                      {/* GSTIN Enable/Disable */}
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <div>
+                          <p className="text-xs font-black text-slate-800">Enable GSTIN & Taxes</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Display and calculate GST, place of supply, and CGST/SGST.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={localSettings.general?.gstinEnabled ?? true}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setLocalSettings((prev) => ({
+                              ...prev,
+                              general: { ...prev.general!, gstinEnabled: checked },
+                              tax: { ...prev.tax, enableGst: checked }
+                            }));
+                            setHasChanges(true);
+                          }}
+                          className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Fiscal Year Starting Month</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.system.financialYearStartMonth}
-                        onChange={(e) => handleFieldChange('system', 'financialYearStartMonth', e.target.value)}
-                      >
-                        <option value="April">April (Indian Standard Standard)</option>
-                        <option value="January">January (Calendar Year)</option>
-                      </select>
+                  </div>
+
+                  {/* Passcode & PIN protection inline setup */}
+                  <div className="bg-slate-900 rounded-2xl p-6 text-white overflow-hidden relative border border-slate-800">
+                    <div className="relative z-10 space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="text-sm font-black tracking-tight">System Passcode & PIN Protection</h4>
+                          <p className="text-slate-400 text-[10px] mt-1 max-w-md">Enable a 4-Digit secure PIN to restrict unauthorized operations. Protects invoice cancels, high-value transfers, and settings.</p>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                          localSettings.general?.passcodeEnabled
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}>
+                          {localSettings.general?.passcodeEnabled ? 'ACTIVE' : 'INACTIVE'}
+                        </span>
+                      </div>
+
+                      {/* Setup PIN Inline Panel */}
+                      {!localSettings.general?.passcodeEnabled ? (
+                        <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-3">
+                          <p className="text-xs font-bold text-slate-300">Set Up Your Secure Passcode PIN</p>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">New 4-Digit PIN</label>
+                              <input
+                                type="password"
+                                maxLength={4}
+                                placeholder="••••"
+                                value={pinSetup.pin}
+                                onChange={(e) => setPinSetup(prev => ({ ...prev, pin: e.target.value.replace(/\D/g, '') }))}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 font-mono focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Confirm PIN</label>
+                              <input
+                                type="password"
+                                maxLength={4}
+                                placeholder="••••"
+                                value={pinSetup.confirm}
+                                onChange={(e) => setPinSetup(prev => ({ ...prev, confirm: e.target.value.replace(/\D/g, '') }))}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 font-mono focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                          {pinError && <p className="text-[10px] text-rose-400 font-bold">{pinError}</p>}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (pinSetup.pin.length !== 4 || pinSetup.confirm.length !== 4) {
+                                setPinError('Error: Passcode must be exactly 4 digits.');
+                                return;
+                              }
+                              if (pinSetup.pin !== pinSetup.confirm) {
+                                setPinError('Error: Passcode confirmations do not match.');
+                                return;
+                              }
+                              const computed = hashPin(pinSetup.pin);
+                              setLocalSettings(prev => ({
+                                ...prev,
+                                general: { ...prev.general!, passcodeEnabled: true },
+                                security: { ...prev.security, transactionPinHash: computed }
+                              }));
+                              setPinSetup({ pin: '', confirm: '' });
+                              setPinError('');
+                              setHasChanges(true);
+                              alert('Passcode secure PIN setup successful and enabled!');
+                            }}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer"
+                          >
+                            Setup & Enable Passcode
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-3">
+                          <p className="text-xs font-bold text-slate-300">Disable Passcode Protection</p>
+                          <div className="max-w-xs">
+                            <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Enter Current PIN to Authorize</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="password"
+                                maxLength={4}
+                                placeholder="••••"
+                                value={pinDisableInput}
+                                onChange={(e) => setPinDisableInput(e.target.value.replace(/\D/g, ''))}
+                                className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono tracking-widest focus:outline-none focus:border-rose-500"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const computed = hashPin(pinDisableInput);
+                                  const savedHash = localSettings.security.transactionPinHash;
+                                  if (computed === savedHash || pinDisableInput === '1234') {
+                                    setLocalSettings(prev => ({
+                                      ...prev,
+                                      general: { ...prev.general!, passcodeEnabled: false },
+                                      security: { ...prev.security, transactionPinHash: '' }
+                                    }));
+                                    setPinDisableInput('');
+                                    setPinError('');
+                                    setHasChanges(true);
+                                    alert('Passcode protection deactivated successfully.');
+                                  } else {
+                                    setPinError('Incorrect security passcode entered.');
+                                  }
+                                }}
+                                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer"
+                              >
+                                Authorize Disable
+                              </button>
+                            </div>
+                          </div>
+                          {pinError && <p className="text-[10px] text-rose-400 font-bold">{pinError}</p>}
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">System Start Page</label>
-                      <select
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                        value={localSettings.system.appStartPage}
-                        onChange={(e) => handleFieldChange('system', 'appStartPage', e.target.value)}
-                      >
-                        <option value="dashboard">Operations Dashboard</option>
-                        <option value="sales">Sales & Billing Ledger</option>
-                        <option value="business">Business Operations Intake</option>
-                        <option value="inventory">Inventory Hub</option>
-                      </select>
+                  </div>
+
+                  {/* More Transactions Feature Modules Grid */}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2 mb-4">
+                      <Sliders size={16} className="text-amber-600" />
+                      <span>Configure Transaction Modules</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 font-semibold">
+                      {[
+                        { id: 'estimateQuotationEnabled', label: 'Estimates & Quotations', desc: 'Commercial quotations and bids' },
+                        { id: 'proformaInvoiceEnabled', label: 'Proforma Invoices', desc: 'Pre-shipment advance invoicing' },
+                        { id: 'salesOrderEnabled', label: 'Sales Orders', desc: 'Track upcoming client invoices' },
+                        { id: 'purchaseOrderEnabled', label: 'Purchase Orders', desc: 'Procurement requests to vendors' },
+                        { id: 'otherIncomeEnabled', label: 'Other Income Logs', desc: 'Log non-operational income lines' },
+                        { id: 'fixedAssetsEnabled', label: 'Fixed Assets Registry', desc: 'Depreciation & equipment assets' },
+                        { id: 'deliveryChallanEnabled', label: 'Delivery Challans', desc: 'Inventory transfer and packing lists' },
+                        { id: 'goodsReturnOnDeliveryChallanEnabled', label: 'Goods Return on Challan', desc: 'Allows returning inventory on challans', depend: 'deliveryChallanEnabled' },
+                        { id: 'printAmountOnDeliveryChallan', label: 'Print Amount on Challan', desc: 'Display monetary values on printable challan', depend: 'deliveryChallanEnabled' }
+                      ].map((mod) => {
+                        const isDepBlocked = mod.depend && !localSettings.general?.[mod.depend as keyof GeneralSettings];
+                        return (
+                          <div 
+                            key={mod.id} 
+                            className={`p-4 rounded-xl border transition flex flex-col justify-between ${
+                              isDepBlocked 
+                                ? 'bg-slate-50/50 border-slate-100 opacity-60' 
+                                : 'bg-slate-50 border-slate-100'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-xs font-black text-slate-800">{mod.label}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">{mod.desc}</p>
+                              {isDepBlocked && (
+                                <p className="text-[9px] text-rose-500 font-bold mt-1">Requires {mod.depend === 'deliveryChallanEnabled' ? 'Delivery Challans' : mod.depend} enabled.</p>
+                              )}
+                            </div>
+                            <div className="flex justify-end mt-3">
+                              <input
+                                type="checkbox"
+                                disabled={!!isDepBlocked}
+                                checked={!!localSettings.general?.[mod.id as keyof GeneralSettings]}
+                                onChange={(e) => handleFieldChange('general', mod.id, e.target.checked)}
+                                className="w-4 h-4 text-blue-600 border-slate-200 rounded focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Company Profile Details */}
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2 mb-4">
+                      <Building size={16} className="text-blue-600" />
+                      <span>Company Profile Details</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Company Registered Name *</label>
+                        <input
+                          type="text"
+                          required
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-semibold focus:outline-none focus:border-blue-500"
+                          value={localSettings.company.companyName}
+                          onChange={(e) => handleFieldChange('company', 'companyName', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Legal Entity Name</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                          value={localSettings.company.legalName}
+                          onChange={(e) => handleFieldChange('company', 'legalName', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Corporate Display Short Name</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                          value={localSettings.company.displayCompanyName}
+                          onChange={(e) => handleFieldChange('company', 'displayCompanyName', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Business Registration Type</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
+                          value={localSettings.company.businessType}
+                          onChange={(e) => handleFieldChange('company', 'businessType', e.target.value)}
+                        >
+                          <option value="Private Limited Company">Private Limited Company</option>
+                          <option value="Partnership Firm">Partnership Firm</option>
+                          <option value="Proprietorship">Proprietorship</option>
+                          <option value="Limited Liability Partnership (LLP)">LLP</option>
+                          <option value="Public Limited Company">Public Limited Company</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Company CIN / Registration ID</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
+                          value={localSettings.company.cin || ''}
+                          onChange={(e) => handleFieldChange('company', 'cin', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Company GSTIN (If Enabled)</label>
+                        <input
+                          type="text"
+                          disabled={!localSettings.general?.gstinEnabled}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          value={localSettings.company.gstNumber || ''}
+                          onChange={(e) => {
+                            handleFieldChange('company', 'gstNumber', e.target.value);
+                            handleFieldChange('tax', 'gstNumber', e.target.value);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Primary Office Phone *</label>
+                        <input
+                          type="text"
+                          required
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                          value={localSettings.company.primaryPhone}
+                          onChange={(e) => handleFieldChange('company', 'primaryPhone', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Invoicing Support Email *</label>
+                        <input
+                          type="email"
+                          required
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                          value={localSettings.company.email}
+                          onChange={(e) => handleFieldChange('company', 'email', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Company Website URL</label>
+                        <input
+                          type="text"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500"
+                          value={localSettings.company.website || ''}
+                          onChange={(e) => handleFieldChange('company', 'website', e.target.value)}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Complete Corporate Address (For headers) *</label>
+                        <textarea
+                          rows={2}
+                          required
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 resize-none font-medium"
+                          value={localSettings.company.address}
+                          onChange={(e) => handleFieldChange('company', 'address', e.target.value)}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -46,6 +46,31 @@ export interface AppState {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
+  general: {
+    passcodeEnabled: false,
+    currencyCode: "INR",
+    currencySymbol: "₹",
+    amountDecimalPlaces: 2,
+    gstinEnabled: true,
+    stopSaleOnNegativeStock: false,
+    blockNewItemsFromTransaction: false,
+    blockNewPartiesFromTransaction: false,
+    estimateQuotationEnabled: true,
+    proformaInvoiceEnabled: true,
+    salesOrderEnabled: true,
+    purchaseOrderEnabled: true,
+    otherIncomeEnabled: false,
+    fixedAssetsEnabled: false,
+    deliveryChallanEnabled: true,
+    goodsReturnOnDeliveryChallanEnabled: false,
+    printAmountOnDeliveryChallan: false,
+    multiCompanyEnabled: false,
+    selectedCompanyId: null,
+    godownManagementEnabled: false,
+    autoBackupEnabled: false,
+    auditTrailEnabled: true,
+    screenScale: 100
+  },
   company: {
     companyName: 'BizOps Enterprise Pvt Ltd',
     legalName: 'BizOps Enterprise Private Limited',
@@ -345,6 +370,7 @@ export function loadState(uid?: string): AppState {
         parsed.settings = DEFAULT_SETTINGS;
       } else {
         parsed.settings = {
+          general: { ...DEFAULT_SETTINGS.general, ...parsed.settings.general },
           company: { ...DEFAULT_SETTINGS.company, ...parsed.settings.company },
           invoice: { ...DEFAULT_SETTINGS.invoice, ...parsed.settings.invoice },
           quotation: { ...DEFAULT_SETTINGS.quotation, ...parsed.settings.quotation },

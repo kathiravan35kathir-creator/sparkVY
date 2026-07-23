@@ -408,33 +408,7 @@ export default function DashboardView({
 
   return (
     <div className="space-y-6 animate-fade-in" id="dashboard_root">
-      {/* Dynamic Date Filter Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4" id="dashboard_filter_bar">
-        <div>
-          <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-            <Activity size={14} className="text-[#2563EB]" />
-            <span>Dashboard Workspace Control</span>
-          </h3>
-          <p className="text-[11px] text-slate-400 mt-0.5">Filter entire workspace metrics & charts instantly</p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          {(['Today', 'Yesterday', 'Week', 'Month', 'Quarter', 'Year', 'Custom'] as DateFilterType[]).map((filter) => (
-            <button
-              key={filter}
-              id={`filter_btn_${filter}`}
-              onClick={() => setDateFilter(filter)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer ${
-                dateFilter === filter
-                  ? 'bg-[#2563EB] text-white shadow-sm'
-                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-100'
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
-      </div>
+
 
       {/* Custom Date Input Panel */}
       {dateFilter === 'Custom' && (
@@ -463,44 +437,7 @@ export default function DashboardView({
         </div>
       )}
 
-      {/* Banner / Welcome Block */}
-      <div className="relative group w-full" id="welcome_banner_container">
-        {/* Ambient glowing blue backlight behind the banner */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-[#2563EB] to-[#06B6D4] rounded-2xl blur-xl opacity-25 group-hover:opacity-90 group-hover:scale-[1.02] transition-all duration-500 pointer-events-none" />
-        
-        <div className="relative overflow-hidden bg-white text-slate-800 rounded-2xl p-6 border border-blue-100 shadow-[0_4px_24px_rgba(37,99,235,0.05)] hover:border-blue-300 transition-all duration-300 ease-in-out flex flex-col md:flex-row md:items-center justify-between gap-4" id="welcome_banner">
-          <div className="absolute -right-20 -top-20 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl pointer-events-none transition-all duration-500 group-hover:bg-blue-500/20 group-hover:scale-110" />
-          <div className="absolute -left-20 -bottom-20 w-60 h-60 bg-blue-400/5 rounded-full blur-3xl pointer-events-none transition-all duration-500 group-hover:bg-blue-400/15 group-hover:scale-110" />
-          
-          <div className="relative z-10">
-            <div className="flex items-center space-x-2">
-              <span className="bg-[#2563EB] text-white text-[10px] uppercase font-bold tracking-widest px-2.5 py-0.5 rounded-full font-mono">
-                LIVE ERP SYSTEM
-              </span>
-              <span className="text-[11px] text-[#2563EB] font-mono font-bold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Realtime Connected</span>
-              </span>
-            </div>
-            <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 mt-1">
-              Welcome Back, {currentUser?.full_name || currentUser?.name || 'Operations Director'}
-            </h2>
-            <p className="text-xs text-slate-500 mt-1 max-w-xl">
-              You are viewing the system workspace as <strong className="text-[#2563EB] font-mono font-bold">{isAdmin ? 'Administrator' : 'Billing Staff'}</strong>. All widgets and transaction feeds below sync with live database modifications.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2.5 shrink-0 relative z-10">
-            <button
-              id="btn_banner_invoice"
-              onClick={() => onQuickAction('create_invoice')}
-              className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm hover:shadow transition-all flex items-center space-x-1.5 cursor-pointer"
-            >
-              <CreditCard size={14} />
-              <span>Create Invoice</span>
-            </button>
-          </div>
-        </div>
-      </div>
+
 
       {/* SECTION 1: CORE BUSINESS KPI BENTO-GRID */}
       {showFinance && (

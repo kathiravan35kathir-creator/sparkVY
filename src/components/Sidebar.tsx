@@ -96,7 +96,7 @@ export default function Sidebar({
       items: [
         { id: 'reports', name: 'Business Reports', icon: Activity },
         { id: 'trash', name: 'Trash / Deleted', icon: History },
-        { id: 'settings', name: 'Settings & DB Demo', icon: Settings }
+        { id: 'settings', name: 'Settings & DB', icon: Settings }
       ]
     }
   ];
