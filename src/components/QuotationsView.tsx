@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -17,7 +17,8 @@ import {
   X,
   UserPlus,
   PackagePlus,
-  FilePlus
+  FilePlus,
+  CheckCircle2
 } from 'lucide-react';
 import { Quotation, QuotationLineItem, Party, Item, QuotationStatus, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -25,6 +26,7 @@ import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
+import ItemSearchSelect from './ItemSearchSelect';
 
 interface QuotationsViewProps {
   quotations: Quotation[];
@@ -94,6 +96,78 @@ export default function QuotationsView({
     discountPercent: number;
     taxPercent: number;
   }[]>([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
+
+  const [pendingCreatedItemName, setPendingCreatedItemName] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Auto-select newly created item when items state updates
+  useEffect(() => {
+    if (pendingCreatedItemName && activeItemLineIdx !== null) {
+      const created = items.find(
+        (i) => i.name.trim().toLowerCase() === pendingCreatedItemName.trim().toLowerCase()
+      );
+      if (created) {
+        setLineItems((prev) =>
+          prev.map((l, idx) =>
+            idx === activeItemLineIdx
+              ? {
+                  ...l,
+                  itemId: created.id,
+                  rate: created.sellingPrice,
+                  taxPercent: created.taxRate ?? 18
+                }
+              : l
+          )
+        );
+        setToastMessage(`Item "${created.name}" created and automatically added to quotation.`);
+        setTimeout(() => setToastMessage(null), 4000);
+        setPendingCreatedItemName(null);
+        setActiveItemLineIdx(null);
+      }
+    }
+  }, [items, pendingCreatedItemName, activeItemLineIdx]);
+
+  // Draft auto-save to localStorage
+  useEffect(() => {
+    if (formMode) {
+      const draft = {
+        formMode,
+        editingQuotationId,
+        partyId,
+        quotationStage,
+        quotationDate,
+        expiryDate,
+        additionalCharges,
+        advanceRequirement,
+        notes,
+        terms,
+        lineItems
+      };
+      try {
+        localStorage.setItem('spark_vy_quotation_draft', JSON.stringify(draft));
+      } catch (e) {
+        // ignore
+      }
+    } else {
+      try {
+        localStorage.removeItem('spark_vy_quotation_draft');
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [
+    formMode,
+    editingQuotationId,
+    partyId,
+    quotationStage,
+    quotationDate,
+    expiryDate,
+    additionalCharges,
+    advanceRequirement,
+    notes,
+    terms,
+    lineItems
+  ]);
 
   // Helper functions to populate form
   const startEditQuotation = (q: Quotation) => {
@@ -430,42 +504,37 @@ export default function QuotationsView({
                     {lineItems.map((line, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/20">
                         <td className="py-2 px-3">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <select
-                                value={line.itemId}
-                                onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)}
-                                className="w-full border border-slate-150 rounded px-2.5 py-1 text-xs focus:outline-none bg-white text-slate-800 font-semibold"
-                              >
-                                <option value="">-- Choose Catalog Item --</option>
-                                {items.map((it) => (
-                                  <option key={it.id} value={it.id}>
-                                    {it.code} - {it.name} [₹{it.sellingPrice}]
-                                  </option>
-                                ))}
-                              </select>
-                              {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
-                                <button
-                                  type="button"
-                                  title="Quick Add New Catalog Item"
-                                  onClick={() => {
-                                    setActiveItemLineIdx(idx);
-                                    setQuickItemSearchText('');
-                                    setIsQuickItemOpen(true);
-                                  }}
-                                  className="py-1 px-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded text-xs font-bold shrink-0 flex items-center gap-1 cursor-pointer"
-                                >
-                                  <PackagePlus size={13} />
-                                  <span className="hidden sm:inline">Add</span>
-                                </button>
-                              )}
-                            </div>
-                            {(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
-                              <p className="text-[10px] text-amber-700 font-medium">
-                                ⚠️ Item creation from forms is disabled in settings.
-                              </p>
-                            )}
-                          </div>
+                          <ItemSearchSelect
+                            selectedItemId={line.itemId}
+                            onSelectItem={(selectedItem) => {
+                              const updated = [...lineItems];
+                              updated[idx] = {
+                                ...updated[idx],
+                                itemId: selectedItem.id,
+                                rate: selectedItem.sellingPrice,
+                                taxPercent: selectedItem.taxRate ?? 18
+                              };
+                              setLineItems(updated);
+                            }}
+                            onClearSelection={() => {
+                              const updated = [...lineItems];
+                              updated[idx] = {
+                                ...updated[idx],
+                                itemId: ''
+                              };
+                              setLineItems(updated);
+                            }}
+                            items={items}
+                            onRequestCreateItem={(searchText) => {
+                              setActiveItemLineIdx(idx);
+                              setQuickItemSearchText(searchText);
+                              setIsQuickItemOpen(true);
+                            }}
+                            canCreateItem={Boolean(onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction))}
+                            blockedMessage="New items can only be created from the Items module according to system settings."
+                            priceType="sellingPrice"
+                            placeholder="Search item by name, code, HSN, barcode..."
+                          />
                         </td>
                         <td className="py-2 px-3">
                           <NumericInput
@@ -908,33 +977,34 @@ export default function QuotationsView({
         />
       )}
 
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-800 text-white px-4 py-3 rounded-xl shadow-2xl border border-emerald-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 text-xs font-bold">
+          <CheckCircle2 size={18} className="text-emerald-300 shrink-0" />
+          <span>{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="ml-2 text-emerald-200 hover:text-white p-0.5 rounded cursor-pointer"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Quick Create Item Modal */}
       {isQuickItemOpen && onAddItem && (
         <QuickCreateItemModal
           isOpen={isQuickItemOpen}
           onClose={() => {
             setIsQuickItemOpen(false);
-            setActiveItemLineIdx(null);
           }}
           initialSearchText={quickItemSearchText}
           existingItems={items}
           onSaveItem={(newItem) => {
             onAddItem(newItem);
             setIsQuickItemOpen(false);
-            if (activeItemLineIdx !== null) {
-              setTimeout(() => {
-                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
-                if (created) {
-                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
-                    ...l,
-                    itemId: created.id,
-                    rate: created.sellingPrice,
-                    taxPercent: created.taxRate ?? 18
-                  } : l));
-                }
-              }, 50);
-            }
-            setActiveItemLineIdx(null);
+            setPendingCreatedItemName(newItem.name);
           }}
         />
       )}

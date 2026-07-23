@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -16,7 +16,8 @@ import {
   X,
   UserPlus,
   PackagePlus,
-  FilePlus
+  FilePlus,
+  CheckCircle2
 } from 'lucide-react';
 import { Purchase, Party, Item, PurchaseLineItem, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -24,6 +25,7 @@ import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
+import ItemSearchSelect from './ItemSearchSelect';
 
 interface PurchasesViewProps {
   purchases: Purchase[];
@@ -82,6 +84,33 @@ export default function PurchasesView({
   const [lineItems, setLineItems] = useState<Omit<PurchaseLineItem, 'id' | 'taxAmount' | 'amount'>[]>([
     { itemId: '', itemName: '', quantity: 1, rate: 0, taxPercent: 18 }
   ]);
+
+  const [pendingCreatedItemName, setPendingCreatedItemName] = useState<string | null>(null);
+
+  // Auto-select newly created item when items state updates
+  useEffect(() => {
+    if (pendingCreatedItemName && activeItemLineIdx !== null) {
+      const created = items.find(
+        (i) => i.name.trim().toLowerCase() === pendingCreatedItemName.trim().toLowerCase()
+      );
+      if (created) {
+        setLineItems((prev) =>
+          prev.map((l, idx) =>
+            idx === activeItemLineIdx
+              ? {
+                  ...l,
+                  itemId: created.id,
+                  rate: created.purchasePrice || 0,
+                  taxPercent: created.taxRate ?? 18
+                }
+              : l
+          )
+        );
+        setPendingCreatedItemName(null);
+        setActiveItemLineIdx(null);
+      }
+    }
+  }, [items, pendingCreatedItemName, activeItemLineIdx]);
 
   const handleOpenDuplicate = (p: Purchase) => {
     setPartyId(p.partyId);
@@ -374,41 +403,28 @@ export default function PurchasesView({
               {lineItems.map((line, idx) => (
                 <div key={idx} className="bg-slate-50 border border-slate-200/65 p-4 rounded-xl grid grid-cols-1 md:grid-cols-12 gap-4 items-end font-sans">
                   <div className="col-span-1 md:col-span-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-bold text-slate-700">Product / Material Name</label>
-                      {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveItemLineIdx(idx);
-                            setQuickItemSearchText('');
-                            setIsQuickItemOpen(true);
-                          }}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                        >
-                          <PackagePlus size={13} />
-                          <span>+ Quick New Item</span>
-                        </button>
-                      )}
-                    </div>
-                    <select
-                      required
-                      className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-semibold"
-                      value={line.itemId}
-                      onChange={(e) => handleLineChange(idx, 'itemId', e.target.value)}
-                    >
-                      <option value="">-- Select Active Material --</option>
-                      {buyableItems.map((it) => (
-                        <option key={it.id} value={it.id}>
-                          {it.name} ({it.unit})
-                        </option>
-                      ))}
-                    </select>
-                    {(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
-                      <p className="text-[10px] text-amber-700 mt-1 font-medium">
-                        ⚠️ Item creation from purchase forms is disabled in settings.
-                      </p>
-                    )}
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Product / Material Name</label>
+                    <ItemSearchSelect
+                      selectedItemId={line.itemId}
+                      onSelectItem={(selectedItem) => {
+                        handleLineChange(idx, 'itemId', selectedItem.id);
+                        handleLineChange(idx, 'rate', selectedItem.purchasePrice || 0);
+                        handleLineChange(idx, 'taxPercent', selectedItem.taxRate ?? 18);
+                      }}
+                      onClearSelection={() => {
+                        handleLineChange(idx, 'itemId', '');
+                      }}
+                      items={buyableItems}
+                      onRequestCreateItem={(searchText) => {
+                        setActiveItemLineIdx(idx);
+                        setQuickItemSearchText(searchText);
+                        setIsQuickItemOpen(true);
+                      }}
+                      canCreateItem={Boolean(onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction))}
+                      blockedMessage="New items can only be created from the Items module according to system settings."
+                      priceType="purchasePrice"
+                      placeholder="Search material/product..."
+                    />
                   </div>
 
                   <div className="col-span-1 md:col-span-1">
@@ -941,29 +957,13 @@ export default function PurchasesView({
       {isQuickItemOpen && onAddItem && (
         <QuickCreateItemModal
           isOpen={isQuickItemOpen}
-          onClose={() => {
-            setIsQuickItemOpen(false);
-            setActiveItemLineIdx(null);
-          }}
+          onClose={() => setIsQuickItemOpen(false)}
           initialSearchText={quickItemSearchText}
           existingItems={items}
           onSaveItem={(newItem) => {
             onAddItem(newItem);
             setIsQuickItemOpen(false);
-            if (activeItemLineIdx !== null) {
-              setTimeout(() => {
-                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
-                if (created) {
-                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
-                    ...l,
-                    itemId: created.id,
-                    purchasePrice: created.purchasePrice || created.sellingPrice,
-                    taxPercent: created.taxRate ?? 18
-                  } : l));
-                }
-              }, 50);
-            }
-            setActiveItemLineIdx(null);
+            setPendingCreatedItemName(newItem.name);
           }}
         />
       )}

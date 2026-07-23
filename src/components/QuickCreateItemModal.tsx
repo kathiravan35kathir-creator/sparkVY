@@ -23,6 +23,7 @@ export default function QuickCreateItemModal({
   const [category, setCategory] = useState('General');
   const [unit, setUnit] = useState('Pcs');
   const [type, setType] = useState<ItemType>('Inventory Product');
+  const [hsnCode, setHsnCode] = useState('');
   const [sellingPrice, setSellingPrice] = useState<number>(0);
   const [purchasePrice, setPurchasePrice] = useState<number>(0);
   const [taxRate, setTaxRate] = useState<number>(18);
@@ -36,6 +37,7 @@ export default function QuickCreateItemModal({
       setCategory('General');
       setUnit('Pcs');
       setType('Inventory Product');
+      setHsnCode('');
       setSellingPrice(0);
       setPurchasePrice(0);
       setTaxRate(18);
@@ -54,9 +56,9 @@ export default function QuickCreateItemModal({
       return;
     }
 
-    const match = findExactMatch(existingItems, name, ['name', 'barcode', 'sku']);
+    const match = findExactMatch(existingItems, name, ['name', 'barcode', 'sku', 'hsnCode']);
     if (match) {
-      if (!confirm(`An item named "${match.name}" already exists. Do you want to proceed saving?`)) {
+      if (!confirm(`An item with similar details ("${match.name}") already exists. Do you want to proceed saving?`)) {
         return;
       }
     }
@@ -66,11 +68,12 @@ export default function QuickCreateItemModal({
       category: category.trim() || 'General',
       type,
       unit: unit.trim() || 'Pcs',
+      hsnCode: hsnCode.trim() || undefined,
       purchasePrice,
       sellingPrice,
       taxRate,
-      openingStock,
-      minimumStock,
+      openingStock: type === 'Service' ? 0 : openingStock,
+      minimumStock: type === 'Service' ? 0 : minimumStock,
       storageLocation: '',
       batchTracking: false,
       expiryTracking: false
@@ -131,7 +134,23 @@ export default function QuickCreateItemModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Item Classification
+              </label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as ItemType)}
+                className="w-full h-10 px-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold"
+              >
+                <option value="Inventory Product">Product / Goods</option>
+                <option value="Service">Service / Non-Stock</option>
+                <option value="Consumable">Consumable</option>
+                <option value="Material">Material</option>
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Category
@@ -140,11 +159,26 @@ export default function QuickCreateItemModal({
                 type="text"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                placeholder="General / Electronics"
+                placeholder="General / Services"
                 className="w-full h-10 px-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                HSN / SAC Code
+              </label>
+              <input
+                type="text"
+                value={hsnCode}
+                onChange={(e) => setHsnCode(e.target.value)}
+                placeholder="e.g. 8471 / 9983"
+                className="w-full h-10 px-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
                 Unit of Measure
@@ -160,6 +194,8 @@ export default function QuickCreateItemModal({
                 <option value="Ltr">Ltr / Litres</option>
                 <option value="Mtr">Mtr / Meters</option>
                 <option value="Pack">Pack / Set</option>
+                <option value="Hrs">Hrs / Hours</option>
+                <option value="Job">Job / Service</option>
               </select>
             </div>
           </div>

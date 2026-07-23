@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -19,7 +19,8 @@ import {
   X,
   UserPlus,
   PackagePlus,
-  FilePlus
+  FilePlus,
+  CheckCircle2
 } from 'lucide-react';
 import { Invoice, Party, Item, InvoiceStatus, InvoiceLineItem, PaymentMethod, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -27,6 +28,7 @@ import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
+import ItemSearchSelect from './ItemSearchSelect';
 
 interface SalesViewProps {
   invoices: Invoice[];
@@ -101,6 +103,33 @@ export default function SalesView({
     discountPercent: number;
     taxPercent: number;
   }[]>([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
+
+  const [pendingCreatedItemName, setPendingCreatedItemName] = useState<string | null>(null);
+
+  // Auto-select newly created item when items state updates
+  useEffect(() => {
+    if (pendingCreatedItemName && activeItemLineIdx !== null) {
+      const created = items.find(
+        (i) => i.name.trim().toLowerCase() === pendingCreatedItemName.trim().toLowerCase()
+      );
+      if (created) {
+        setLineItems((prev) =>
+          prev.map((l, idx) =>
+            idx === activeItemLineIdx
+              ? {
+                  ...l,
+                  itemId: created.id,
+                  rate: created.sellingPrice,
+                  taxPercent: created.taxRate ?? 18
+                }
+              : l
+          )
+        );
+        setPendingCreatedItemName(null);
+        setActiveItemLineIdx(null);
+      }
+    }
+  }, [items, pendingCreatedItemName, activeItemLineIdx]);
 
   const handleOpenDuplicate = (inv: Invoice) => {
     setPartyId(inv.partyId);
@@ -412,43 +441,37 @@ export default function SalesView({
                   {lineItems.map((line, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50">
                       <td className="py-3.5 px-4">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1.5">
-                            <select
-                              required
-                              value={line.itemId}
-                              onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)}
-                              className="w-full h-[36px] px-2 bg-white border border-[#D8E0EA] rounded text-xs text-slate-900 focus:outline-none font-bold"
-                            >
-                              <option value="">-- Choose Catalog Item --</option>
-                              {items.map((it) => (
-                                <option key={it.id} value={it.id}>
-                                  {it.code} - {it.name} [₹{it.sellingPrice}]
-                                </option>
-                              ))}
-                            </select>
-                            {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
-                              <button
-                                type="button"
-                                title="Quick Add New Catalog Item"
-                                onClick={() => {
-                                  setActiveItemLineIdx(idx);
-                                  setQuickItemSearchText('');
-                                  setIsQuickItemOpen(true);
-                                }}
-                                className="h-[36px] px-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded text-xs font-bold shrink-0 flex items-center gap-1 cursor-pointer"
-                              >
-                                <PackagePlus size={14} />
-                                <span className="hidden sm:inline">Add</span>
-                              </button>
-                            )}
-                          </div>
-                          {(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
-                            <p className="text-[10px] text-amber-700 font-medium">
-                              ⚠️ Item creation from invoice form is disabled in settings.
-                            </p>
-                          )}
-                        </div>
+                        <ItemSearchSelect
+                          selectedItemId={line.itemId}
+                          onSelectItem={(selectedItem) => {
+                            const updated = [...lineItems];
+                            updated[idx] = {
+                              ...updated[idx],
+                              itemId: selectedItem.id,
+                              rate: selectedItem.sellingPrice,
+                              taxPercent: selectedItem.taxRate ?? 18
+                            };
+                            setLineItems(updated);
+                          }}
+                          onClearSelection={() => {
+                            const updated = [...lineItems];
+                            updated[idx] = {
+                              ...updated[idx],
+                              itemId: ''
+                            };
+                            setLineItems(updated);
+                          }}
+                          items={items}
+                          onRequestCreateItem={(searchText) => {
+                            setActiveItemLineIdx(idx);
+                            setQuickItemSearchText(searchText);
+                            setIsQuickItemOpen(true);
+                          }}
+                          canCreateItem={Boolean(onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction))}
+                          blockedMessage="New items can only be created from the Items module according to system settings."
+                          priceType="sellingPrice"
+                          placeholder="Search item by name, code, HSN, barcode..."
+                        />
                       </td>
                       <td className="py-3.5 px-3">
                         <NumericInput
@@ -1056,27 +1079,13 @@ export default function SalesView({
           isOpen={isQuickItemOpen}
           onClose={() => {
             setIsQuickItemOpen(false);
-            setActiveItemLineIdx(null);
           }}
           initialSearchText={quickItemSearchText}
           existingItems={items}
           onSaveItem={(newItem) => {
             onAddItem(newItem);
             setIsQuickItemOpen(false);
-            if (activeItemLineIdx !== null) {
-              setTimeout(() => {
-                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
-                if (created) {
-                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
-                    ...l,
-                    itemId: created.id,
-                    rate: created.sellingPrice,
-                    taxPercent: created.taxRate ?? 18
-                  } : l));
-                }
-              }, 50);
-            }
-            setActiveItemLineIdx(null);
+            setPendingCreatedItemName(newItem.name);
           }}
         />
       )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -16,7 +16,8 @@ import {
   X,
   UserPlus,
   PackagePlus,
-  FilePlus
+  FilePlus,
+  CheckCircle2
 } from 'lucide-react';
 import { ProformaInvoice, Party, Item, InvoiceLineItem, AppSettings, ProformaStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
@@ -24,6 +25,7 @@ import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
+import ItemSearchSelect from './ItemSearchSelect';
 
 interface ProformaInvoicesViewProps {
   proformaInvoices: ProformaInvoice[];
@@ -82,6 +84,32 @@ export default function ProformaInvoicesView({
     discountPercent: number;
     taxPercent: number;
   }[]>([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
+
+  const [pendingCreatedItemName, setPendingCreatedItemName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pendingCreatedItemName && activeItemLineIdx !== null) {
+      const created = items.find(
+        (i) => i.name.trim().toLowerCase() === pendingCreatedItemName.trim().toLowerCase()
+      );
+      if (created) {
+        setLineItems((prev) =>
+          prev.map((l, idx) =>
+            idx === activeItemLineIdx
+              ? {
+                  ...l,
+                  itemId: created.id,
+                  rate: created.sellingPrice,
+                  taxPercent: created.taxRate ?? 18
+                }
+              : l
+          )
+        );
+        setPendingCreatedItemName(null);
+        setActiveItemLineIdx(null);
+      }
+    }
+  }, [items, pendingCreatedItemName, activeItemLineIdx]);
 
   const handleOpenDuplicate = (pi: ProformaInvoice) => {
     setPartyId(pi.partyId);
@@ -278,26 +306,27 @@ export default function ProformaInvoicesView({
                 {lineItems.map((line, idx) => (
                   <tr key={idx}>
                     <td className="p-3">
-                      <div className="flex items-center gap-1.5">
-                        <select required value={line.itemId} onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)} className="w-full border rounded p-1 text-xs font-semibold">
-                          <option value="">Select Item</option>
-                          {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-                        </select>
-                        {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
-                          <button
-                            type="button"
-                            title="Quick Add Item"
-                            onClick={() => {
-                              setActiveItemLineIdx(idx);
-                              setQuickItemSearchText('');
-                              setIsQuickItemOpen(true);
-                            }}
-                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs shrink-0 cursor-pointer"
-                          >
-                            <PackagePlus size={13} />
-                          </button>
-                        )}
-                      </div>
+                      <ItemSearchSelect
+                        selectedItemId={line.itemId}
+                        onSelectItem={(selectedItem) => {
+                          handleLineItemChange(idx, 'itemId', selectedItem.id);
+                          handleLineItemChange(idx, 'rate', selectedItem.sellingPrice);
+                          handleLineItemChange(idx, 'taxPercent', selectedItem.taxRate ?? 18);
+                        }}
+                        onClearSelection={() => {
+                          handleLineItemChange(idx, 'itemId', '');
+                        }}
+                        items={items}
+                        onRequestCreateItem={(searchText) => {
+                          setActiveItemLineIdx(idx);
+                          setQuickItemSearchText(searchText);
+                          setIsQuickItemOpen(true);
+                        }}
+                        canCreateItem={Boolean(onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction))}
+                        blockedMessage="New items can only be created from the Items module according to system settings."
+                        priceType="sellingPrice"
+                        placeholder="Search item..."
+                      />
                     </td>
                     <td className="p-3">
                       <NumericInput
@@ -559,29 +588,13 @@ export default function ProformaInvoicesView({
       {isQuickItemOpen && onAddItem && (
         <QuickCreateItemModal
           isOpen={isQuickItemOpen}
-          onClose={() => {
-            setIsQuickItemOpen(false);
-            setActiveItemLineIdx(null);
-          }}
+          onClose={() => setIsQuickItemOpen(false)}
           initialSearchText={quickItemSearchText}
           existingItems={items}
           onSaveItem={(newItem) => {
             onAddItem(newItem);
             setIsQuickItemOpen(false);
-            if (activeItemLineIdx !== null) {
-              setTimeout(() => {
-                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
-                if (created) {
-                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
-                    ...l,
-                    itemId: created.id,
-                    rate: created.sellingPrice,
-                    taxPercent: created.taxRate ?? 18
-                  } : l));
-                }
-              }, 50);
-            }
-            setActiveItemLineIdx(null);
+            setPendingCreatedItemName(newItem.name);
           }}
         />
       )}
