@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -12,13 +12,22 @@ import {
   ChevronRight,
   Eye,
   ArrowUpDown,
-  X
+  X,
+  UserPlus,
+  AlertCircle
 } from 'lucide-react';
 import { Party, PartyType, BalanceType, AppSettings } from '../types';
 import { AppState } from '../data';
 import PartyLedgerView from './PartyLedgerView';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
+import {
+  getPrefillParamsFromUrl,
+  updateUrlWithPrefill,
+  clearPrefillFromUrl,
+  detectSmartPrefill,
+  findExactMatch
+} from '../utils/searchOrCreate';
 
 interface PartiesViewProps {
   parties: Party[];
@@ -51,6 +60,17 @@ export default function PartiesView({
   const [filterStatus, setFilterStatus] = useState<string>('Active');
   const [sortField, setSortField] = useState<keyof Party>('name');
   const [sortAsc, setSortAsc] = useState(true);
+  const [prefillNotice, setPrefillNotice] = useState<string | null>(null);
+
+  // Check URL prefill parameters on mount
+  useEffect(() => {
+    const params = getPrefillParamsFromUrl();
+    if (params.prefillName || params.prefillPhone || params.prefillEmail || params.prefillGst) {
+      const text = params.prefillName || params.prefillPhone || params.prefillEmail || params.prefillGst || '';
+      handleOpenAdd(text, params.prefillType as PartyType);
+      clearPrefillFromUrl();
+    }
+  }, []);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -161,8 +181,35 @@ export default function PartiesView({
     setIsEditMode(false);
   };
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = (initialSearchText?: string, partyType?: PartyType) => {
     resetForm();
+    if (partyType) {
+      setType(partyType);
+    }
+    if (initialSearchText) {
+      const smart = detectSmartPrefill(initialSearchText);
+      if (smart.type === 'phone') {
+        setPhone(smart.value);
+        setName('');
+      } else if (smart.type === 'email') {
+        setEmail(smart.value);
+        setName('');
+      } else if (smart.type === 'gst') {
+        setGstNumber(smart.value);
+        setGstRegistration('Registered');
+        setName('');
+      } else {
+        setName(smart.value);
+      }
+      setPrefillNotice(`Creating a new party from search: "${initialSearchText}"`);
+      updateUrlWithPrefill('parties', {
+        prefillName: smart.type === 'name' ? smart.value : undefined,
+        prefillPhone: smart.type === 'phone' ? smart.value : undefined,
+        prefillEmail: smart.type === 'email' ? smart.value : undefined,
+        prefillGst: smart.type === 'gst' ? smart.value : undefined,
+        prefillType: partyType
+      });
+    }
     setIsEditMode(false);
     setIsOpenForm(true);
   };
@@ -279,6 +326,22 @@ export default function PartiesView({
     if (!name || !phone || !billingLine1) {
       alert('Please fill in Name, Phone, and Billing Address (Line 1) as they are mandatory.');
       return;
+    }
+
+    // Duplicate party check
+    const match = findExactMatch(
+      parties.filter((p) => p.id !== selectedPartyId),
+      name,
+      ['name', 'companyName', 'phone', 'gstNumber', 'email']
+    );
+    if (match) {
+      if (
+        !confirm(
+          `A party named "${match.name}" (Phone: ${match.phone}) already exists. Are you sure you want to save a duplicate?`
+        )
+      ) {
+        return;
+      }
     }
 
     const composedBilling = [billingLine1, billingLine2, billingCity, billingState, billingZip, billingCountry].filter(Boolean).join(', ');
@@ -449,6 +512,18 @@ export default function PartiesView({
             </button>
           </div>
         </div>
+
+        {prefillNotice && (
+          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2 font-semibold">
+              <UserPlus size={16} className="text-blue-600 shrink-0" />
+              <span>{prefillNotice}</span>
+            </div>
+            <span className="text-[10px] text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-200 font-bold">
+              Smart Prefilled
+            </span>
+          </div>
+        )}
 
         {/* Full-width Form Grid */}
         <form onSubmit={handleSubmit} className="space-y-8 pb-20">
@@ -991,7 +1066,16 @@ export default function PartiesView({
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim()) {
+                const match = findExactMatch(parties, searchQuery.trim(), ['name', 'companyName', 'phone', 'gstNumber', 'email']);
+                if (!match) {
+                  e.preventDefault();
+                  handleOpenAdd(searchQuery.trim());
+                }
+              }
+            }}
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 font-medium"
           />
           {searchQuery && (
             <button
@@ -1082,7 +1166,33 @@ export default function PartiesView({
               {currentItems.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
-                    No matching records found.
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                        <UserPlus size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">
+                          {searchQuery.trim()
+                            ? `No matching party found for "${searchQuery.trim()}".`
+                            : 'No parties registered yet.'}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {searchQuery.trim()
+                            ? 'Would you like to register this as a new business party?'
+                            : 'Click "Add New Party" to create your first client or vendor.'}
+                        </p>
+                      </div>
+                      {searchQuery.trim() && isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAdd(searchQuery.trim())}
+                          className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                        >
+                          <Plus size={15} />
+                          <span>Add "{searchQuery.trim()}" as a new party</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (

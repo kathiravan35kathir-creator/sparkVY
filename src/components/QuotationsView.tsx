@@ -14,12 +14,17 @@ import {
   User,
   PlusCircle,
   FileSpreadsheet,
-  X
+  X,
+  UserPlus,
+  PackagePlus,
+  FilePlus
 } from 'lucide-react';
 import { Quotation, QuotationLineItem, Party, Item, QuotationStatus, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
+import QuickCreatePartyModal from './QuickCreatePartyModal';
+import QuickCreateItemModal from './QuickCreateItemModal';
 
 interface QuotationsViewProps {
   quotations: Quotation[];
@@ -31,6 +36,8 @@ interface QuotationsViewProps {
   onReviseEstimate?: (id: string) => void;
   onConvertEstimateToFinal?: (id: string) => void;
   onDeleteQuotation?: (id: string) => void;
+  onAddParty?: (party: Omit<Party, 'id' | 'code' | 'currentBalance' | 'createdAt' | 'updatedAt'>) => void;
+  onAddItem?: (item: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => void;
   isAdmin: boolean;
   settings: AppSettings;
   onCheckPin?: (action: string, onConfirm: () => void) => void;
@@ -47,6 +54,8 @@ export default function QuotationsView({
   onReviseEstimate,
   onConvertEstimateToFinal,
   onDeleteQuotation,
+  onAddParty,
+  onAddItem,
   isAdmin,
   settings,
   onCheckPin,
@@ -59,6 +68,13 @@ export default function QuotationsView({
   const [formMode, setFormMode] = useState<'create' | 'edit' | 'duplicate' | null>(null);
   const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [printingQuotation, setPrintingQuotation] = useState<Quotation | null>(null);
+
+  // Quick Create Modals
+  const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
+  const [quickPartySearchText, setQuickPartySearchText] = useState('');
+  const [isQuickItemOpen, setIsQuickItemOpen] = useState(false);
+  const [quickItemSearchText, setQuickItemSearchText] = useState('');
+  const [activeItemLineIdx, setActiveItemLineIdx] = useState<number | null>(null);
 
   // New Quotation Fields
   const [partyId, setPartyId] = useState('');
@@ -331,7 +347,22 @@ export default function QuotationsView({
               </div>
 
               <div className="md:col-span-1">
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">Select Customer (Client/Org) *</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700">Select Customer (Client/Org) *</label>
+                  {onAddParty && !(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickPartySearchText('');
+                        setIsQuickPartyOpen(true);
+                      }}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <UserPlus size={13} />
+                      <span>+ Quick New Customer</span>
+                    </button>
+                  )}
+                </div>
                 <select
                   required
                   value={partyId}
@@ -345,6 +376,11 @@ export default function QuotationsView({
                     </option>
                   ))}
                 </select>
+                {(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                  <p className="text-[10px] text-amber-700 mt-1 font-medium">
+                    ⚠️ Party creation from forms is disabled in settings.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -394,18 +430,42 @@ export default function QuotationsView({
                     {lineItems.map((line, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/20">
                         <td className="py-2 px-3">
-                          <select
-                            value={line.itemId}
-                            onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)}
-                            className="w-full border border-slate-150 rounded px-2.5 py-1 text-xs focus:outline-none bg-white text-slate-800 font-semibold"
-                          >
-                            <option value="">-- Choose Catalog Item --</option>
-                            {items.map((it) => (
-                              <option key={it.id} value={it.id}>
-                                {it.code} - {it.name} [₹{it.sellingPrice}]
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                value={line.itemId}
+                                onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)}
+                                className="w-full border border-slate-150 rounded px-2.5 py-1 text-xs focus:outline-none bg-white text-slate-800 font-semibold"
+                              >
+                                <option value="">-- Choose Catalog Item --</option>
+                                {items.map((it) => (
+                                  <option key={it.id} value={it.id}>
+                                    {it.code} - {it.name} [₹{it.sellingPrice}]
+                                  </option>
+                                ))}
+                              </select>
+                              {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                                <button
+                                  type="button"
+                                  title="Quick Add New Catalog Item"
+                                  onClick={() => {
+                                    setActiveItemLineIdx(idx);
+                                    setQuickItemSearchText('');
+                                    setIsQuickItemOpen(true);
+                                  }}
+                                  className="py-1 px-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded text-xs font-bold shrink-0 flex items-center gap-1 cursor-pointer"
+                                >
+                                  <PackagePlus size={13} />
+                                  <span className="hidden sm:inline">Add</span>
+                                </button>
+                              )}
+                            </div>
+                            {(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                              <p className="text-[10px] text-amber-700 font-medium">
+                                ⚠️ Item creation from forms is disabled in settings.
+                              </p>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 px-3">
                           <NumericInput
@@ -657,7 +717,33 @@ export default function QuotationsView({
                   {filteredQuotations.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
-                        No matching records found.
+                        <div className="flex flex-col items-center justify-center gap-3">
+                          <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                            <FilePlus size={24} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-700">
+                              {searchQuery.trim()
+                                ? `No quotations found matching "${searchQuery.trim()}".`
+                                : 'No quotations recorded yet.'}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {searchQuery.trim()
+                                ? 'Would you like to draft a new proposal or estimate?'
+                                : 'Click "Draft Quotation" to create your first proposal.'}
+                            </p>
+                          </div>
+                          {searchQuery.trim() && isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setFormMode('create')}
+                              className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                            >
+                              <Plus size={15} />
+                              <span>Draft New Quotation Proposal</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -800,6 +886,56 @@ export default function QuotationsView({
           onClose={() => setPrintingQuotation(null)}
           onCheckPin={onCheckPin}
           onLogCommunication={onLogCommunication}
+        />
+      )}
+
+      {/* Quick Create Party Modal */}
+      {isQuickPartyOpen && onAddParty && (
+        <QuickCreatePartyModal
+          isOpen={isQuickPartyOpen}
+          onClose={() => setIsQuickPartyOpen(false)}
+          defaultType="Customer"
+          initialSearchText={quickPartySearchText}
+          existingParties={parties}
+          onSaveParty={(newParty) => {
+            onAddParty(newParty);
+            setIsQuickPartyOpen(false);
+            setTimeout(() => {
+              const created = parties.find(p => p.name.toLowerCase() === newParty.name.toLowerCase());
+              if (created) setPartyId(created.id);
+            }, 50);
+          }}
+        />
+      )}
+
+      {/* Quick Create Item Modal */}
+      {isQuickItemOpen && onAddItem && (
+        <QuickCreateItemModal
+          isOpen={isQuickItemOpen}
+          onClose={() => {
+            setIsQuickItemOpen(false);
+            setActiveItemLineIdx(null);
+          }}
+          initialSearchText={quickItemSearchText}
+          existingItems={items}
+          onSaveItem={(newItem) => {
+            onAddItem(newItem);
+            setIsQuickItemOpen(false);
+            if (activeItemLineIdx !== null) {
+              setTimeout(() => {
+                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+                if (created) {
+                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
+                    ...l,
+                    itemId: created.id,
+                    rate: created.sellingPrice,
+                    taxPercent: created.taxRate ?? 18
+                  } : l));
+                }
+              }, 50);
+            }
+            setActiveItemLineIdx(null);
+          }}
         />
       )}
     </div>

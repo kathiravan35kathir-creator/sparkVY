@@ -1712,6 +1712,8 @@ export default function App() {
               onReviseEstimate={handleReviseEstimate}
               onConvertEstimateToFinal={handleConvertEstimateToFinal}
               onDeleteQuotation={handleDeleteQuotation}
+              onAddParty={handleAddParty}
+              onAddItem={handleAddItem}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
               onCheckPin={checkPin}
@@ -1727,6 +1729,8 @@ export default function App() {
               onUpdateProformaStatus={(id, status) => setDb(prev => ({ ...prev, proformaInvoices: prev.proformaInvoices.map(p => p.id === id ? { ...p, status } : p) }))}
               onConvertToSalesInvoice={handleConvertProformaToInvoice}
               onDeleteProforma={handleDeleteProformaInvoice}
+              onAddParty={handleAddParty}
+              onAddItem={handleAddItem}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
@@ -1741,6 +1745,8 @@ export default function App() {
               onRecordPayment={handleRecordPayment}
               onCancelInvoice={(id) => checkPin('cancel_invoice', () => handleCancelInvoice(id))}
               onDeleteInvoice={handleDeleteInvoice}
+              onAddParty={handleAddParty}
+              onAddItem={handleAddItem}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
               onCheckPin={checkPin}
@@ -1813,6 +1819,8 @@ export default function App() {
                 }
               }}
               onDeleteProcurement={handleDeleteProcurementOrder}
+              onAddParty={handleAddParty}
+              onAddItem={handleAddItem}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
@@ -1824,6 +1832,8 @@ export default function App() {
               items={db.items.filter(it => !it.isDeleted)}
               onAddPurchase={handleAddPurchase}
               onDeletePurchase={handleDeletePurchase}
+              onAddParty={handleAddParty}
+              onAddItem={handleAddItem}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />

@@ -13,12 +13,17 @@ import {
   ChevronRight,
   Printer,
   Copy,
-  X
+  X,
+  UserPlus,
+  PackagePlus,
+  FilePlus
 } from 'lucide-react';
 import { Purchase, Party, Item, PurchaseLineItem, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
+import QuickCreatePartyModal from './QuickCreatePartyModal';
+import QuickCreateItemModal from './QuickCreateItemModal';
 
 interface PurchasesViewProps {
   purchases: Purchase[];
@@ -26,6 +31,8 @@ interface PurchasesViewProps {
   items: Item[];
   onAddPurchase: (purchasePayload: Omit<Purchase, 'id' | 'purchaseNumber' | 'createdAt'>) => void;
   onDeletePurchase?: (id: string) => void;
+  onAddParty?: (party: Omit<Party, 'id' | 'code' | 'currentBalance' | 'createdAt' | 'updatedAt'>) => void;
+  onAddItem?: (item: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -36,6 +43,8 @@ export default function PurchasesView({
   items,
   onAddPurchase,
   onDeletePurchase,
+  onAddParty,
+  onAddItem,
   isAdmin,
   settings
 }: PurchasesViewProps) {
@@ -47,6 +56,13 @@ export default function PurchasesView({
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [printingPurchase, setPrintingPurchase] = useState<Purchase | null>(null);
   const [isBulkPrinting, setIsBulkPrinting] = useState(false);
+
+  // Quick Create Modals
+  const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
+  const [quickPartySearchText, setQuickPartySearchText] = useState('');
+  const [isQuickItemOpen, setIsQuickItemOpen] = useState(false);
+  const [quickItemSearchText, setQuickItemSearchText] = useState('');
+  const [activeItemLineIdx, setActiveItemLineIdx] = useState<number | null>(null);
 
   // Supplier list filter (Supplier or Both)
   const suppliers = parties.filter((p) => p.type === 'Supplier' || p.type === 'Both' && p.isActive);
@@ -270,7 +286,22 @@ export default function PurchasesView({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">Active Supplier <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700">Active Supplier <span className="text-red-500">*</span></label>
+                  {onAddParty && !(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickPartySearchText('');
+                        setIsQuickPartyOpen(true);
+                      }}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <UserPlus size={13} />
+                      <span>+ Quick New Supplier</span>
+                    </button>
+                  )}
+                </div>
                 <select
                   required
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-semibold"
@@ -284,6 +315,11 @@ export default function PurchasesView({
                     </option>
                   ))}
                 </select>
+                {(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                  <p className="text-[10px] text-amber-700 mt-1 font-medium">
+                    ⚠️ Party creation from purchase forms is disabled in settings.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -338,7 +374,23 @@ export default function PurchasesView({
               {lineItems.map((line, idx) => (
                 <div key={idx} className="bg-slate-50 border border-slate-200/65 p-4 rounded-xl grid grid-cols-1 md:grid-cols-12 gap-4 items-end font-sans">
                   <div className="col-span-1 md:col-span-3">
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Product / Material Name</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700">Product / Material Name</label>
+                      {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveItemLineIdx(idx);
+                            setQuickItemSearchText('');
+                            setIsQuickItemOpen(true);
+                          }}
+                          className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                        >
+                          <PackagePlus size={13} />
+                          <span>+ Quick New Item</span>
+                        </button>
+                      )}
+                    </div>
                     <select
                       required
                       className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-semibold"
@@ -352,6 +404,11 @@ export default function PurchasesView({
                         </option>
                       ))}
                     </select>
+                    {(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                      <p className="text-[10px] text-amber-700 mt-1 font-medium">
+                        ⚠️ Item creation from purchase forms is disabled in settings.
+                      </p>
+                    )}
                   </div>
 
                   <div className="col-span-1 md:col-span-1">
@@ -623,9 +680,29 @@ export default function PurchasesView({
             <div className="overflow-x-auto">
               {filteredPurchases.length === 0 ? (
                 <div className="p-12 text-center">
-                  <ShoppingBag className="mx-auto text-slate-300 mb-3" size={32} />
-                  <p className="font-bold text-slate-500 text-sm">No inbound purchase bills registered</p>
-                  <p className="text-xs text-slate-400 mt-1">Click "Record Inbound Purchase" to log inventory stock increments.</p>
+                  <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <FilePlus size={24} />
+                  </div>
+                  <p className="font-bold text-slate-700 text-sm">
+                    {searchQuery.trim()
+                      ? `No purchase bills found matching "${searchQuery.trim()}".`
+                      : 'No inbound purchase bills registered'}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {searchQuery.trim()
+                      ? 'Would you like to record a new purchase bill for this query?'
+                      : 'Click "Record Inbound Purchase" to log inventory stock increments.'}
+                  </p>
+                  {searchQuery.trim() && isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setIsAdding(true)}
+                      className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                    >
+                      <Plus size={15} />
+                      <span>Record Inbound Purchase Bill</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <table className="w-full text-left border-collapse">
@@ -838,6 +915,56 @@ export default function PurchasesView({
           }}
           settings={settings}
           onClose={() => setIsBulkPrinting(false)}
+        />
+      )}
+
+      {/* Quick Create Party Modal */}
+      {isQuickPartyOpen && onAddParty && (
+        <QuickCreatePartyModal
+          isOpen={isQuickPartyOpen}
+          onClose={() => setIsQuickPartyOpen(false)}
+          defaultType="Supplier"
+          initialSearchText={quickPartySearchText}
+          existingParties={parties}
+          onSaveParty={(newParty) => {
+            onAddParty(newParty);
+            setIsQuickPartyOpen(false);
+            setTimeout(() => {
+              const created = parties.find(p => p.name.toLowerCase() === newParty.name.toLowerCase());
+              if (created) setPartyId(created.id);
+            }, 50);
+          }}
+        />
+      )}
+
+      {/* Quick Create Item Modal */}
+      {isQuickItemOpen && onAddItem && (
+        <QuickCreateItemModal
+          isOpen={isQuickItemOpen}
+          onClose={() => {
+            setIsQuickItemOpen(false);
+            setActiveItemLineIdx(null);
+          }}
+          initialSearchText={quickItemSearchText}
+          existingItems={items}
+          onSaveItem={(newItem) => {
+            onAddItem(newItem);
+            setIsQuickItemOpen(false);
+            if (activeItemLineIdx !== null) {
+              setTimeout(() => {
+                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+                if (created) {
+                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
+                    ...l,
+                    itemId: created.id,
+                    purchasePrice: created.purchasePrice || created.sellingPrice,
+                    taxPercent: created.taxRate ?? 18
+                  } : l));
+                }
+              }, 50);
+            }
+            setActiveItemLineIdx(null);
+          }}
         />
       )}
     </div>

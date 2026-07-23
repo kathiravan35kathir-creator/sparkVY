@@ -13,12 +13,17 @@ import {
   Lock,
   ArrowRight,
   Trash2,
-  X
+  X,
+  UserPlus,
+  PackagePlus,
+  FilePlus
 } from 'lucide-react';
 import { ProformaInvoice, Party, Item, InvoiceLineItem, AppSettings, ProformaStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
+import QuickCreatePartyModal from './QuickCreatePartyModal';
+import QuickCreateItemModal from './QuickCreateItemModal';
 
 interface ProformaInvoicesViewProps {
   proformaInvoices: ProformaInvoice[];
@@ -28,6 +33,8 @@ interface ProformaInvoicesViewProps {
   onUpdateProformaStatus: (id: string, status: ProformaStatus) => void;
   onConvertToSalesInvoice: (proformaId: string) => void;
   onDeleteProforma?: (id: string) => void;
+  onAddParty?: (party: Omit<Party, 'id' | 'code' | 'currentBalance' | 'createdAt' | 'updatedAt'>) => void;
+  onAddItem?: (item: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -40,6 +47,8 @@ export default function ProformaInvoicesView({
   onUpdateProformaStatus,
   onConvertToSalesInvoice,
   onDeleteProforma,
+  onAddParty,
+  onAddItem,
   isAdmin,
   settings
 }: ProformaInvoicesViewProps) {
@@ -47,6 +56,13 @@ export default function ProformaInvoicesView({
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [isCreating, setIsCreating] = useState(false);
   const [viewingProforma, setViewingProforma] = useState<ProformaInvoice | null>(null);
+
+  // Quick Create Modals
+  const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
+  const [quickPartySearchText, setQuickPartySearchText] = useState('');
+  const [isQuickItemOpen, setIsQuickItemOpen] = useState(false);
+  const [quickItemSearchText, setQuickItemSearchText] = useState('');
+  const [activeItemLineIdx, setActiveItemLineIdx] = useState<number | null>(null);
 
   // Form Fields
   const [partyId, setPartyId] = useState('');
@@ -215,8 +231,23 @@ export default function ProformaInvoicesView({
         <form onSubmit={handleSave} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-200">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Customer</label>
-              <select required value={partyId} onChange={(e) => setPartyId(e.target.value)} className="w-full border rounded-md p-2 text-xs">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700">Customer</label>
+                {onAddParty && !(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickPartySearchText('');
+                      setIsQuickPartyOpen(true);
+                    }}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <UserPlus size={13} />
+                    <span>+ Quick Customer</span>
+                  </button>
+                )}
+              </div>
+              <select required value={partyId} onChange={(e) => setPartyId(e.target.value)} className="w-full border rounded-md p-2 text-xs font-semibold">
                 <option value="">Select Customer</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -247,10 +278,26 @@ export default function ProformaInvoicesView({
                 {lineItems.map((line, idx) => (
                   <tr key={idx}>
                     <td className="p-3">
-                      <select required value={line.itemId} onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)} className="w-full border rounded p-1 text-xs">
-                        <option value="">Select Item</option>
-                        {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-                      </select>
+                      <div className="flex items-center gap-1.5">
+                        <select required value={line.itemId} onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)} className="w-full border rounded p-1 text-xs font-semibold">
+                          <option value="">Select Item</option>
+                          {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                        </select>
+                        {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                          <button
+                            type="button"
+                            title="Quick Add Item"
+                            onClick={() => {
+                              setActiveItemLineIdx(idx);
+                              setQuickItemSearchText('');
+                              setIsQuickItemOpen(true);
+                            }}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs shrink-0 cursor-pointer"
+                          >
+                            <PackagePlus size={13} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3">
                       <NumericInput
@@ -407,7 +454,37 @@ export default function ProformaInvoicesView({
           </thead>
           <tbody className="divide-y text-xs text-slate-700">
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} className="p-12 text-center text-slate-500 font-medium">No matching records found.</td></tr>
+              <tr>
+                <td colSpan={6} className="p-12 text-center text-slate-500 font-medium">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                      <FilePlus size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">
+                        {searchQuery.trim()
+                          ? `No proforma invoices found matching "${searchQuery.trim()}".`
+                          : 'No proforma invoices created yet.'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {searchQuery.trim()
+                          ? 'Would you like to draft a new proforma invoice for this query?'
+                          : 'Click "New Proforma Invoice" to issue a formal estimate.'}
+                      </p>
+                    </div>
+                    {searchQuery.trim() && isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCreating(true)}
+                        className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-lg text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                      >
+                        <Plus size={15} />
+                        <span>Create New Proforma Invoice</span>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
             ) : (
               filtered.map((pi) => (
                 <tr key={pi.id} className="hover:bg-slate-50 transition">
@@ -456,6 +533,56 @@ export default function ProformaInvoicesView({
           data={viewingProforma}
           settings={settings}
           onClose={() => setViewingProforma(null)}
+        />
+      )}
+
+      {/* Quick Create Party Modal */}
+      {isQuickPartyOpen && onAddParty && (
+        <QuickCreatePartyModal
+          isOpen={isQuickPartyOpen}
+          onClose={() => setIsQuickPartyOpen(false)}
+          defaultType="Customer"
+          initialSearchText={quickPartySearchText}
+          existingParties={parties}
+          onSaveParty={(newParty) => {
+            onAddParty(newParty);
+            setIsQuickPartyOpen(false);
+            setTimeout(() => {
+              const created = parties.find(p => p.name.toLowerCase() === newParty.name.toLowerCase());
+              if (created) setPartyId(created.id);
+            }, 50);
+          }}
+        />
+      )}
+
+      {/* Quick Create Item Modal */}
+      {isQuickItemOpen && onAddItem && (
+        <QuickCreateItemModal
+          isOpen={isQuickItemOpen}
+          onClose={() => {
+            setIsQuickItemOpen(false);
+            setActiveItemLineIdx(null);
+          }}
+          initialSearchText={quickItemSearchText}
+          existingItems={items}
+          onSaveItem={(newItem) => {
+            onAddItem(newItem);
+            setIsQuickItemOpen(false);
+            if (activeItemLineIdx !== null) {
+              setTimeout(() => {
+                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+                if (created) {
+                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
+                    ...l,
+                    itemId: created.id,
+                    rate: created.sellingPrice,
+                    taxPercent: created.taxRate ?? 18
+                  } : l));
+                }
+              }, 50);
+            }
+            setActiveItemLineIdx(null);
+          }}
         />
       )}
     </div>

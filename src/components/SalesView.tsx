@@ -16,12 +16,17 @@ import {
   DollarSign,
   Calendar,
   Trash2,
-  X
+  X,
+  UserPlus,
+  PackagePlus,
+  FilePlus
 } from 'lucide-react';
 import { Invoice, Party, Item, InvoiceStatus, InvoiceLineItem, PaymentMethod, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
+import QuickCreatePartyModal from './QuickCreatePartyModal';
+import QuickCreateItemModal from './QuickCreateItemModal';
 
 interface SalesViewProps {
   invoices: Invoice[];
@@ -32,6 +37,8 @@ interface SalesViewProps {
   onRecordPayment: (invoiceId: string, amount: number, method: PaymentMethod, accountId: string, notes?: string) => void;
   onCancelInvoice: (id: string) => void;
   onDeleteInvoice?: (id: string) => void;
+  onAddParty?: (party: Omit<Party, 'id' | 'code' | 'currentBalance' | 'createdAt' | 'updatedAt'>) => void;
+  onAddItem?: (item: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => void;
   isAdmin: boolean;
   settings: AppSettings;
   onCheckPin?: (action: string, onConfirm: () => void) => void;
@@ -47,6 +54,8 @@ export default function SalesView({
   onRecordPayment,
   onCancelInvoice,
   onDeleteInvoice,
+  onAddParty,
+  onAddItem,
   isAdmin,
   settings,
   onCheckPin,
@@ -62,6 +71,13 @@ export default function SalesView({
   const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [isBulkPrinting, setIsBulkPrinting] = useState(false);
+
+  // Quick Create Modals
+  const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
+  const [quickPartySearchText, setQuickPartySearchText] = useState('');
+  const [isQuickItemOpen, setIsQuickItemOpen] = useState(false);
+  const [quickItemSearchText, setQuickItemSearchText] = useState('');
+  const [activeItemLineIdx, setActiveItemLineIdx] = useState<number | null>(null);
 
   // Form Fields
   const [partyId, setPartyId] = useState('');
@@ -313,7 +329,22 @@ export default function SalesView({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">Customer / Client Party <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700">Customer / Client Party <span className="text-red-500">*</span></label>
+                  {onAddParty && !(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickPartySearchText('');
+                        setIsQuickPartyOpen(true);
+                      }}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <UserPlus size={13} />
+                      <span>+ Quick New Customer</span>
+                    </button>
+                  )}
+                </div>
                 <select
                   required
                   value={partyId}
@@ -327,6 +358,11 @@ export default function SalesView({
                     </option>
                   ))}
                 </select>
+                {(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                  <p className="text-[10px] text-amber-700 mt-1 font-medium">
+                    ⚠️ Creating new parties directly from transaction forms is disabled in Settings.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -376,19 +412,43 @@ export default function SalesView({
                   {lineItems.map((line, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50">
                       <td className="py-3.5 px-4">
-                        <select
-                          required
-                          value={line.itemId}
-                          onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)}
-                          className="w-full h-[36px] px-2 bg-white border border-[#D8E0EA] rounded text-xs text-slate-900 focus:outline-none font-bold"
-                        >
-                          <option value="">-- Choose Catalog Item --</option>
-                          {items.map((it) => (
-                            <option key={it.id} value={it.id}>
-                              {it.code} - {it.name} [₹{it.sellingPrice}]
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              required
+                              value={line.itemId}
+                              onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)}
+                              className="w-full h-[36px] px-2 bg-white border border-[#D8E0EA] rounded text-xs text-slate-900 focus:outline-none font-bold"
+                            >
+                              <option value="">-- Choose Catalog Item --</option>
+                              {items.map((it) => (
+                                <option key={it.id} value={it.id}>
+                                  {it.code} - {it.name} [₹{it.sellingPrice}]
+                                </option>
+                              ))}
+                            </select>
+                            {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                              <button
+                                type="button"
+                                title="Quick Add New Catalog Item"
+                                onClick={() => {
+                                  setActiveItemLineIdx(idx);
+                                  setQuickItemSearchText('');
+                                  setIsQuickItemOpen(true);
+                                }}
+                                className="h-[36px] px-2 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 rounded text-xs font-bold shrink-0 flex items-center gap-1 cursor-pointer"
+                              >
+                                <PackagePlus size={14} />
+                                <span className="hidden sm:inline">Add</span>
+                              </button>
+                            )}
+                          </div>
+                          {(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                            <p className="text-[10px] text-amber-700 font-medium">
+                              ⚠️ Item creation from invoice form is disabled in settings.
+                            </p>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-3">
                         <NumericInput
@@ -672,7 +732,35 @@ export default function SalesView({
                   {filteredInvoices.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
-                        No matching records found.
+                        <div className="flex flex-col items-center justify-center gap-3">
+                          <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                            <FilePlus size={24} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-700">
+                              {searchQuery.trim()
+                                ? `No sales invoices found matching "${searchQuery.trim()}".`
+                                : 'No sales invoices recorded yet.'}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {searchQuery.trim()
+                                ? 'Would you like to generate a new sales invoice or search for a customer?'
+                                : 'Click "Generate Invoice" to create your first sales bill.'}
+                            </p>
+                          </div>
+                          {searchQuery.trim() && isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCreating(true);
+                              }}
+                              className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                            >
+                              <Plus size={15} />
+                              <span>Generate New Sales Invoice</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -940,6 +1028,57 @@ export default function SalesView({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Quick Create Party Modal */}
+      {isQuickPartyOpen && onAddParty && (
+        <QuickCreatePartyModal
+          isOpen={isQuickPartyOpen}
+          onClose={() => setIsQuickPartyOpen(false)}
+          defaultType="Customer"
+          initialSearchText={quickPartySearchText}
+          existingParties={parties}
+          onSaveParty={(newParty) => {
+            onAddParty(newParty);
+            setIsQuickPartyOpen(false);
+            // Note: the newly created party will appear in parties prop, and we match by name/company
+            setTimeout(() => {
+              const created = parties.find(p => p.name.toLowerCase() === newParty.name.toLowerCase());
+              if (created) setPartyId(created.id);
+            }, 50);
+          }}
+        />
+      )}
+
+      {/* Quick Create Item Modal */}
+      {isQuickItemOpen && onAddItem && (
+        <QuickCreateItemModal
+          isOpen={isQuickItemOpen}
+          onClose={() => {
+            setIsQuickItemOpen(false);
+            setActiveItemLineIdx(null);
+          }}
+          initialSearchText={quickItemSearchText}
+          existingItems={items}
+          onSaveItem={(newItem) => {
+            onAddItem(newItem);
+            setIsQuickItemOpen(false);
+            if (activeItemLineIdx !== null) {
+              setTimeout(() => {
+                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+                if (created) {
+                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
+                    ...l,
+                    itemId: created.id,
+                    rate: created.sellingPrice,
+                    taxPercent: created.taxRate ?? 18
+                  } : l));
+                }
+              }, 50);
+            }
+            setActiveItemLineIdx(null);
+          }}
+        />
       )}
     </div>
   );

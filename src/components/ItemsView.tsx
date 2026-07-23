@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -13,11 +13,20 @@ import {
   ChevronRight,
   Bookmark,
   Copy,
-  X
+  X,
+  PackagePlus,
+  AlertCircle
 } from 'lucide-react';
 import { Item, ItemType, Party, AppSettings } from '../types';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
+import {
+  getPrefillParamsFromUrl,
+  updateUrlWithPrefill,
+  clearPrefillFromUrl,
+  findExactMatch
+} from '../utils/searchOrCreate';
+import { SearchOrCreateInput } from './SearchOrCreateInput';
 
 interface ItemsViewProps {
   items: Item[];
@@ -45,6 +54,7 @@ export default function ItemsView({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterStockStatus, setFilterStockStatus] = useState<string>('All');
+  const [prefillNotice, setPrefillNotice] = useState<string | null>(null);
 
   // Form states
   const [isOpenForm, setIsOpenForm] = useState(false);
@@ -69,6 +79,18 @@ export default function ItemsView({
   const [supplierId, setSupplierId] = useState('');
   const [description, setDescription] = useState('');
 
+  // Check URL prefill query parameters on load
+  useEffect(() => {
+    const params = getPrefillParamsFromUrl();
+    if (params.prefillName) {
+      resetForm();
+      setName(params.prefillName);
+      setPrefillNotice(`Creating a new item from search: "${params.prefillName}"`);
+      setIsOpenForm(true);
+      clearPrefillFromUrl();
+    }
+  }, []);
+
   const resetForm = () => {
     setName('');
     setCategory('');
@@ -89,10 +111,16 @@ export default function ItemsView({
 
     setSelectedItemId(null);
     setIsEditMode(false);
+    setPrefillNotice(null);
   };
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = (initialName?: string) => {
     resetForm();
+    if (initialName) {
+      setName(initialName);
+      setPrefillNotice(`Creating a new item from search: "${initialName}"`);
+      updateUrlWithPrefill('items', { prefillName: initialName });
+    }
     setIsEditMode(false);
     setIsOpenForm(true);
   };
@@ -148,6 +176,22 @@ export default function ItemsView({
     if (!name || !category) {
       alert('Please enter Name and Category');
       return;
+    }
+
+    // Duplicate check
+    const match = findExactMatch(
+      items.filter((i) => i.id !== selectedItemId),
+      name,
+      ['name', 'barcode', 'hsnCode']
+    );
+    if (match) {
+      if (
+        !confirm(
+          `An item named "${match.name}" already exists in your catalog. Are you sure you want to save a duplicate?`
+        )
+      ) {
+        return;
+      }
     }
 
     const payload = {
@@ -264,6 +308,18 @@ export default function ItemsView({
             </button>
           </div>
         </div>
+
+        {prefillNotice && (
+          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2 font-semibold">
+              <PackagePlus size={16} className="text-blue-600 shrink-0" />
+              <span>{prefillNotice}</span>
+            </div>
+            <span className="text-[10px] text-blue-600 bg-white px-2 py-0.5 rounded border border-blue-200 font-bold">
+              Prefilled
+            </span>
+          </div>
+        )}
 
         {/* Full-width Form Grid */}
         <form onSubmit={handleSubmit} className="space-y-8 pb-20">
@@ -559,7 +615,16 @@ export default function ItemsView({
             placeholder="Search items by Name, SKU, Barcode, HSN, Category, Brand/Type..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim()) {
+                const exact = findExactMatch(items, searchQuery.trim(), ['name', 'code', 'barcode', 'sku']);
+                if (!exact) {
+                  e.preventDefault();
+                  handleOpenAdd(searchQuery.trim());
+                }
+              }
+            }}
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-xs focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-all placeholder:text-slate-400 font-medium"
           />
           {searchQuery && (
             <button
@@ -629,7 +694,33 @@ export default function ItemsView({
               {filteredItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
-                    No matching records found.
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                        <Package size={24} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">
+                          {searchQuery.trim()
+                            ? `No matching item found for "${searchQuery.trim()}".`
+                            : 'No items in catalog yet.'}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {searchQuery.trim()
+                            ? 'Would you like to register this as a new catalog product?'
+                            : 'Click "Add Product" to create your first item.'}
+                        </p>
+                      </div>
+                      {searchQuery.trim() && isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAdd(searchQuery.trim())}
+                          className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                        >
+                          <Plus size={15} />
+                          <span>Add "{searchQuery.trim()}" as a new item</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (

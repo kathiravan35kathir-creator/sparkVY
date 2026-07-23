@@ -15,12 +15,18 @@ import {
   ArrowRight,
   FileText,
   Trash2,
-  X
+  X,
+  UserPlus,
+  PackagePlus,
+  FilePlus,
+  Briefcase
 } from 'lucide-react';
 import { ProcurementOrder, Party, Item, PurchaseLineItem, AppSettings, ProcurementStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
+import QuickCreatePartyModal from './QuickCreatePartyModal';
+import QuickCreateItemModal from './QuickCreateItemModal';
 
 interface ProcurementOrdersViewProps {
   procurementOrders: ProcurementOrder[];
@@ -30,6 +36,8 @@ interface ProcurementOrdersViewProps {
   onUpdateProcurementStatus: (id: string, status: ProcurementStatus) => void;
   onConvertToPurchaseInvoice: (orderId: string) => void;
   onDeleteProcurement?: (id: string) => void;
+  onAddParty?: (party: Omit<Party, 'id' | 'code' | 'currentBalance' | 'createdAt' | 'updatedAt'>) => void;
+  onAddItem?: (item: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -42,6 +50,8 @@ export default function ProcurementOrdersView({
   onUpdateProcurementStatus,
   onConvertToPurchaseInvoice,
   onDeleteProcurement,
+  onAddParty,
+  onAddItem,
   isAdmin,
   settings
 }: ProcurementOrdersViewProps) {
@@ -49,6 +59,13 @@ export default function ProcurementOrdersView({
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [isCreating, setIsCreating] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<ProcurementOrder | null>(null);
+
+  // Quick Create Modals
+  const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
+  const [quickPartySearchText, setQuickPartySearchText] = useState('');
+  const [isQuickItemOpen, setIsQuickItemOpen] = useState(false);
+  const [quickItemSearchText, setQuickItemSearchText] = useState('');
+  const [activeItemLineIdx, setActiveItemLineIdx] = useState<number | null>(null);
 
   // Form Fields
   const [partyId, setPartyId] = useState('');
@@ -212,8 +229,23 @@ export default function ProcurementOrdersView({
         <form onSubmit={handleSave} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl border border-slate-200">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Supplier</label>
-              <select required value={partyId} onChange={(e) => setPartyId(e.target.value)} className="w-full border rounded-md p-2 text-xs">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700">Supplier</label>
+                {onAddParty && !(settings?.generalFeatures?.blockNewPartiesFromTransaction) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickPartySearchText('');
+                      setIsQuickPartyOpen(true);
+                    }}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <UserPlus size={13} />
+                    <span>+ Quick Supplier</span>
+                  </button>
+                )}
+              </div>
+              <select required value={partyId} onChange={(e) => setPartyId(e.target.value)} className="w-full border rounded-md p-2 text-xs font-semibold">
                 <option value="">Select Supplier</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -259,10 +291,26 @@ export default function ProcurementOrdersView({
                 {lineItems.map((line, idx) => (
                   <tr key={idx}>
                     <td className="p-3">
-                      <select required value={line.itemId} onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)} className="w-full border rounded p-1 text-xs">
-                        <option value="">Select Item</option>
-                        {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-                      </select>
+                      <div className="flex items-center gap-1.5">
+                        <select required value={line.itemId} onChange={(e) => handleLineItemChange(idx, 'itemId', e.target.value)} className="w-full border rounded p-1 text-xs font-semibold">
+                          <option value="">Select Item</option>
+                          {items.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                        </select>
+                        {onAddItem && !(settings?.generalFeatures?.blockNewItemsFromTransaction) && (
+                          <button
+                            type="button"
+                            title="Quick Add Item"
+                            onClick={() => {
+                              setActiveItemLineIdx(idx);
+                              setQuickItemSearchText('');
+                              setIsQuickItemOpen(true);
+                            }}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs shrink-0 cursor-pointer"
+                          >
+                            <PackagePlus size={13} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3">
                       <NumericInput
@@ -410,7 +458,37 @@ export default function ProcurementOrdersView({
           </thead>
           <tbody className="divide-y text-xs text-slate-700">
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="p-12 text-center text-slate-500 font-medium">No matching records found.</td></tr>
+              <tr>
+                <td colSpan={7} className="p-12 text-center text-slate-500 font-medium">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="p-3 bg-slate-100 rounded-full text-slate-400">
+                      <FilePlus size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">
+                        {searchQuery.trim()
+                          ? `No procurement orders found matching "${searchQuery.trim()}".`
+                          : 'No procurement orders created yet.'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {searchQuery.trim()
+                          ? 'Would you like to create a new procurement order for this query?'
+                          : 'Click "New Procurement Order" to issue a material request.'}
+                      </p>
+                    </div>
+                    {searchQuery.trim() && isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCreating(true)}
+                        className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-lg text-xs shadow-xs transition active:scale-95 cursor-pointer"
+                      >
+                        <Plus size={15} />
+                        <span>Create New Procurement Order</span>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
             ) : (
               filtered.map((po) => (
                 <tr key={po.id} className="hover:bg-slate-50 transition group">
@@ -463,8 +541,56 @@ export default function ProcurementOrdersView({
           onClose={() => setViewingOrder(null)}
         />
       )}
+
+      {/* Quick Create Party Modal */}
+      {isQuickPartyOpen && onAddParty && (
+        <QuickCreatePartyModal
+          isOpen={isQuickPartyOpen}
+          onClose={() => setIsQuickPartyOpen(false)}
+          defaultType="Supplier"
+          initialSearchText={quickPartySearchText}
+          existingParties={parties}
+          onSaveParty={(newParty) => {
+            onAddParty(newParty);
+            setIsQuickPartyOpen(false);
+            setTimeout(() => {
+              const created = parties.find(p => p.name.toLowerCase() === newParty.name.toLowerCase());
+              if (created) setPartyId(created.id);
+            }, 50);
+          }}
+        />
+      )}
+
+      {/* Quick Create Item Modal */}
+      {isQuickItemOpen && onAddItem && (
+        <QuickCreateItemModal
+          isOpen={isQuickItemOpen}
+          onClose={() => {
+            setIsQuickItemOpen(false);
+            setActiveItemLineIdx(null);
+          }}
+          initialSearchText={quickItemSearchText}
+          existingItems={items}
+          onSaveItem={(newItem) => {
+            onAddItem(newItem);
+            setIsQuickItemOpen(false);
+            if (activeItemLineIdx !== null) {
+              setTimeout(() => {
+                const created = items.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+                if (created) {
+                  setLineItems(prev => prev.map((l, idx) => idx === activeItemLineIdx ? {
+                    ...l,
+                    itemId: created.id,
+                    rate: created.purchasePrice || created.sellingPrice,
+                    taxPercent: created.taxRate ?? 18
+                  } : l));
+                }
+              }, 50);
+            }
+            setActiveItemLineIdx(null);
+          }}
+        />
+      )}
     </div>
   );
 }
-
-import { Briefcase } from 'lucide-react';
