@@ -14,10 +14,13 @@ import {
   Lock,
   ArrowRight,
   FileText,
+  Trash2,
   X
 } from 'lucide-react';
 import { ProcurementOrder, Party, Item, PurchaseLineItem, AppSettings, ProcurementStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface ProcurementOrdersViewProps {
   procurementOrders: ProcurementOrder[];
@@ -26,6 +29,7 @@ interface ProcurementOrdersViewProps {
   onAddProcurement: (order: Omit<ProcurementOrder, 'id' | 'orderNumber' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProcurementStatus: (id: string, status: ProcurementStatus) => void;
   onConvertToPurchaseInvoice: (orderId: string) => void;
+  onDeleteProcurement?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -37,6 +41,7 @@ export default function ProcurementOrdersView({
   onAddProcurement,
   onUpdateProcurementStatus,
   onConvertToPurchaseInvoice,
+  onDeleteProcurement,
   isAdmin,
   settings
 }: ProcurementOrdersViewProps) {
@@ -64,6 +69,26 @@ export default function ProcurementOrdersView({
     taxPercent: number;
   }[]>([{ itemId: '', quantity: 1, rate: 0, taxPercent: 18 }]);
 
+  const handleOpenDuplicate = (po: ProcurementOrder) => {
+    setPartyId(po.partyId);
+    setOrderDate(new Date().toISOString().slice(0, 10));
+    setExpectedDeliveryDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    setReferenceNumber(po.referenceNumber || '');
+    setPaymentTerms(po.paymentTerms || '');
+    setShippingAddress(po.shippingAddress || '');
+    setDeliveryLocation(po.deliveryLocation || '');
+    setAdditionalCharges(po.additionalCharges);
+    setInternalNotes(po.internalNotes || '');
+    setTermsAndConditions(po.termsAndConditions || '');
+    setLineItems(po.items.map(it => ({
+      itemId: it.itemId,
+      quantity: it.quantity,
+      rate: it.rate,
+      taxPercent: it.taxPercent
+    })));
+    setIsCreating(true);
+  };
+
   const suppliers = parties.filter((p) => p.type === 'Supplier' || p.type === 'Both');
 
   const handleLineItemChange = (index: number, field: string, value: any) => {
@@ -87,8 +112,11 @@ export default function ProcurementOrdersView({
       .filter((line) => line.itemId !== '')
       .map((line, idx) => {
         const itemObj = items.find((it) => it.id === line.itemId)!;
-        const baseAmount = line.quantity * line.rate;
-        const taxVal = baseAmount * (line.taxPercent / 100);
+        const q = toSafeNumber(line.quantity);
+        const r = toSafeNumber(line.rate);
+        const t = toSafeNumber(line.taxPercent);
+        const baseAmount = q * r;
+        const taxVal = baseAmount * (t / 100);
         const finalAmount = baseAmount + taxVal;
 
         subtotal += baseAmount;
@@ -98,15 +126,15 @@ export default function ProcurementOrdersView({
           id: `po-line-${Date.now()}-${idx}`,
           itemId: line.itemId,
           itemName: itemObj.name,
-          quantity: line.quantity,
-          rate: line.rate,
-          taxPercent: line.taxPercent,
+          quantity: q,
+          rate: r,
+          taxPercent: t,
           taxAmount: parseFloat(taxVal.toFixed(2)),
           amount: parseFloat(finalAmount.toFixed(2))
         };
       });
 
-    const grandTotal = subtotal + taxAmount + Number(additionalCharges);
+    const grandTotal = subtotal + taxAmount + toSafeNumber(additionalCharges);
 
     return {
       items: mappedItems,
@@ -139,7 +167,7 @@ export default function ProcurementOrdersView({
       subtotal: totals.subtotal,
       taxAmount: totals.taxAmount,
       discountAmount: 0,
-      additionalCharges: Number(additionalCharges),
+      additionalCharges: toSafeNumber(additionalCharges),
       roundOff: 0,
       total: totals.total,
       termsAndConditions,
@@ -237,16 +265,38 @@ export default function ProcurementOrdersView({
                       </select>
                     </td>
                     <td className="p-3">
-                      <input type="number" required min="1" value={line.quantity} onChange={(e) => handleLineItemChange(idx, 'quantity', Number(e.target.value))} className="w-full border rounded p-1 text-center" />
+                      <NumericInput
+                        value={line.quantity}
+                        onChange={(val) => handleLineItemChange(idx, 'quantity', val)}
+                        allowDecimal={true}
+                        decimalScale={3}
+                        min={0}
+                        className="w-full border rounded p-1 text-center font-mono text-xs"
+                      />
                     </td>
                     <td className="p-3">
-                      <input type="number" required value={line.rate} onChange={(e) => handleLineItemChange(idx, 'rate', Number(e.target.value))} className="w-full border rounded p-1 text-right" />
+                      <NumericInput
+                        value={line.rate}
+                        onChange={(val) => handleLineItemChange(idx, 'rate', val)}
+                        allowDecimal={true}
+                        decimalScale={2}
+                        min={0}
+                        className="w-full border rounded p-1 text-right font-mono text-xs"
+                      />
                     </td>
                     <td className="p-3">
-                      <input type="number" value={line.taxPercent} onChange={(e) => handleLineItemChange(idx, 'taxPercent', Number(e.target.value))} className="w-full border rounded p-1 text-right" />
+                      <NumericInput
+                        value={line.taxPercent}
+                        onChange={(val) => handleLineItemChange(idx, 'taxPercent', val)}
+                        allowDecimal={true}
+                        decimalScale={2}
+                        min={0}
+                        max={100}
+                        className="w-full border rounded p-1 text-right font-mono text-xs"
+                      />
                     </td>
                     <td className="p-3 text-right font-mono">
-                      {(line.quantity * line.rate * (1 + line.taxPercent/100)).toFixed(2)}
+                      {(toSafeNumber(line.quantity) * toSafeNumber(line.rate) * (1 + toSafeNumber(line.taxPercent)/100)).toFixed(2)}
                     </td>
                     <td className="p-3 text-center">
                       <button type="button" onClick={() => setLineItems(lineItems.filter((_, i) => i !== idx))} className="text-red-500 hover:bg-red-50 p-1 rounded" disabled={lineItems.length === 1}>&times;</button>
@@ -270,7 +320,14 @@ export default function ProcurementOrdersView({
               <div className="flex justify-between text-xs font-medium"><span>Tax</span><span>₹{totals.taxAmount.toLocaleString()}</span></div>
               <div className="flex justify-between text-xs font-medium">
                 <span>Other Charges</span>
-                <input type="number" value={additionalCharges} onChange={(e) => setAdditionalCharges(Number(e.target.value))} className="w-24 border rounded text-right p-1" />
+                <NumericInput
+                  value={additionalCharges}
+                  onChange={(val) => setAdditionalCharges(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
+                  className="w-24 border rounded text-right p-1 font-mono text-xs"
+                />
               </div>
               <div className="border-t pt-2 flex justify-between items-baseline">
                 <span className="font-bold text-slate-900 uppercase">Grand Total Procurement Value</span>
@@ -372,13 +429,22 @@ export default function ProcurementOrdersView({
                     }`}>{po.status}</span>
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-2">
                       <button onClick={() => setViewingOrder(po)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded" title="Print/Preview"><Printer size={14} /></button>
+                      
+                      {isAdmin && (
+                        <button onClick={() => handleOpenDuplicate(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded" title="Duplicate PO (Save as New)"><Copy size={14} /></button>
+                      )}
+
                       {po.status !== 'Fully Received' && po.status !== 'Cancelled' && (
                         <>
                           <button onClick={() => onUpdateProcurementStatus(po.id, 'Fully Received')} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Mark Fully Received"><CheckCircle2 size={14} /></button>
                           <button onClick={() => { if(confirm('Convert to Purchase Invoice? This will increase inventory stock levels and create a payable ledger entry.')) onConvertToPurchaseInvoice(po.id); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded" title="Convert to Purchase"><FileText size={14} /></button>
                         </>
+                      )}
+
+                      {isAdmin && onDeleteProcurement && (
+                        <button onClick={() => { if (confirm(`Are you sure you want to delete PO ${po.orderNumber}?`)) onDeleteProcurement(po.id); }} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded" title="Move to Trash"><Trash2 size={14} /></button>
                       )}
                     </div>
                   </td>

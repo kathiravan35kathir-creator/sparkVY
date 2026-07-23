@@ -17,6 +17,8 @@ import {
 import { Party, PartyType, BalanceType } from '../types';
 import { AppState } from '../data';
 import PartyLedgerView from './PartyLedgerView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface PartiesViewProps {
   parties: Party[];
@@ -24,6 +26,7 @@ interface PartiesViewProps {
   onEditParty: (id: string, party: Partial<Party>) => void;
   onDeactivateParty: (id: string) => void;
   onReactivateParty: (id: string) => void;
+  onDeleteParty?: (id: string) => void;
   isAdmin: boolean;
   db?: AppState;
   currentUser?: any;
@@ -35,6 +38,7 @@ export default function PartiesView({
   onEditParty,
   onDeactivateParty,
   onReactivateParty,
+  onDeleteParty,
   isAdmin,
   db,
   currentUser
@@ -216,6 +220,59 @@ export default function PartiesView({
     setIsOpenForm(true);
   };
 
+  const handleOpenDuplicate = (party: Party) => {
+    setName(party.name + ' (Copy)');
+    setDisplayName(party.displayName + ' (Copy)');
+    setCompanyName(party.companyName || '');
+    setType(party.type);
+    setContactPerson(party.contactPerson || '');
+    setPhone(party.phone);
+    setAlternatePhone(party.alternatePhone || '');
+    setEmail(party.email || '');
+    setGstRegistration(party.gstRegistration);
+    setGstNumber(party.gstNumber || '');
+    setPan(party.pan || '');
+    setBusinessType(party.businessType || '');
+    setOpeningBalance(party.openingBalance);
+    setBalanceType(party.balanceType);
+    setCreditLimit(party.creditLimit || 50000);
+    setBillingAddress(party.billingAddress);
+    setShippingAddress(party.shippingAddress || '');
+    setNotes(party.notes || '');
+    setPartyStatus(party.isActive);
+
+    // Parse Address
+    const bParts = (party.billingAddress || '').split(',').map(s => s.trim());
+    setBillingLine1(bParts[0] || '');
+    setBillingLine2(bParts[1] || '');
+    setBillingCity(bParts[2] || '');
+    setBillingState(bParts[3] || '');
+    setBillingZip(bParts[4] || '');
+    setBillingCountry(bParts[5] || 'India');
+
+    const sParts = (party.shippingAddress || '').split(',').map(s => s.trim());
+    setShippingLine1(sParts[0] || '');
+    setShippingLine2(sParts[1] || '');
+    setShippingCity(sParts[2] || '');
+    setShippingState(sParts[3] || '');
+    setShippingZip(sParts[4] || '');
+    setShippingCountry(sParts[5] || 'India');
+
+    if (party.billingAddress === party.shippingAddress) {
+      setSameAsBilling(true);
+    } else {
+      setSameAsBilling(false);
+    }
+
+    if (party.gstNumber) {
+      setGstVerified(true);
+    }
+
+    setSelectedPartyId(null); // Save as new
+    setIsEditMode(false);
+    setIsOpenForm(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !phone || !billingLine1) {
@@ -239,9 +296,9 @@ export default function PartiesView({
       gstNumber,
       pan,
       businessType,
-      openingBalance: Number(openingBalance),
+      openingBalance: toSafeNumber(openingBalance),
       balanceType,
-      creditLimit: Number(creditLimit),
+      creditLimit: toSafeNumber(creditLimit),
       billingAddress: composedBilling,
       shippingAddress: composedShipping,
       notes,
@@ -595,22 +652,26 @@ export default function PartiesView({
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Credit Limit Allowed (INR)</label>
-                <input
-                  type="number"
+                <NumericInput
                   placeholder="₹ 50,000"
                   value={creditLimit}
-                  onChange={(e) => setCreditLimit(Number(e.target.value))}
+                  onChange={(val) => setCreditLimit(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-mono"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Opening Balance (INR)</label>
-                <input
-                  type="number"
+                <NumericInput
                   disabled={isEditMode}
                   value={openingBalance}
-                  onChange={(e) => setOpeningBalance(Number(e.target.value))}
+                  onChange={(val) => setOpeningBalance(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-mono disabled:bg-slate-50"
                 />
               </div>
@@ -1085,17 +1146,26 @@ export default function PartiesView({
                             >
                               <Edit2 size={14} />
                             </button>
+
+                            <button
+                              onClick={() => handleOpenDuplicate(party)}
+                              className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                              title="Duplicate Profile (Save as New)"
+                            >
+                              <Copy size={14} />
+                            </button>
+
                             {party.isActive ? (
                               <button
                                 onClick={() => {
-                                  if (confirm(`Are you sure you want to deactivate (soft-delete) ${party.name}?`)) {
+                                  if (confirm(`Are you sure you want to deactivate ${party.name}?`)) {
                                     onDeactivateParty(party.id);
                                   }
                                 }}
-                                className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                                className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded"
                                 title="Deactivate"
                               >
-                                <Trash2 size={14} />
+                                <XCircle size={14} />
                               </button>
                             ) : (
                               <button
@@ -1104,6 +1174,20 @@ export default function PartiesView({
                                 title="Reactivate"
                               >
                                 <CheckCircle size={14} />
+                              </button>
+                            )}
+
+                            {onDeleteParty && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to move ${party.name} to Trash?`)) {
+                                    onDeleteParty(party.id);
+                                  }
+                                }}
+                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                                title="Move to Trash"
+                              >
+                                <Trash2 size={14} />
                               </button>
                             )}
                           </>

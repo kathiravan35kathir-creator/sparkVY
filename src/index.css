@@ -65,12 +65,23 @@ h3 {
   border-radius: 8px;
 }
 
+/* Global number input spinner removal (Chrome, Safari, Edge, Opera, Firefox) */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* Form inputs focus ring */
 input[type="text"],
 input[type="password"],
 input[type="number"],
 input[type="date"],
 input[type="email"],
+.numeric-input-field,
 select,
 textarea {
   font-size: 12px;
@@ -84,6 +95,7 @@ input[type="password"]:focus,
 input[type="number"]:focus,
 input[type="date"]:focus,
 input[type="email"]:focus,
+.numeric-input-field:focus,
 select:focus,
 textarea:focus {
   border-color: #2563EB;

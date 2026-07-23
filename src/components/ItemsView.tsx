@@ -12,9 +12,12 @@ import {
   FileText,
   ChevronRight,
   Bookmark,
+  Copy,
   X
 } from 'lucide-react';
 import { Item, ItemType, Party } from '../types';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface ItemsViewProps {
   items: Item[];
@@ -23,6 +26,7 @@ interface ItemsViewProps {
   onEditItem: (id: string, item: Partial<Item>) => void;
   onDeactivateItem: (id: string) => void;
   onReactivateItem: (id: string) => void;
+  onDeleteItem?: (id: string) => void;
   isAdmin: boolean;
 }
 
@@ -33,6 +37,7 @@ export default function ItemsView({
   onEditItem,
   onDeactivateItem,
   onReactivateItem,
+  onDeleteItem,
   isAdmin
 }: ItemsViewProps) {
   // Navigation & Search States
@@ -114,6 +119,29 @@ export default function ItemsView({
     setIsOpenForm(true);
   };
 
+  const handleOpenDuplicate = (item: Item) => {
+    setName(item.name + ' (Copy)');
+    setCategory(item.category);
+    setType(item.type);
+    setUnit(item.unit);
+    setBarcode(item.barcode || '');
+    setHsnCode(item.hsnCode || '');
+    setPurchasePrice(item.purchasePrice);
+    setSellingPrice(item.sellingPrice);
+    setTaxRate(item.taxRate);
+    setOpeningStock(item.openingStock);
+    setMinimumStock(item.minimumStock);
+    setStorageLocation(item.storageLocation || '');
+    setBatchTracking(item.batchTracking);
+    setExpiryTracking(item.expiryTracking);
+    setSupplierId(item.supplierId || '');
+    setDescription(item.description || '');
+
+    setSelectedItemId(null); // Save as new
+    setIsEditMode(false);
+    setIsOpenForm(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !category) {
@@ -128,11 +156,11 @@ export default function ItemsView({
       unit,
       barcode,
       hsnCode,
-      purchasePrice: Number(purchasePrice),
-      sellingPrice: Number(sellingPrice),
-      taxRate: Number(taxRate),
-      openingStock: Number(openingStock),
-      minimumStock: Number(minimumStock),
+      purchasePrice: toSafeNumber(purchasePrice),
+      sellingPrice: toSafeNumber(sellingPrice),
+      taxRate: toSafeNumber(taxRate),
+      openingStock: toSafeNumber(openingStock),
+      minimumStock: toSafeNumber(minimumStock),
       storageLocation,
       batchTracking,
       expiryTracking,
@@ -315,11 +343,13 @@ export default function ItemsView({
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   Selling Price (INR, 0 if unused)
                 </label>
-                <input
-                  type="number"
+                <NumericInput
                   required
                   value={sellingPrice}
-                  onChange={(e) => setSellingPrice(Number(e.target.value))}
+                  onChange={(val) => setSellingPrice(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-mono"
                 />
               </div>
@@ -359,29 +389,35 @@ export default function ItemsView({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Opening Stock Qty *</label>
-                <input
-                  type="number"
+                <NumericInput
                   disabled={isEditMode}
                   value={openingStock}
-                  onChange={(e) => setOpeningStock(Number(e.target.value))}
+                  onChange={(val) => setOpeningStock(val)}
+                  allowDecimal={true}
+                  decimalScale={3}
+                  min={0}
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-mono disabled:bg-slate-50 disabled:text-slate-500"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Minimum Buffer / Alert Stock *</label>
-                <input
-                  type="number"
+                <NumericInput
                   value={minimumStock}
-                  onChange={(e) => setMinimumStock(Number(e.target.value))}
+                  onChange={(val) => setMinimumStock(val)}
+                  allowDecimal={true}
+                  decimalScale={3}
+                  min={0}
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-mono"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Standard Purchase Unit Cost (INR)</label>
-                <input
-                  type="number"
+                <NumericInput
                   value={purchasePrice}
-                  onChange={(e) => setPurchasePrice(Number(e.target.value))}
+                  onChange={(val) => setPurchasePrice(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-mono"
                 />
               </div>
@@ -652,6 +688,28 @@ export default function ItemsView({
                             >
                               <Edit2 size={13} />
                             </button>
+
+                            <button
+                              onClick={() => handleOpenDuplicate(item)}
+                              className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                              title="Duplicate Item (Save as New)"
+                            >
+                              <Copy size={13} />
+                            </button>
+
+                            {onDeleteItem && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to move ${item.name} to Trash?`)) {
+                                    onDeleteItem(item.id);
+                                  }
+                                }}
+                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                                title="Move to Trash"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         )}
                       </td>

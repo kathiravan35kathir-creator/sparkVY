@@ -12,16 +12,20 @@ import {
   DollarSign,
   ChevronRight,
   Printer,
+  Copy,
   X
 } from 'lucide-react';
 import { Purchase, Party, Item, PurchaseLineItem, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface PurchasesViewProps {
   purchases: Purchase[];
   parties: Party[];
   items: Item[];
   onAddPurchase: (purchasePayload: Omit<Purchase, 'id' | 'purchaseNumber' | 'createdAt'>) => void;
+  onDeletePurchase?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -31,6 +35,7 @@ export default function PurchasesView({
   parties,
   items,
   onAddPurchase,
+  onDeletePurchase,
   isAdmin,
   settings
 }: PurchasesViewProps) {
@@ -62,6 +67,26 @@ export default function PurchasesView({
     { itemId: '', itemName: '', quantity: 1, rate: 0, taxPercent: 18 }
   ]);
 
+  const handleOpenDuplicate = (p: Purchase) => {
+    setPartyId(p.partyId);
+    setSupplierInvoiceNumber(p.supplierInvoiceNumber ? p.supplierInvoiceNumber + ' (Copy)' : '');
+    setPurchaseDate(new Date().toISOString().slice(0, 10));
+    setDueDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    setStorageLocation(p.storageLocation || 'Central Store A');
+    setNotes(p.notes || '');
+    setAmountPaid(0);
+    setLineItems(p.items.map(it => ({
+      itemId: it.itemId,
+      itemName: it.itemName,
+      quantity: it.quantity,
+      rate: it.rate,
+      taxPercent: it.taxPercent,
+      batchNumber: it.batchNumber,
+      expiryDate: it.expiryDate
+    })));
+    setIsAdding(true);
+  };
+
   const handleAddLine = () => {
     setLineItems([...lineItems, { itemId: '', itemName: '', quantity: 1, rate: 0, taxPercent: 18 }]);
   };
@@ -87,9 +112,9 @@ export default function PurchasesView({
           ...item,
           [field]: val,
           itemName: name,
-          rate: field === 'itemId' ? rate : field === 'rate' ? Number(val) : item.rate,
-          taxPercent: field === 'itemId' ? taxPercent : field === 'taxPercent' ? Number(val) : item.taxPercent,
-          quantity: field === 'quantity' ? Number(val) : item.quantity
+          rate: field === 'itemId' ? rate : field === 'rate' ? val : item.rate,
+          taxPercent: field === 'itemId' ? taxPercent : field === 'taxPercent' ? val : item.taxPercent,
+          quantity: field === 'quantity' ? val : item.quantity
         };
       }
       return item;
@@ -98,12 +123,13 @@ export default function PurchasesView({
   };
 
   // Live total calculations
-  const subtotal = lineItems.reduce((sum, item) => sum + item.quantity * item.rate, 0);
-  const taxAmount = lineItems.reduce((sum, item) => sum + (item.quantity * item.rate * (item.taxPercent / 100)), 0);
+  const subtotal = lineItems.reduce((sum, item) => sum + toSafeNumber(item.quantity) * toSafeNumber(item.rate), 0);
+  const taxAmount = lineItems.reduce((sum, item) => sum + (toSafeNumber(item.quantity) * toSafeNumber(item.rate) * (toSafeNumber(item.taxPercent) / 100)), 0);
   const discountAmount = 0; // Simple flat
   const total = parseFloat((subtotal + taxAmount - discountAmount).toFixed(2));
-  const balanceDue = parseFloat((total - amountPaid).toFixed(2));
-  const paymentStatus = balanceDue <= 0 ? 'Paid' : amountPaid > 0 ? 'Partially Paid' : 'Unpaid';
+  const safeAmountPaid = toSafeNumber(amountPaid);
+  const balanceDue = parseFloat((total - safeAmountPaid).toFixed(2));
+  const paymentStatus = balanceDue <= 0 ? 'Paid' : safeAmountPaid > 0 ? 'Partially Paid' : 'Unpaid';
 
   const handleSavePurchase = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,15 +146,18 @@ export default function PurchasesView({
 
     // Build finalized items
     const purchaseLines: PurchaseLineItem[] = lineItems.map((line, idx) => {
-      const lineSub = line.quantity * line.rate;
-      const lineTax = parseFloat((lineSub * (line.taxPercent / 100)).toFixed(2));
+      const q = toSafeNumber(line.quantity);
+      const r = toSafeNumber(line.rate);
+      const t = toSafeNumber(line.taxPercent);
+      const lineSub = q * r;
+      const lineTax = parseFloat((lineSub * (t / 100)).toFixed(2));
       return {
         id: `pl-${Date.now()}-${idx}`,
         itemId: line.itemId,
         itemName: line.itemName,
-        quantity: line.quantity,
-        rate: line.rate,
-        taxPercent: line.taxPercent,
+        quantity: q,
+        rate: r,
+        taxPercent: t,
         taxAmount: lineTax,
         amount: parseFloat((lineSub + lineTax).toFixed(2)),
         batchNumber: line.batchNumber,
@@ -148,7 +177,7 @@ export default function PurchasesView({
       taxAmount: parseFloat(taxAmount.toFixed(2)),
       discountAmount,
       total,
-      amountPaid: Number(amountPaid),
+      amountPaid: safeAmountPaid,
       balanceDue,
       paymentStatus,
       storageLocation,
@@ -327,36 +356,38 @@ export default function PurchasesView({
 
                   <div className="col-span-1 md:col-span-1">
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">Inbound Qty</label>
-                    <input
-                      type="number"
-                      min="1"
-                      required
-                      className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
+                    <NumericInput
                       value={line.quantity}
-                      onChange={(e) => handleLineChange(idx, 'quantity', e.target.value)}
+                      onChange={(val) => handleLineChange(idx, 'quantity', val)}
+                      allowDecimal={true}
+                      decimalScale={3}
+                      min={0}
+                      className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
                     />
                   </div>
 
                   <div className="col-span-1 md:col-span-2">
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">Buy Rate (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
+                    <NumericInput
                       value={line.rate}
-                      onChange={(e) => handleLineChange(idx, 'rate', e.target.value)}
+                      onChange={(val) => handleLineChange(idx, 'rate', val)}
+                      allowDecimal={true}
+                      decimalScale={2}
+                      min={0}
+                      className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
                     />
                   </div>
 
                   <div className="col-span-1 md:col-span-1">
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">GST Rate (%)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
+                    <NumericInput
                       value={line.taxPercent}
-                      onChange={(e) => handleLineChange(idx, 'taxPercent', e.target.value)}
+                      onChange={(val) => handleLineChange(idx, 'taxPercent', val)}
+                      allowDecimal={true}
+                      decimalScale={2}
+                      min={0}
+                      max={100}
+                      className="w-full h-[40px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
                     />
                   </div>
 
@@ -417,12 +448,13 @@ export default function PurchasesView({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1.5">Amount Paid (INR) *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono text-emerald-600"
+                    <NumericInput
                       value={amountPaid}
-                      onChange={(e) => setAmountPaid(Number(e.target.value))}
+                      onChange={(val) => setAmountPaid(val)}
+                      allowDecimal={true}
+                      decimalScale={2}
+                      min={0}
+                      className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono text-emerald-600"
                     />
                   </div>
                 </div>
@@ -662,13 +694,38 @@ export default function PurchasesView({
                     </span>
                     <h3 className="font-extrabold text-slate-800 mt-1">{selectedPurchase.partyName}</h3>
                   </div>
-                  <button
-                    onClick={() => setPrintingPurchase(selectedPurchase)}
-                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-50 rounded border border-slate-200"
-                    title="Print Receipt"
-                  >
-                    <Printer size={13} />
-                  </button>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      onClick={() => setPrintingPurchase(selectedPurchase)}
+                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-50 rounded border border-slate-200"
+                      title="Print Receipt"
+                    >
+                      <Printer size={13} />
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleOpenDuplicate(selectedPurchase)}
+                        className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded border border-indigo-200"
+                        title="Duplicate Purchase (Save as New)"
+                      >
+                        <Copy size={13} />
+                      </button>
+                    )}
+                    {isAdmin && onDeletePurchase && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete Purchase Invoice ${selectedPurchase.purchaseNumber}?`)) {
+                            onDeletePurchase(selectedPurchase.id);
+                            setSelectedPurchase(null);
+                          }
+                        }}
+                        className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded border border-rose-200"
+                        title="Move to Trash"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-[11px] border-b border-slate-100 pb-3">

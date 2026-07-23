@@ -13,16 +13,21 @@ import {
   Lock,
   ArrowDownLeft,
   CheckCircle2,
+  Trash2,
+  Copy,
   X
 } from 'lucide-react';
 import { SalesReturn, Party, Invoice, SalesReturnLineItem, AppSettings, SalesReturnReason, ItemCondition, PaymentMethod, SalesReturnLineItem as SRLineItem } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface SalesReturnsViewProps {
   salesReturns: SalesReturn[];
   parties: Party[];
   invoices: Invoice[];
-  onAddSalesReturn: (sr: Omit<SalesReturn, 'id' | 'returnNumber' | 'createdAt'>) => void;
+  onAddSalesReturn: (sr: Omit<SalesReturn, 'id' | 'createdAt' | 'returnNumber'>) => void;
+  onDeleteSalesReturn?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -32,6 +37,7 @@ export default function SalesReturnsView({
   parties,
   invoices,
   onAddSalesReturn,
+  onDeleteSalesReturn,
   isAdmin,
   settings
 }: SalesReturnsViewProps) {
@@ -60,6 +66,28 @@ export default function SalesReturnsView({
     restockOption: boolean;
   }[]>([]);
 
+  const handleOpenDuplicate = (sr: SalesReturn) => {
+    setPartyId(sr.partyId);
+    setInvoiceId(sr.originalInvoiceId || '');
+    setReturnDate(new Date().toISOString().slice(0, 10));
+    setRefundMethod(sr.refundMethod || '');
+    setIssueCreditNote(sr.creditNoteIssued);
+    setNotes(sr.notes || '');
+    setReturnItems(sr.items.map(it => ({
+      itemId: it.itemId,
+      itemName: it.itemName,
+      itemCode: it.itemCode,
+      originalQuantity: it.quantity,
+      returnQuantity: it.returnQuantity,
+      rate: it.rate,
+      taxPercent: it.taxPercent,
+      reason: it.reason,
+      condition: it.condition,
+      restockOption: it.restockOption
+    })));
+    setIsCreating(true);
+  };
+
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');
   const customerInvoices = invoices.filter(inv => inv.partyId === partyId && inv.status !== 'Cancelled');
 
@@ -87,7 +115,7 @@ export default function SalesReturnsView({
   const handleReturnItemChange = (idx: number, field: string, value: any) => {
     const updated = [...returnItems];
     if (field === 'returnQuantity') {
-      const val = Number(value);
+      const val = toSafeNumber(value);
       if (val > updated[idx].originalQuantity) return;
       updated[idx].returnQuantity = val;
     } else {
@@ -98,7 +126,7 @@ export default function SalesReturnsView({
 
   const calculateTotal = () => {
     return returnItems.reduce((acc, item) => {
-      const amount = item.returnQuantity * item.rate * (1 + item.taxPercent / 100);
+      const amount = toSafeNumber(item.returnQuantity) * toSafeNumber(item.rate) * (1 + toSafeNumber(item.taxPercent) / 100);
       return acc + amount;
     }, 0);
   };
@@ -219,7 +247,15 @@ export default function SalesReturnsView({
                       </td>
                       <td className="p-3 text-center font-bold text-slate-400">{item.originalQuantity}</td>
                       <td className="p-3">
-                        <input type="number" min="0" max={item.originalQuantity} value={item.returnQuantity} onChange={(e) => handleReturnItemChange(idx, 'returnQuantity', e.target.value)} className="w-full border rounded p-1 text-center font-bold text-blue-600" />
+                        <NumericInput
+                          value={item.returnQuantity}
+                          onChange={(val) => handleReturnItemChange(idx, 'returnQuantity', val)}
+                          allowDecimal={true}
+                          decimalScale={3}
+                          min={0}
+                          max={item.originalQuantity}
+                          className="w-full border rounded p-1 text-center font-bold text-blue-600 font-mono text-xs"
+                        />
                       </td>
                       <td className="p-3 text-right font-mono">₹{item.rate.toLocaleString()}</td>
                       <td className="p-3">
@@ -351,7 +387,17 @@ export default function SalesReturnsView({
                     )}
                   </td>
                   <td className="p-4 text-right">
-                    <button onClick={() => setViewingReturn(sr)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded" title="Print Return Document"><Printer size={14} /></button>
+                    <div className="flex justify-end gap-1.5">
+                      <button onClick={() => setViewingReturn(sr)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded" title="Print Return Document"><Printer size={14} /></button>
+                      
+                      {isAdmin && (
+                        <button onClick={() => handleOpenDuplicate(sr)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded" title="Duplicate (Save as New)"><Copy size={14} /></button>
+                      )}
+
+                      {isAdmin && onDeleteSalesReturn && (
+                        <button onClick={() => { if (confirm(`Are you sure you want to delete Sales Return ${sr.returnNumber}?`)) onDeleteSalesReturn(sr.id); }} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded" title="Move to Trash"><Trash2 size={14} /></button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

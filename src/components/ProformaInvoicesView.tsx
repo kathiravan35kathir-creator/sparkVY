@@ -12,10 +12,13 @@ import {
   ClipboardList,
   Lock,
   ArrowRight,
+  Trash2,
   X
 } from 'lucide-react';
 import { ProformaInvoice, Party, Item, InvoiceLineItem, AppSettings, ProformaStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface ProformaInvoicesViewProps {
   proformaInvoices: ProformaInvoice[];
@@ -24,6 +27,7 @@ interface ProformaInvoicesViewProps {
   onAddProforma: (proforma: Omit<ProformaInvoice, 'id' | 'proformaNumber' | 'createdAt' | 'updatedAt'>) => void;
   onUpdateProformaStatus: (id: string, status: ProformaStatus) => void;
   onConvertToSalesInvoice: (proformaId: string) => void;
+  onDeleteProforma?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -35,6 +39,7 @@ export default function ProformaInvoicesView({
   onAddProforma,
   onUpdateProformaStatus,
   onConvertToSalesInvoice,
+  onDeleteProforma,
   isAdmin,
   settings
 }: ProformaInvoicesViewProps) {
@@ -61,6 +66,26 @@ export default function ProformaInvoicesView({
     discountPercent: number;
     taxPercent: number;
   }[]>([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
+
+  const handleOpenDuplicate = (pi: ProformaInvoice) => {
+    setPartyId(pi.partyId);
+    setDate(new Date().toISOString().slice(0, 10));
+    setValidUntil(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    setReference(pi.reference || '');
+    setSalesperson(pi.salesperson || '');
+    setAdditionalCharges(pi.additionalCharges);
+    setAdvanceRequested(pi.advanceRequested);
+    setNotes(pi.notes || '');
+    setTerms(pi.terms || '');
+    setLineItems(pi.items.map(it => ({
+      itemId: it.itemId,
+      quantity: it.quantity,
+      rate: it.rate,
+      discountPercent: it.discountPercent,
+      taxPercent: it.taxPercent
+    })));
+    setIsCreating(true);
+  };
 
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');
 
@@ -110,7 +135,7 @@ export default function ProformaInvoicesView({
         };
       });
 
-    const grandTotal = subtotal - discountAmount + taxAmount + Number(additionalCharges);
+    const grandTotal = subtotal - discountAmount + taxAmount + toSafeNumber(additionalCharges);
 
     return {
       items: mappedItems,
@@ -142,10 +167,10 @@ export default function ProformaInvoicesView({
       subtotal: totals.subtotal,
       discountAmount: totals.discountAmount,
       taxAmount: totals.taxAmount,
-      additionalCharges: Number(additionalCharges),
+      additionalCharges: toSafeNumber(additionalCharges),
       roundOff: 0,
       total: totals.total,
-      advanceRequested,
+      advanceRequested: toSafeNumber(advanceRequested),
       status: 'Draft',
       notes,
       terms
@@ -228,13 +253,37 @@ export default function ProformaInvoicesView({
                       </select>
                     </td>
                     <td className="p-3">
-                      <input type="number" required min="1" value={line.quantity} onChange={(e) => handleLineItemChange(idx, 'quantity', Number(e.target.value))} className="w-full border rounded p-1 text-center" />
+                      <NumericInput
+                        required
+                        value={line.quantity}
+                        onChange={(val) => handleLineItemChange(idx, 'quantity', val)}
+                        allowDecimal={true}
+                        decimalScale={3}
+                        min={0}
+                        className="w-full border rounded p-1 text-center font-mono text-xs"
+                      />
                     </td>
                     <td className="p-3">
-                      <input type="number" required value={line.rate} onChange={(e) => handleLineItemChange(idx, 'rate', Number(e.target.value))} className="w-full border rounded p-1 text-right" />
+                      <NumericInput
+                        required
+                        value={line.rate}
+                        onChange={(val) => handleLineItemChange(idx, 'rate', val)}
+                        allowDecimal={true}
+                        decimalScale={2}
+                        min={0}
+                        className="w-full border rounded p-1 text-right font-mono text-xs"
+                      />
                     </td>
                     <td className="p-3">
-                      <input type="number" value={line.taxPercent} onChange={(e) => handleLineItemChange(idx, 'taxPercent', Number(e.target.value))} className="w-full border rounded p-1 text-right" />
+                      <NumericInput
+                        value={line.taxPercent}
+                        onChange={(val) => handleLineItemChange(idx, 'taxPercent', val)}
+                        allowDecimal={true}
+                        decimalScale={2}
+                        min={0}
+                        max={100}
+                        className="w-full border rounded p-1 text-right font-mono text-xs"
+                      />
                     </td>
                     <td className="p-3 text-right font-mono">
                       {(line.quantity * line.rate * (1 - line.discountPercent/100) * (1 + line.taxPercent/100)).toFixed(2)}
@@ -261,7 +310,14 @@ export default function ProformaInvoicesView({
               <div className="flex justify-between text-xs font-medium"><span>Tax</span><span>₹{totals.taxAmount.toLocaleString()}</span></div>
               <div className="flex justify-between text-xs font-medium">
                 <span>Other Charges</span>
-                <input type="number" value={additionalCharges} onChange={(e) => setAdditionalCharges(Number(e.target.value))} className="w-24 border rounded text-right p-1" />
+                <NumericInput
+                  value={additionalCharges}
+                  onChange={(val) => setAdditionalCharges(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
+                  className="w-24 border rounded text-right p-1 font-mono text-xs"
+                />
               </div>
               <div className="border-t pt-2 flex justify-between items-baseline">
                 <span className="font-bold text-slate-900">Total</span>
@@ -269,7 +325,14 @@ export default function ProformaInvoicesView({
               </div>
               <div className="pt-2">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase">Advance Requested (₹)</label>
-                <input type="number" value={advanceRequested} onChange={(e) => setAdvanceRequested(Number(e.target.value))} className="w-full border rounded p-2 text-xs mt-1" />
+                <NumericInput
+                  value={advanceRequested}
+                  onChange={(val) => setAdvanceRequested(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
+                  className="w-full border rounded p-2 text-xs mt-1 font-mono"
+                />
               </div>
             </div>
           </div>
@@ -363,11 +426,20 @@ export default function ProformaInvoicesView({
                   <td className="p-4 text-right">
                     <div className="flex justify-end gap-2">
                       <button onClick={() => setViewingProforma(pi)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded" title="Print/Preview"><Printer size={14} /></button>
+                      
+                      {isAdmin && (
+                        <button onClick={() => handleOpenDuplicate(pi)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded" title="Duplicate (Save as New)"><Copy size={14} /></button>
+                      )}
+
                       {pi.status !== 'Converted' && pi.status !== 'Cancelled' && (
                         <>
                           <button onClick={() => onUpdateProformaStatus(pi.id, 'Accepted')} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Mark Accepted"><ArrowRight size={14} /></button>
                           <button onClick={() => { if(confirm('Convert to Sales Invoice? This will generate a new invoice number and update records.')) onConvertToSalesInvoice(pi.id); }} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded" title="Convert to Invoice"><FileText size={14} /></button>
                         </>
+                      )}
+
+                      {isAdmin && onDeleteProforma && (
+                        <button onClick={() => { if (confirm(`Are you sure you want to delete Proforma Invoice ${pi.proformaNumber}?`)) onDeleteProforma(pi.id); }} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded" title="Move to Trash"><Trash2 size={14} /></button>
                       )}
                     </div>
                   </td>

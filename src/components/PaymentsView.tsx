@@ -16,16 +16,21 @@ import {
   User,
   DollarSign,
   FileText,
+  Trash2,
+  Copy,
   X
 } from 'lucide-react';
 import { Payment, Party, AppSettings, PaymentMethod, PaymentType } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface PaymentsViewProps {
   payments: Payment[];
   parties: Party[];
   type: PaymentType;
   onAddPayment: (payment: Omit<Payment, 'id' | 'paymentNumber' | 'createdAt'>) => void;
+  onDeletePayment?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -35,6 +40,7 @@ export default function PaymentsView({
   parties,
   type,
   onAddPayment,
+  onDeletePayment,
   isAdmin,
   settings
 }: PaymentsViewProps) {
@@ -54,13 +60,25 @@ export default function PaymentsView({
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
 
+  const handleOpenDuplicate = (p: Payment) => {
+    setPartyId(p.partyId || '');
+    setAmount(p.amount);
+    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setPaymentMethod(p.paymentMethod);
+    setAccountId(p.accountId || 'acc-1');
+    setReferenceNumber(p.referenceNumber || '');
+    setNotes(p.notes || '');
+    setIsCreating(true);
+  };
+
   const filteredParties = type === 'Payment In' 
     ? parties.filter(p => p.type === 'Customer' || p.type === 'Both')
     : parties.filter(p => p.type === 'Supplier' || p.type === 'Both');
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (amount <= 0) return alert('Enter a positive amount');
+    const safeAmount = toSafeNumber(amount);
+    if (safeAmount <= 0) return alert('Enter a positive amount');
     
     const selectedParty = parties.find(p => p.id === partyId);
     const accountName = accountId === 'acc-1' ? 'Petty Cash' : accountId === 'acc-2' ? 'ICICI Bank' : 'HDFC Bank';
@@ -69,7 +87,7 @@ export default function PaymentsView({
       paymentType: type,
       partyId: partyId || undefined,
       partyName: selectedParty?.name,
-      amount,
+      amount: safeAmount,
       paymentDate,
       paymentMethod,
       accountId,
@@ -133,7 +151,16 @@ export default function PaymentsView({
               <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Amount (₹) *</label>
               <div className="relative">
                 <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input type="number" required min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="w-full border-2 rounded-xl pl-10 pr-4 py-3 text-lg font-bold text-slate-900 focus:border-blue-500 outline-none transition-all" placeholder="0.00" />
+                <NumericInput
+                  required
+                  value={amount}
+                  onChange={(val) => setAmount(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0.01}
+                  className="w-full border-2 rounded-xl pl-10 pr-4 py-3 text-lg font-bold text-slate-900 focus:border-blue-500 outline-none transition-all font-mono"
+                  placeholder="0.00"
+                />
               </div>
             </div>
 
@@ -285,7 +312,17 @@ export default function PaymentsView({
                     ₹{p.amount.toLocaleString()}
                   </td>
                   <td className="p-4 text-right">
-                    <button onClick={() => setViewingPayment(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded" title="Print Receipt"><Printer size={14} /></button>
+                    <div className="flex justify-end gap-1.5">
+                      <button onClick={() => setViewingPayment(p)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded" title="Print Receipt"><Printer size={14} /></button>
+                      
+                      {isAdmin && (
+                        <button onClick={() => handleOpenDuplicate(p)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded" title="Duplicate Payment (Save as New)"><Copy size={14} /></button>
+                      )}
+
+                      {isAdmin && onDeletePayment && (
+                        <button onClick={() => { if (confirm(`Are you sure you want to delete Payment ${p.paymentNumber}?`)) onDeletePayment(p.id); }} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded" title="Move to Trash"><Trash2 size={14} /></button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

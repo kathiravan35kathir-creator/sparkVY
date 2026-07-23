@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { User, AppSettings } from '../../types';
+import { NumericInput } from '../NumericInput';
+import { toSafeNumber } from '../../utils/numericUtils';
 
 interface OnboardingViewProps {
   user: Partial<User>;
@@ -107,7 +109,7 @@ export default function OnboardingView({ user, onSave, onSkip }: OnboardingViewP
         financialYearStartMonth: fyStartMonth,
         currency,
         timezone: timezone,
-        defaultTax: parseFloat(defaultTax)
+        defaultTax: toSafeNumber(defaultTax)
       });
     } catch (err: any) {
       setError(err.message || 'Failed to save setup data.');
@@ -324,7 +326,15 @@ export default function OnboardingView({ user, onSave, onSkip }: OnboardingViewP
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">Default Tax Rate (%)</label>
-                <input type="number" value={defaultTax} onChange={e => setDefaultTax(e.target.value)} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                <NumericInput
+                  value={defaultTax}
+                  onChange={(val) => setDefaultTax(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
+                  max={100}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
               </div>
             </div>
           </div>

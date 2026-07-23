@@ -45,9 +45,9 @@ export default function Sidebar({
   // Check permission of current role for sidebar tabs
   const hasAccess = (tab: string): boolean => {
     if (isAdmin) return true;
-    // Staff (non-admin) has access to everything except sensitive system, settings, staff and financial reports
+    // Staff (non-admin) has access to everything except sensitive system, settings, staff, financial reports and trash
     return ![
-      'settings', 'audit_logs', 'staff', 'accounts', 'expenses', 'reports', 'payment_out'
+      'settings', 'audit_logs', 'staff', 'accounts', 'expenses', 'reports', 'payment_out', 'trash'
     ].includes(tab);
   };
 
@@ -95,6 +95,7 @@ export default function Sidebar({
       title: 'REPORTS & SYSTEM',
       items: [
         { id: 'reports', name: 'Business Reports', icon: Activity },
+        { id: 'trash', name: 'Trash / Deleted', icon: History },
         { id: 'settings', name: 'Settings & DB Demo', icon: Settings }
       ]
     }

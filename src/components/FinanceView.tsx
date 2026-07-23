@@ -15,10 +15,14 @@ import {
   BookOpen,
   Calendar,
   Printer,
+  Copy,
+  Trash2,
   X
 } from 'lucide-react';
 import { Expense, Payment, Party, PaymentMethod, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface FinanceViewProps {
   expenses: Expense[];
@@ -26,6 +30,7 @@ interface FinanceViewProps {
   parties: Party[];
   onAddExpense: (expense: Omit<Expense, 'id' | 'expenseNumber' | 'createdAt'>) => void;
   onApproveExpense: (id: string) => void;
+  onDeleteExpense?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
   initialTab?: 'expenses' | 'payments';
@@ -39,6 +44,7 @@ export default function FinanceView({
   parties,
   onAddExpense,
   onApproveExpense,
+  onDeleteExpense,
   isAdmin,
   settings,
   initialTab,
@@ -68,6 +74,18 @@ export default function FinanceView({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
   const [linkedAccountId, setLinkedAccountId] = useState('acc-3'); // UPI standard
   const [description, setDescription] = useState('');
+
+  const handleOpenDuplicateExpense = (ex: Expense) => {
+    setVendorName(ex.vendorName);
+    setExpenseDate(new Date().toISOString().slice(0, 10));
+    setCategory(ex.category);
+    setAmount(ex.amount);
+    setTaxAmount(ex.taxAmount);
+    setPaymentMethod(ex.paymentMethod);
+    setLinkedAccountId(ex.accountId || 'acc-3');
+    setDescription(ex.description || '');
+    setIsAddingExpense(true);
+  };
 
   // Auto-calculated Cash & Bank reserves removed
 
@@ -226,24 +244,27 @@ export default function FinanceView({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Expense Subtotal Amount (INR) <span className="text-red-500">*</span></label>
-                <input
-                  type="number"
+                <NumericInput
                   required
-                  min="1"
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono text-[#D97706]"
                   value={amount}
-                  onChange={(e) => setAmount(Number(e.target.value))}
+                  onChange={(val) => setAmount(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Tax Amount (GST included)</label>
-                <input
-                  type="number"
+                <NumericInput
                   required
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
                   value={taxAmount}
-                  onChange={(e) => setTaxAmount(Number(e.target.value))}
+                  onChange={(val) => setTaxAmount(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                 />
               </div>
 
@@ -448,6 +469,7 @@ export default function FinanceView({
                     <th className="py-3 px-4 text-right">Tax (GST)</th>
                     <th className="py-3 px-4 text-right">Total Outflow</th>
                     <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
@@ -483,6 +505,30 @@ export default function FinanceView({
                           <span className="inline-block text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
                             Approved & Posted
                           </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenDuplicateExpense(ex)}
+                              className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                              title="Duplicate Expense (Save as New)"
+                            >
+                              <Copy size={13} />
+                            </button>
+                            {onDeleteExpense && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete Expense ${ex.vendorName} - ₹${ex.amount}?`)) {
+                                    onDeleteExpense(ex.id);
+                                  }
+                                }}
+                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                                title="Move to Trash"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))

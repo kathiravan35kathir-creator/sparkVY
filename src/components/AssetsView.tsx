@@ -15,6 +15,8 @@ import {
   X
 } from 'lucide-react';
 import { Equipment, EquipmentStatus } from '../types';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface EquipmentViewProps {
   equipment: Equipment[];
@@ -59,7 +61,7 @@ export default function EquipmentView({
       model,
       serialNumber,
       location,
-      purchaseCost: Number(purchaseCost),
+      purchaseCost: toSafeNumber(purchaseCost),
       purchaseDate,
       lastMaintenanceDate: purchaseDate,
       nextMaintenanceDate: purchaseDate,
@@ -227,12 +229,13 @@ export default function EquipmentView({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Purchase Value (INR)</label>
-                <input
-                  type="number"
-                  min="0"
+                <NumericInput
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition font-bold font-mono"
                   value={purchaseCost}
-                  onChange={(e) => setPurchaseCost(Number(e.target.value))}
+                  onChange={(val) => setPurchaseCost(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                 />
               </div>
 

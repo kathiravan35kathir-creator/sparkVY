@@ -14,16 +14,20 @@ import {
   ArrowDownLeft,
   CheckCircle2,
   AlertCircle,
+  Trash2,
   X
 } from 'lucide-react';
 import { CreditNote, Party, Invoice, AppSettings, CreditNoteStatus } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface CreditNotesViewProps {
   creditNotes: CreditNote[];
   parties: Party[];
   onIssueRefund: (cnId: string, amount: number, accountId: string) => void;
   onAdjustAgainstInvoice: (cnId: string, invoiceId: string, amount: number) => void;
+  onDeleteCreditNote?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
 }
@@ -33,6 +37,7 @@ export default function CreditNotesView({
   parties,
   onIssueRefund,
   onAdjustAgainstInvoice,
+  onDeleteCreditNote,
   isAdmin,
   settings
 }: CreditNotesViewProps) {
@@ -143,6 +148,19 @@ export default function CreditNotesView({
                             </button>
                           </>
                         )}
+                        {isAdmin && onDeleteCreditNote && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete Credit Note ${cn.creditNoteNumber}?`)) {
+                                onDeleteCreditNote(cn.id);
+                              }
+                            }}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded"
+                            title="Move to Trash"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -206,6 +224,8 @@ function AdjustCreditNoteModal({ creditNote, onClose, onAdjust }: { creditNote: 
 
 function RefundCreditNoteModal({ creditNote, onClose, onRefund }: { creditNote: CreditNote, onClose: () => void, onRefund: any }) {
   const [amount, setAmount] = useState(creditNote.total - creditNote.adjustedAmount - creditNote.refundAmount);
+  const maxRefund = creditNote.total - creditNote.adjustedAmount - creditNote.refundAmount;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
@@ -213,7 +233,15 @@ function RefundCreditNoteModal({ creditNote, onClose, onRefund }: { creditNote: 
         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Refund Credit Note</h3>
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">Refund Amount</label>
-          <input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} max={creditNote.total - creditNote.adjustedAmount - creditNote.refundAmount} className="w-full border rounded p-2 text-sm font-mono" />
+          <NumericInput
+            value={amount}
+            onChange={(val) => setAmount(val)}
+            allowDecimal={true}
+            decimalScale={2}
+            min={0}
+            max={maxRefund}
+            className="w-full border rounded p-2 text-sm font-mono"
+          />
         </div>
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">Payment Account</label>
@@ -224,7 +252,7 @@ function RefundCreditNoteModal({ creditNote, onClose, onRefund }: { creditNote: 
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="px-4 py-2 border rounded-lg text-xs font-bold hover:bg-slate-50">Cancel</button>
-          <button onClick={() => { onRefund(creditNote.id, amount, 'acc-1'); onClose(); }} className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-bold">Issue Refund</button>
+          <button onClick={() => { onRefund(creditNote.id, toSafeNumber(amount), 'acc-1'); onClose(); }} className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-bold">Issue Refund</button>
         </div>
       </div>
     </div>

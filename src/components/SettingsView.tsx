@@ -42,6 +42,8 @@ import {
 } from 'lucide-react';
 import { AppSettings } from '../types';
 import DocumentTemplateRenderer from './DocumentTemplateRenderer';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 // Constant Databases of Professional ERP Document Templates
 export const INVOICE_TEMPLATES = [
@@ -1041,22 +1043,20 @@ export default function SettingsView({
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Starting Sequence Number</label>
-                      <input
-                        type="number"
+                      <NumericInput
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
                         value={localSettings.numbering[numberingType].startingNumber}
-                        onChange={(e) => handleNumberingChange(numberingType, 'startingNumber', Number(e.target.value))}
+                        onChange={(val) => handleNumberingChange(numberingType, 'startingNumber', toSafeNumber(val))}
                       />
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Minimum Serial Digits (Padding)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="10"
+                      <NumericInput
+                        min={1}
+                        max={10}
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
                         value={localSettings.numbering[numberingType].minDigitLength}
-                        onChange={(e) => handleNumberingChange(numberingType, 'minDigitLength', Number(e.target.value))}
+                        onChange={(val) => handleNumberingChange(numberingType, 'minDigitLength', toSafeNumber(val))}
                       />
                     </div>
                     <div>
@@ -1140,13 +1140,12 @@ export default function SettingsView({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Quotation Validity Duration (Days)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="365"
+                      <NumericInput
+                        min={1}
+                        max={365}
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-bold focus:outline-none focus:border-blue-500"
                         value={localSettings.quotation.validityDays}
-                        onChange={(e) => handleFieldChange('quotation', 'validityDays', Number(e.target.value))}
+                        onChange={(val) => handleFieldChange('quotation', 'validityDays', toSafeNumber(val))}
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -1985,24 +1984,22 @@ export default function SettingsView({
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Financial Decimal Places</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="4"
+                      <NumericInput
+                        min={0}
+                        max={4}
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
                         value={localSettings.system.decimalPlaces}
-                        onChange={(e) => handleFieldChange('system', 'decimalPlaces', Number(e.target.value))}
+                        onChange={(val) => handleFieldChange('system', 'decimalPlaces', toSafeNumber(val))}
                       />
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Item Quantities Decimal Places</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="4"
+                      <NumericInput
+                        min={0}
+                        max={4}
                         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono focus:outline-none focus:border-blue-500"
                         value={localSettings.system.quantityDecimalPlaces}
-                        onChange={(e) => handleFieldChange('system', 'quantityDecimalPlaces', Number(e.target.value))}
+                        onChange={(val) => handleFieldChange('system', 'quantityDecimalPlaces', toSafeNumber(val))}
                       />
                     </div>
                   </div>

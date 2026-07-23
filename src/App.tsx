@@ -77,6 +77,7 @@ import PaymentsView from './components/PaymentsView';
 import FinanceView from './components/FinanceView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
+import TrashView from './components/TrashView';
 import SecurityPinDialog from './components/SecurityPinDialog';
 import CommandPaletteModal from './components/CommandPaletteModal';
 // Auth Components
@@ -1145,6 +1146,386 @@ export default function App() {
       return notify(audited, 'Purchase Recorded', `Material inventory increased and supplier invoice logged.`, 'success');
     });
   };
+
+  // DUPLICATE AND DELETE SYSTEM HANDLERS
+  const handleDeleteQuotation = (id: string) => {
+    setDb((prev) => {
+      const q = prev.quotations.find(x => x.id === id);
+      if (!q) return prev;
+      if (q.status === 'Converted') {
+        alert("This quotation has already been converted to an invoice. Deletion is blocked to preserve audit history.");
+        return prev;
+      }
+      const updated = prev.quotations.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, quotations: updated };
+      const audited = logAudit(newState, 'Delete Quotation', 'Quotations', id, q.quotationNumber);
+      return notify(audited, 'Quotation Deleted', `Quotation ${q.quotationNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteInvoice = (id: string) => {
+    setDb((prev) => {
+      const inv = prev.invoices.find(x => x.id === id);
+      if (!inv) return prev;
+      
+      const hasPayments = inv.amountPaid > 0 || prev.payments.some(p => p.allocations?.some((a: any) => a.invoiceId === id));
+      if (hasPayments) {
+        alert("This invoice has linked payments. Deletion is blocked. Please reverse or delete the linked payments first.");
+        return prev;
+      }
+
+      let updatedParties = [...prev.parties];
+      let updatedItems = [...prev.items];
+      if (inv.status !== 'Cancelled') {
+        updatedParties = prev.parties.map((p) =>
+          p.id === inv.partyId ? { ...p, currentBalance: Math.max(0, p.currentBalance - inv.total) } : p
+        );
+
+        inv.items.forEach((line) => {
+          updatedItems = updatedItems.map((it) => {
+            if (it.id === line.itemId) {
+              return { ...it, currentStock: it.currentStock + line.quantity };
+            }
+            return it;
+          });
+        });
+      }
+
+      const updated = prev.invoices.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, invoices: updated, parties: updatedParties, items: updatedItems };
+      const audited = logAudit(newState, 'Delete Invoice', 'Sales', id, inv.invoiceNumber);
+      return notify(audited, 'Invoice Deleted', `Sales Invoice ${inv.invoiceNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteProformaInvoice = (id: string) => {
+    setDb((prev) => {
+      const pi = prev.proformaInvoices.find(x => x.id === id);
+      if (!pi) return prev;
+      if (pi.status === 'Converted') {
+        alert("This proforma invoice has already been converted to a sales invoice. Deletion is blocked.");
+        return prev;
+      }
+      const updated = prev.proformaInvoices.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, proformaInvoices: updated };
+      const audited = logAudit(newState, 'Delete Proforma Invoice', 'Sales', id, pi.proformaNumber);
+      return notify(audited, 'Proforma Deleted', `Proforma Invoice ${pi.proformaNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeletePurchase = (id: string) => {
+    setDb((prev) => {
+      const pur = prev.purchases.find(x => x.id === id);
+      if (!pur) return prev;
+      if (pur.amountPaid > 0) {
+        alert("This purchase invoice has linked payments. Deletion is blocked. Please delete the payment outflow entries first.");
+        return prev;
+      }
+
+      let updatedParties = prev.parties.map((p) => {
+        if (p.id === pur.partyId) {
+          return { ...p, currentBalance: Math.max(0, p.currentBalance - pur.balanceDue) };
+        }
+        return p;
+      });
+
+      let updatedItems = [...prev.items];
+      pur.items.forEach((line: any) => {
+        updatedItems = updatedItems.map((item) => {
+          if (item.id === line.itemId) {
+            return { ...item, currentStock: Math.max(0, item.currentStock - line.quantity) };
+          }
+          return item;
+        });
+      });
+
+      const updated = prev.purchases.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, purchases: updated, parties: updatedParties, items: updatedItems };
+      const audited = logAudit(newState, 'Delete Purchase', 'Purchases', id, pur.purchaseNumber);
+      return notify(audited, 'Purchase Deleted', `Purchase Invoice ${pur.purchaseNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteProcurementOrder = (id: string) => {
+    setDb((prev) => {
+      const po = prev.procurementOrders.find(x => x.id === id);
+      if (!po) return prev;
+      if (po.status === 'Fully Received') {
+        alert("This procurement order has been fully received. Deletion is blocked.");
+        return prev;
+      }
+      const updated = prev.procurementOrders.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, procurementOrders: updated };
+      const audited = logAudit(newState, 'Delete Procurement Order', 'Purchases', id, po.orderNumber);
+      return notify(audited, 'Order Deleted', `Procurement Order ${po.orderNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteSalesReturn = (id: string) => {
+    setDb((prev) => {
+      const sr = prev.salesReturns.find(x => x.id === id);
+      if (!sr) return prev;
+
+      let updatedItems = [...prev.items];
+      sr.items.forEach((line: any) => {
+        if (line.restockOption) {
+          updatedItems = updatedItems.map((it) => {
+            if (it.id === line.itemId) {
+              return { ...it, currentStock: Math.max(0, it.currentStock - line.returnQuantity) };
+            }
+            return it;
+          });
+        }
+      });
+
+      if (sr.creditNoteId) {
+        const cn = prev.creditNotes.find(x => x.id === sr.creditNoteId);
+        if (cn && (cn.refundAmount > 0 || cn.adjustedAmount > 0)) {
+          alert("A credit note with adjustments is linked to this return. Deletion is blocked. Revert those adjustments first.");
+          return prev;
+        }
+      }
+
+      const updated = prev.salesReturns.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+
+      const updatedCreditNotes = prev.creditNotes.map(cn => cn.salesReturnId === id ? { ...cn, isDeleted: true } : cn);
+
+      const newState = { ...prev, salesReturns: updated, creditNotes: updatedCreditNotes, items: updatedItems };
+      const audited = logAudit(newState, 'Delete Sales Return', 'Sales', id, sr.returnNumber);
+      return notify(audited, 'Return Deleted', `Sales Return ${sr.returnNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteCreditNote = (id: string) => {
+    setDb((prev) => {
+      const cn = prev.creditNotes.find(x => x.id === id);
+      if (!cn) return prev;
+      if (cn.refundAmount > 0 || cn.adjustedAmount > 0) {
+        alert("This credit note has been adjusted or refunded. Deletion is blocked. Reverse the adjustments/refunds first.");
+        return prev;
+      }
+      const updated = prev.creditNotes.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, creditNotes: updated };
+      const audited = logAudit(newState, 'Delete Credit Note', 'Sales', id, cn.creditNoteNumber);
+      return notify(audited, 'Credit Note Deleted', `Credit Note ${cn.creditNoteNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeletePayment = (id: string) => {
+    setDb((prev) => {
+      const payment = prev.payments.find(x => x.id === id);
+      if (!payment) return prev;
+
+      let updatedParties = prev.parties.map(p => {
+        if (p.id === payment.partyId) {
+          const reverseAdjustment = payment.paymentType === 'Payment In' ? payment.amount : -payment.amount;
+          return { ...p, currentBalance: p.currentBalance + reverseAdjustment };
+        }
+        return p;
+      });
+
+      let updatedInvoices = [...prev.invoices];
+      if (payment.allocations && payment.allocations.length > 0) {
+        payment.allocations.forEach((alloc: any) => {
+          updatedInvoices = updatedInvoices.map(inv => {
+            if (inv.id === alloc.invoiceId) {
+              const paidAmt = Math.max(0, inv.amountPaid - alloc.allocatedAmount);
+              const bal = inv.total - paidAmt;
+              const status = paidAmt <= 0 ? 'Unpaid' : 'Partially Paid';
+              return { ...inv, amountPaid: paidAmt, balanceDue: bal, status };
+            }
+            return inv;
+          });
+        });
+      }
+
+      const updated = prev.payments.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, payments: updated, parties: updatedParties, invoices: updatedInvoices };
+      const audited = logAudit(newState, 'Delete Payment', 'Finance', id, payment.paymentNumber);
+      return notify(audited, 'Payment Deleted', `${payment.paymentType} ${payment.paymentNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    setDb((prev) => {
+      const exp = prev.expenses.find(x => x.id === id);
+      if (!exp) return prev;
+      const updated = prev.expenses.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true, 
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, expenses: updated };
+      const audited = logAudit(newState, 'Delete Expense', 'Finance', id, exp.expenseNumber);
+      return notify(audited, 'Expense Deleted', `Expense ${exp.expenseNumber} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteParty = (id: string) => {
+    setDb((prev) => {
+      const party = prev.parties.find(x => x.id === id);
+      if (!party) return prev;
+
+      const hasTx = 
+        prev.invoices.some(x => x.partyId === id && !x.isDeleted) ||
+        prev.purchases.some(x => x.partyId === id && !x.isDeleted) ||
+        prev.quotations.some(x => x.partyId === id && !x.isDeleted) ||
+        prev.proformaInvoices.some(x => x.partyId === id && !x.isDeleted) ||
+        prev.procurementOrders.some(x => x.partyId === id && !x.isDeleted) ||
+        prev.salesReturns.some(x => x.partyId === id && !x.isDeleted) ||
+        prev.creditNotes.some(x => x.partyId === id && !x.isDeleted) ||
+        prev.payments.some(x => x.partyId === id && !x.isDeleted);
+
+      if (hasTx) {
+        alert("This party cannot be deleted because transactions exist. Use Deactivate/Archive instead.");
+        return prev;
+      }
+
+      const updated = prev.parties.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true,
+        isActive: false,
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, parties: updated };
+      const audited = logAudit(newState, 'Delete Party', 'Parties', id, party.name);
+      return notify(audited, 'Party Deleted', `Party ${party.name} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleDeleteItem = (id: string) => {
+    setDb((prev) => {
+      const item = prev.items.find(x => x.id === id);
+      if (!item) return prev;
+
+      const hasTx = 
+        prev.invoices.some(x => !x.isDeleted && x.items.some(it => it.itemId === id)) ||
+        prev.purchases.some(x => !x.isDeleted && x.items.some((it: any) => it.itemId === id)) ||
+        prev.quotations.some(x => !x.isDeleted && x.items.some(it => it.itemId === id)) ||
+        prev.proformaInvoices.some(x => !x.isDeleted && x.items.some(it => it.itemId === id)) ||
+        prev.procurementOrders.some(x => !x.isDeleted && x.items.some(it => it.itemId === id)) ||
+        prev.salesReturns.some(x => !x.isDeleted && x.items.some(it => it.itemId === id)) ||
+        prev.creditNotes.some(x => !x.isDeleted && x.items.some(it => it.itemId === id));
+
+      if (hasTx) {
+        alert("This item cannot be deleted because it is referenced in transactions. Use Deactivate/Archive instead.");
+        return prev;
+      }
+
+      const updated = prev.items.map(x => x.id === id ? { 
+        ...x, 
+        isDeleted: true,
+        isActive: false,
+        deletedAt: new Date().toISOString(), 
+        deletedBy: currentUser?.full_name || currentUser?.name || 'System'
+      } : x);
+      const newState = { ...prev, items: updated };
+      const audited = logAudit(newState, 'Delete Item', 'Catalog', id, item.name);
+      return notify(audited, 'Item Deleted', `Item ${item.name} deleted successfully.`, 'success');
+    });
+  };
+
+  const handleRestoreRecord = (module: string, id: string) => {
+    setDb((prev) => {
+      let collectionKey = '';
+
+      switch (module) {
+        case 'Quotations':
+          collectionKey = 'quotations';
+          break;
+        case 'Sales':
+          collectionKey = 'invoices';
+          break;
+        case 'Proforma Invoices':
+          collectionKey = 'proformaInvoices';
+          break;
+        case 'Purchases':
+          collectionKey = 'purchases';
+          break;
+        case 'Procurement':
+          collectionKey = 'procurementOrders';
+          break;
+        case 'Sales Returns':
+          collectionKey = 'salesReturns';
+          break;
+        case 'Credit Notes':
+          collectionKey = 'creditNotes';
+          break;
+        case 'Payments':
+          collectionKey = 'payments';
+          break;
+        case 'Expenses':
+          collectionKey = 'expenses';
+          break;
+        case 'Parties':
+          collectionKey = 'parties';
+          break;
+        case 'Catalog':
+          collectionKey = 'items';
+          break;
+        default:
+          return prev;
+      }
+
+      const list = (prev as any)[collectionKey] || [];
+      const record = list.find((x: any) => x.id === id);
+      if (!record) return prev;
+
+      const updated = list.map((x: any) => x.id === id ? { 
+        ...x, 
+        isDeleted: false,
+        isActive: module === 'Parties' || module === 'Catalog' ? true : x.isActive,
+        deletedAt: undefined,
+        deletedBy: undefined
+      } : x);
+
+      const newState = { ...prev, [collectionKey]: updated };
+      const audited = logAudit(newState, 'Restore Record', module, id, record.quotationNumber || record.invoiceNumber || record.proformaNumber || record.purchaseNumber || record.orderNumber || record.returnNumber || record.creditNoteNumber || record.paymentNumber || record.expenseNumber || record.name || '');
+      return notify(audited, 'Record Restored', `${module} record restored successfully.`, 'success');
+    });
+  };
   // CONDITIONAL RENDER AREA
   // --------------------------------------------------------
 
@@ -1231,11 +1612,12 @@ export default function App() {
 
           {activeTab === 'parties' && (
             <PartiesView
-              parties={db.parties}
+              parties={db.parties.filter(p => !p.isDeleted)}
               onAddParty={handleAddParty}
               onEditParty={handleEditParty}
               onDeactivateParty={handleDeactivateParty}
               onReactivateParty={handleReactivateParty}
+              onDeleteParty={handleDeleteParty}
               isAdmin={currentUser.isAdmin}
               db={db}
               currentUser={currentUser}
@@ -1244,7 +1626,13 @@ export default function App() {
 
           {activeTab === 'party_ledger' && (
             <PartyLedgerHomeView
-              db={db}
+              db={{
+                ...db,
+                parties: db.parties.filter(p => !p.isDeleted),
+                invoices: db.invoices.filter(i => !i.isDeleted),
+                purchases: db.purchases.filter(p => !p.isDeleted),
+                payments: db.payments.filter(p => !p.isDeleted)
+              }}
               isAdmin={currentUser.isAdmin}
               onUpdateParty={handleEditParty}
               currentUser={currentUser}
@@ -1254,26 +1642,28 @@ export default function App() {
 
           {(activeTab === 'catalog' || activeTab === 'items') && (
             <ItemsView
-              items={db.items}
-              parties={db.parties}
+              items={db.items.filter(it => !it.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
               onAddItem={handleAddItem}
               onEditItem={handleEditItem}
               onDeactivateItem={() => {}}
               onReactivateItem={() => {}}
+              onDeleteItem={handleDeleteItem}
               isAdmin={currentUser.isAdmin}
             />
           )}
 
           {activeTab === 'quotations' && (
             <QuotationsView
-              quotations={db.quotations}
-              parties={db.parties}
-              items={db.items}
+              quotations={(db.quotations || []).filter(q => !q.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
+              items={db.items.filter(it => !it.isDeleted)}
               onAddQuotation={handleAddQuotation}
               onEditQuotation={handleEditQuotation}
               onConvertToInvoice={handleConvertToInvoice}
               onReviseEstimate={handleReviseEstimate}
               onConvertEstimateToFinal={handleConvertEstimateToFinal}
+              onDeleteQuotation={handleDeleteQuotation}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
               onCheckPin={checkPin}
@@ -1282,25 +1672,27 @@ export default function App() {
           )}
           {activeTab === 'proforma' && (
             <ProformaInvoicesView
-              proformaInvoices={db.proformaInvoices}
-              parties={db.parties}
-              items={db.items}
+              proformaInvoices={(db.proformaInvoices || []).filter(p => !p.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
+              items={db.items.filter(it => !it.isDeleted)}
               onAddProforma={handleAddProformaInvoice}
               onUpdateProformaStatus={(id, status) => setDb(prev => ({ ...prev, proformaInvoices: prev.proformaInvoices.map(p => p.id === id ? { ...p, status } : p) }))}
               onConvertToSalesInvoice={handleConvertProformaToInvoice}
+              onDeleteProforma={handleDeleteProformaInvoice}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
           {activeTab === 'sales' && (
             <SalesView
-              invoices={db.invoices}
-              parties={db.parties}
-              items={db.items}
+              invoices={db.invoices.filter(inv => !inv.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
+              items={db.items.filter(it => !it.isDeleted)}
               onAddInvoice={handleAddInvoice}
               onFinaliseInvoice={handleFinaliseInvoice}
               onRecordPayment={handleRecordPayment}
               onCancelInvoice={(id) => checkPin('cancel_invoice', () => handleCancelInvoice(id))}
+              onDeleteInvoice={handleDeleteInvoice}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
               onCheckPin={checkPin}
@@ -1309,18 +1701,19 @@ export default function App() {
           )}
           {activeTab === 'returns' && (
             <SalesReturnsView
-              salesReturns={db.salesReturns}
-              parties={db.parties}
-              invoices={db.invoices}
+              salesReturns={(db.salesReturns || []).filter(sr => !sr.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
+              invoices={db.invoices.filter(inv => !inv.isDeleted)}
               onAddSalesReturn={handleAddSalesReturn}
+              onDeleteSalesReturn={handleDeleteSalesReturn}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
           {activeTab === 'credit_notes' && (
             <CreditNotesView
-              creditNotes={db.creditNotes}
-              parties={db.parties}
+              creditNotes={(db.creditNotes || []).filter(cn => !cn.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
               onIssueRefund={(id, amt, acc) => checkPin('record_refund', () => {
                 setDb(prev => ({
                   ...prev,
@@ -1336,15 +1729,16 @@ export default function App() {
                 }));
                 addAuditLog('Finance', `Adjusted ₹${amt} from Credit Note to Invoice`);
               }}
+              onDeleteCreditNote={handleDeleteCreditNote}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
           {activeTab === 'procurement' && (
             <ProcurementOrdersView
-              procurementOrders={db.procurementOrders}
-              parties={db.parties}
-              items={db.items}
+              procurementOrders={(db.procurementOrders || []).filter(po => !po.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
+              items={db.items.filter(it => !it.isDeleted)}
               onAddProcurement={handleAddProcurementOrder}
               onUpdateProcurementStatus={(id, status) => setDb(prev => ({ ...prev, procurementOrders: prev.procurementOrders.map(o => o.id === id ? { ...o, status } : o) }))}
               onConvertToPurchaseInvoice={(id) => {
@@ -1370,47 +1764,52 @@ export default function App() {
                   setDb(prev => ({ ...prev, procurementOrders: prev.procurementOrders.map(o => o.id === id ? { ...o, status: 'Fully Received' } : o) }));
                 }
               }}
+              onDeleteProcurement={handleDeleteProcurementOrder}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
           {activeTab === 'purchases' && (
             <PurchasesView
-              purchases={db.purchases}
-              parties={db.parties}
-              items={db.items}
+              purchases={(db.purchases || []).filter(pur => !pur.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
+              items={db.items.filter(it => !it.isDeleted)}
               onAddPurchase={handleAddPurchase}
+              onDeletePurchase={handleDeletePurchase}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
           {activeTab === 'payment_in' && (
             <PaymentsView
-              payments={db.payments}
-              parties={db.parties}
+              payments={db.payments.filter(pay => !pay.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
               type="Payment In"
               onAddPayment={handleAddPayment}
+              onDeletePayment={handleDeletePayment}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
           {activeTab === 'payment_out' && (
             <PaymentsView
-              payments={db.payments}
-              parties={db.parties}
+              payments={db.payments.filter(pay => !pay.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
               type="Payment Out"
               onAddPayment={(pay) => checkPin('payment_out', () => handleAddPayment(pay))}
+              onDeletePayment={handleDeletePayment}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
             />
           )}
           {activeTab === 'expenses' && (
             <FinanceView
-              expenses={db.expenses}
-              payments={db.payments}
-              parties={db.parties}
+              expenses={db.expenses.filter(exp => !exp.isDeleted)}
+              payments={db.payments.filter(pay => !pay.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
               onAddExpense={handleAddExpense}
               onApproveExpense={handleApproveExpense}
+              onDeleteExpense={handleDeleteExpense}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
               initialTab={activeTab === 'expenses' ? 'expenses' : 'expenses'}
@@ -1421,15 +1820,23 @@ export default function App() {
 
           {activeTab === 'reports' && (
             <ReportsView
-              invoices={db.invoices}
-              purchases={db.purchases}
-              expenses={db.expenses}
-              payments={db.payments}
-              items={db.items}
-              parties={db.parties}
-              quotations={db.quotations}
+              invoices={db.invoices.filter(i => !i.isDeleted)}
+              purchases={db.purchases.filter(p => !p.isDeleted)}
+              expenses={db.expenses.filter(e => !e.isDeleted)}
+              payments={db.payments.filter(p => !p.isDeleted)}
+              items={db.items.filter(it => !it.isDeleted)}
+              parties={db.parties.filter(p => !p.isDeleted)}
+              quotations={(db.quotations || []).filter(q => !q.isDeleted)}
               isAdmin={currentUser.isAdmin}
               samples={[]}
+            />
+          )}
+
+          {activeTab === 'trash' && (
+            <TrashView
+              db={db}
+              onRestoreRecord={handleRestoreRecord}
+              isAdmin={currentUser.isAdmin}
             />
           )}
 
@@ -1438,7 +1845,15 @@ export default function App() {
               settings={db.settings}
               onUpdateSettings={handleUpdateSettings}
               isAdmin={currentUser.isAdmin}
-              dbState={db}
+              dbState={{
+                ...db,
+                parties: db.parties.filter(p => !p.isDeleted),
+                items: db.items.filter(i => !i.isDeleted),
+                invoices: db.invoices.filter(i => !i.isDeleted),
+                purchases: db.purchases.filter(p => !p.isDeleted),
+                expenses: db.expenses.filter(e => !e.isDeleted),
+                payments: db.payments.filter(p => !p.isDeleted)
+              }}
               currentUser={currentUser}
               onUpdateUser={setCurrentUser}
             />

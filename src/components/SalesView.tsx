@@ -15,10 +15,13 @@ import {
   Lock,
   DollarSign,
   Calendar,
+  Trash2,
   X
 } from 'lucide-react';
 import { Invoice, Party, Item, InvoiceStatus, InvoiceLineItem, PaymentMethod, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface SalesViewProps {
   invoices: Invoice[];
@@ -28,6 +31,7 @@ interface SalesViewProps {
   onFinaliseInvoice: (id: string) => void;
   onRecordPayment: (invoiceId: string, amount: number, method: PaymentMethod, accountId: string, notes?: string) => void;
   onCancelInvoice: (id: string) => void;
+  onDeleteInvoice?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
   onCheckPin?: (action: string, onConfirm: () => void) => void;
@@ -42,6 +46,7 @@ export default function SalesView({
   onFinaliseInvoice,
   onRecordPayment,
   onCancelInvoice,
+  onDeleteInvoice,
   isAdmin,
   settings,
   onCheckPin,
@@ -81,6 +86,23 @@ export default function SalesView({
     taxPercent: number;
   }[]>([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
 
+  const handleOpenDuplicate = (inv: Invoice) => {
+    setPartyId(inv.partyId);
+    setInvoiceDate(new Date().toISOString().slice(0, 10));
+    setDueDate(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    setAdditionalCharges(inv.additionalCharges);
+    setNotes(inv.notes || '');
+    setTerms(inv.terms || '');
+    setLineItems(inv.items.map(it => ({
+      itemId: it.itemId,
+      quantity: it.quantity,
+      rate: it.rate,
+      discountPercent: it.discountPercent,
+      taxPercent: it.taxPercent
+    })));
+    setIsCreating(true);
+  };
+
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');
 
   const handleLineItemChange = (index: number, field: string, value: any) => {
@@ -117,10 +139,15 @@ export default function SalesView({
       .filter((line) => line.itemId !== '')
       .map((line, idx) => {
         const itemObj = items.find((it) => it.id === line.itemId)!;
-        const baseAmount = line.quantity * line.rate;
-        const discVal = baseAmount * (line.discountPercent / 100);
+        const qty = toSafeNumber(line.quantity);
+        const rate = toSafeNumber(line.rate);
+        const discPct = toSafeNumber(line.discountPercent);
+        const taxPct = toSafeNumber(line.taxPercent);
+
+        const baseAmount = qty * rate;
+        const discVal = baseAmount * (discPct / 100);
         const netBase = baseAmount - discVal;
-        const taxVal = netBase * (line.taxPercent / 100);
+        const taxVal = netBase * (taxPct / 100);
         const finalAmount = netBase + taxVal;
 
         subtotal += baseAmount;
@@ -132,16 +159,16 @@ export default function SalesView({
           itemId: line.itemId,
           itemName: itemObj.name,
           itemCode: itemObj.code,
-          quantity: line.quantity,
-          rate: line.rate,
-          discountPercent: line.discountPercent,
-          taxPercent: line.taxPercent,
+          quantity: qty,
+          rate: rate,
+          discountPercent: discPct,
+          taxPercent: taxPct,
           taxAmount: parseFloat(taxVal.toFixed(2)),
           amount: parseFloat(finalAmount.toFixed(2))
         };
       });
 
-    const grandTotal = subtotal - discountAmount + taxAmount + Number(additionalCharges);
+    const grandTotal = subtotal - discountAmount + taxAmount + toSafeNumber(additionalCharges);
 
     return {
       items: mappedItems,
@@ -351,31 +378,33 @@ export default function SalesView({
                         </select>
                       </td>
                       <td className="py-3.5 px-3">
-                        <input
-                          type="number"
-                          required
-                          min="1"
+                        <NumericInput
                           value={line.quantity}
-                          onChange={(e) => handleLineItemChange(idx, 'quantity', Number(e.target.value))}
+                          onChange={(val) => handleLineItemChange(idx, 'quantity', val)}
+                          allowDecimal={true}
+                          decimalScale={3}
+                          min={0}
                           className="w-full h-[36px] text-center bg-white border border-[#D8E0EA] rounded text-xs font-mono font-semibold"
                         />
                       </td>
                       <td className="py-3.5 px-3 text-right">
-                        <input
-                          type="number"
-                          required
+                        <NumericInput
                           value={line.rate}
-                          onChange={(e) => handleLineItemChange(idx, 'rate', Number(e.target.value))}
+                          onChange={(val) => handleLineItemChange(idx, 'rate', val)}
+                          allowDecimal={true}
+                          decimalScale={2}
+                          min={0}
                           className="w-full h-[36px] text-right bg-white border border-[#D8E0EA] rounded text-xs font-mono font-semibold"
                         />
                       </td>
                       <td className="py-3.5 px-3 text-right">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
+                        <NumericInput
                           value={line.discountPercent}
-                          onChange={(e) => handleLineItemChange(idx, 'discountPercent', Number(e.target.value))}
+                          onChange={(val) => handleLineItemChange(idx, 'discountPercent', val)}
+                          allowDecimal={true}
+                          decimalScale={2}
+                          min={0}
+                          max={100}
                           className="w-full h-[36px] text-right bg-white border border-[#D8E0EA] rounded text-xs font-mono"
                         />
                       </td>
@@ -467,12 +496,13 @@ export default function SalesView({
 
               <div className="flex justify-between items-center text-xs text-slate-500 font-medium pt-1.5">
                 <span>Additional Transport / Courier Charges (₹):</span>
-                <input
-                  type="number"
-                  min="0"
-                  className="w-24 h-[32px] px-2 bg-white border border-[#D8E0EA] rounded text-right text-xs font-mono font-bold text-slate-900"
+                <NumericInput
                   value={additionalCharges}
-                  onChange={(e) => setAdditionalCharges(Number(e.target.value))}
+                  onChange={(val) => setAdditionalCharges(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
+                  className="w-24 h-[32px] px-2 bg-white border border-[#D8E0EA] rounded text-right text-xs font-mono font-bold text-slate-900"
                 />
               </div>
 
@@ -676,6 +706,17 @@ export default function SalesView({
                             >
                               <Printer size={13} />
                             </button>
+
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleOpenDuplicate(inv)}
+                                className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                                title="Duplicate Invoice (Save as New)"
+                              >
+                                <Copy size={13} />
+                              </button>
+                            )}
+
                             {isAdmin && inv.status !== 'Cancelled' && (
                               <>
                                 {/* Finalise lock */}
@@ -719,6 +760,20 @@ export default function SalesView({
                                   <XCircle size={13} />
                                 </button>
                               </>
+                            )}
+
+                            {isAdmin && onDeleteInvoice && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete Invoice ${inv.invoiceNumber}? This will soft-delete the record.`)) {
+                                    onDeleteInvoice(inv.id);
+                                  }
+                                }}
+                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                                title="Move to Trash"
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             )}
                           </div>
                         </td>
@@ -801,13 +856,13 @@ export default function SalesView({
               {/* Amount */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Payment Amount In (INR) *</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  max={payingInvoice.balanceDue}
+                <NumericInput
                   value={payAmount}
-                  onChange={(e) => setPayAmount(Number(e.target.value))}
+                  onChange={(val) => setPayAmount(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
+                  max={payingInvoice.balanceDue}
                   className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-mono font-bold text-slate-800"
                 />
               </div>

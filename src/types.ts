@@ -1,5 +1,11 @@
 export type EquipmentStatus = 'Operational' | 'Under Maintenance' | 'Calibration Due' | 'Faulty' | 'Decommissioned';
 
+export interface BaseDeletedEntity {
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+}
+
 export interface Equipment {
   id: string;
   equipmentCode: string;
@@ -40,7 +46,7 @@ export interface User {
 export type PartyType = 'Customer' | 'Supplier' | 'Both';
 export type BalanceType = 'Receivable' | 'Payable';
 
-export interface Party {
+export interface Party extends BaseDeletedEntity {
   id: string;
   code: string;
   name: string;
@@ -71,7 +77,7 @@ export interface Party {
 
 export type ItemType = 'Inventory Product' | 'Equipment' | 'Asset' | 'Consumable' | 'Material' | 'Supply';
 
-export interface Item {
+export interface Item extends BaseDeletedEntity {
   id: string;
   code: string;
   name: string;
@@ -116,7 +122,7 @@ export interface QuotationLineItem {
   turnaroundTime?: string;
 }
 
-export interface Quotation {
+export interface Quotation extends BaseDeletedEntity {
   id: string;
   stage: QuotationStage;
   quotationNumber: string; // "EST-0001 Rev 1" or "QT-0001"
@@ -154,7 +160,7 @@ export interface Quotation {
 
 export type ProformaStatus = 'Draft' | 'Sent' | 'Viewed' | 'Accepted' | 'Rejected' | 'Expired' | 'Converted' | 'Cancelled';
 
-export interface ProformaInvoice {
+export interface ProformaInvoice extends BaseDeletedEntity {
   id: string;
   proformaNumber: string;
   partyId: string;
@@ -184,7 +190,7 @@ export interface ProformaInvoice {
 
 export type ProcurementStatus = 'Draft' | 'Sent' | 'Partially Received' | 'Fully Received' | 'Cancelled' | 'Closed';
 
-export interface ProcurementOrder {
+export interface ProcurementOrder extends BaseDeletedEntity {
   id: string;
   orderNumber: string;
   orderDate: string;
@@ -223,7 +229,7 @@ export interface SalesReturnLineItem extends InvoiceLineItem {
   restockOption: boolean;
 }
 
-export interface SalesReturn {
+export interface SalesReturn extends BaseDeletedEntity {
   id: string;
   returnNumber: string;
   returnDate: string;
@@ -242,7 +248,7 @@ export interface SalesReturn {
 
 export type CreditNoteStatus = 'Draft' | 'Issued' | 'Partially Adjusted' | 'Fully Adjusted' | 'Refunded' | 'Cancelled';
 
-export interface CreditNote {
+export interface CreditNote extends BaseDeletedEntity {
   id: string;
   creditNoteNumber: string;
   creditNoteDate: string;
@@ -278,7 +284,7 @@ export interface InvoiceLineItem {
   amount: number;
 }
 
-export interface Invoice {
+export interface Invoice extends BaseDeletedEntity {
   id: string;
   invoiceNumber: string;
   partyId: string;
@@ -319,7 +325,7 @@ export interface PurchaseLineItem {
   expiryDate?: string;
 }
 
-export interface Purchase {
+export interface Purchase extends BaseDeletedEntity {
   id: string;
   purchaseNumber: string;
   partyId: string; // Supplier
@@ -349,7 +355,7 @@ export interface PaymentAllocation {
   allocatedAmount: number;
 }
 
-export interface Payment {
+export interface Payment extends BaseDeletedEntity {
   id: string;
   paymentNumber: string;
   partyId?: string;
@@ -366,7 +372,7 @@ export interface Payment {
   createdAt: string;
 }
 
-export interface Expense {
+export interface Expense extends BaseDeletedEntity {
   id: string;
   expenseNumber: string;
   category: string;

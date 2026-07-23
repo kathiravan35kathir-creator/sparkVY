@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { Quotation, QuotationLineItem, Party, Item, QuotationStatus, AppSettings } from '../types';
 import DocumentPrintView from './DocumentPrintView';
+import { NumericInput } from './NumericInput';
+import { toSafeNumber } from '../utils/numericUtils';
 
 interface QuotationsViewProps {
   quotations: Quotation[];
@@ -28,6 +30,7 @@ interface QuotationsViewProps {
   onConvertToInvoice: (id: string) => void;
   onReviseEstimate?: (id: string) => void;
   onConvertEstimateToFinal?: (id: string) => void;
+  onDeleteQuotation?: (id: string) => void;
   isAdmin: boolean;
   settings: AppSettings;
   onCheckPin?: (action: string, onConfirm: () => void) => void;
@@ -43,6 +46,7 @@ export default function QuotationsView({
   onConvertToInvoice,
   onReviseEstimate,
   onConvertEstimateToFinal,
+  onDeleteQuotation,
   isAdmin,
   settings,
   onCheckPin,
@@ -52,7 +56,8 @@ export default function QuotationsView({
   const [filterStatus, setFilterStatus] = useState<string>('All');
 
   // Active view states
-  const [isCreating, setIsCreating] = useState(false);
+  const [formMode, setFormMode] = useState<'create' | 'edit' | 'duplicate' | null>(null);
+  const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [printingQuotation, setPrintingQuotation] = useState<Quotation | null>(null);
 
   // New Quotation Fields
@@ -73,6 +78,47 @@ export default function QuotationsView({
     discountPercent: number;
     taxPercent: number;
   }[]>([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
+
+  // Helper functions to populate form
+  const startEditQuotation = (q: Quotation) => {
+    setFormMode('edit');
+    setEditingQuotationId(q.id);
+    setPartyId(q.partyId);
+    setQuotationStage(q.stage);
+    setQuotationDate(q.quotationDate);
+    setExpiryDate(q.expiryDate);
+    setAdditionalCharges(q.additionalCharges);
+    setAdvanceRequirement(q.advanceRequirement);
+    setNotes(q.notes || '');
+    setTerms(q.termsAndConditions || '');
+    setLineItems(q.items.map(it => ({
+      itemId: it.itemId,
+      quantity: it.quantity,
+      rate: it.rate,
+      discountPercent: it.discountPercent,
+      taxPercent: it.taxPercent
+    })));
+  };
+
+  const startDuplicateQuotation = (q: Quotation) => {
+    setFormMode('duplicate');
+    setEditingQuotationId(null);
+    setPartyId(q.partyId);
+    setQuotationStage(q.stage);
+    setQuotationDate(new Date().toISOString().slice(0, 10));
+    setExpiryDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+    setAdditionalCharges(q.additionalCharges);
+    setAdvanceRequirement(q.advanceRequirement);
+    setNotes(q.notes || '');
+    setTerms(q.termsAndConditions || '');
+    setLineItems(q.items.map(it => ({
+      itemId: it.itemId,
+      quantity: it.quantity,
+      rate: it.rate,
+      discountPercent: it.discountPercent,
+      taxPercent: it.taxPercent
+    })));
+  };
 
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');
 
@@ -112,32 +158,37 @@ export default function QuotationsView({
       .filter((line) => line.itemId !== '')
       .map((line, idx) => {
         const itemObj = items.find((it) => it.id === line.itemId)!;
-        const baseAmount = line.quantity * line.rate;
-        const discVal = baseAmount * (line.discountPercent / 100);
+        const qty = toSafeNumber(line.quantity);
+        const rate = toSafeNumber(line.rate);
+        const discPct = toSafeNumber(line.discountPercent);
+        const taxPct = toSafeNumber(line.taxPercent);
+
+        const baseAmount = qty * rate;
+        const discVal = baseAmount * (discPct / 100);
         const netBase = baseAmount - discVal;
-        const taxVal = netBase * (line.taxPercent / 100);
+        const taxVal = netBase * (taxPct / 100);
         const finalAmount = netBase + taxVal;
 
         subtotal += baseAmount;
         discountAmount += discVal;
         taxAmount += taxVal;
-        sampleCount += line.quantity; // mapping qty to sample count for convenience
+        sampleCount += qty;
 
         return {
           id: `qti-${Date.now()}-${idx}`,
           itemId: line.itemId,
           itemName: itemObj.name,
           itemCode: itemObj.code,
-          quantity: line.quantity,
-          rate: line.rate,
-          discountPercent: line.discountPercent,
-          taxPercent: line.taxPercent,
+          quantity: qty,
+          rate: rate,
+          discountPercent: discPct,
+          taxPercent: taxPct,
           taxAmount: parseFloat(taxVal.toFixed(2)),
           amount: parseFloat(finalAmount.toFixed(2))
         };
       });
 
-    const total = subtotal - discountAmount + taxAmount + Number(additionalCharges);
+    const total = subtotal - discountAmount + taxAmount + toSafeNumber(additionalCharges);
 
     return {
       items: mappedItems,
@@ -163,7 +214,7 @@ export default function QuotationsView({
       return;
     }
 
-    onAddQuotation({
+    const payload = {
       stage: quotationStage,
       partyId,
       partyName: selectedParty.name,
@@ -176,13 +227,20 @@ export default function QuotationsView({
       taxAmount,
       additionalCharges: Number(additionalCharges),
       total,
-      status: 'Sent', // Both stages allow 'Sent'
+      status: (formMode === 'edit') ? (quotations.find(x => x.id === editingQuotationId)?.status || 'Sent') : 'Sent' as QuotationStatus,
       advanceRequirement: Number(advanceRequirement),
       notes,
       termsAndConditions: terms
-    });
+    };
 
-    setIsCreating(false);
+    if (formMode === 'edit' && editingQuotationId) {
+      onEditQuotation(editingQuotationId, payload);
+    } else {
+      onAddQuotation(payload);
+    }
+
+    setFormMode(null);
+    setEditingQuotationId(null);
     // Reset Form
     setPartyId('');
     setLineItems([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
@@ -208,7 +266,7 @@ export default function QuotationsView({
     return matchesSearch && matchesStatus;
   });
 
-  if (isCreating) {
+  if (formMode) {
     return (
       <div className="space-y-6">
         {/* Breadcrumb / Page Header */}
@@ -219,10 +277,18 @@ export default function QuotationsView({
               <span className="text-slate-300">/</span>
               <span>Quotations</span>
               <span className="text-slate-300">/</span>
-              <span className="text-[#172033] font-semibold">New Quotation</span>
+              <span className="text-[#172033] font-semibold">
+                {formMode === 'edit' ? 'Edit Quotation' : formMode === 'duplicate' ? 'Duplicate Quotation' : 'New Quotation'}
+              </span>
             </div>
-            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight mt-1">
-              Draft Professional Quotation Proposal
+            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight mt-1 flex items-center space-x-2">
+              <span>{formMode === 'edit' ? 'Edit Quotation' : formMode === 'duplicate' ? 'Duplicate Quotation' : 'Draft Professional Quotation Proposal'}</span>
+              {formMode === 'duplicate' && (
+                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-black rounded-full uppercase tracking-wider animate-pulse">Duplicate Mode</span>
+              )}
+              {formMode === 'edit' && (
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-full uppercase tracking-wider">Edit Mode</span>
+              )}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               Line items support both physical products or standard business services.
@@ -231,7 +297,10 @@ export default function QuotationsView({
           <div>
             <button
               type="button"
-              onClick={() => setIsCreating(false)}
+              onClick={() => {
+                setFormMode(null);
+                setEditingQuotationId(null);
+              }}
               className="px-4 py-2 bg-white border border-[#D8E0EA] hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
             >
               Back to Catalog
@@ -339,29 +408,33 @@ export default function QuotationsView({
                           </select>
                         </td>
                         <td className="py-2 px-3">
-                          <input
-                            type="number"
-                            min="1"
+                          <NumericInput
                             value={line.quantity}
-                            onChange={(e) => handleLineItemChange(idx, 'quantity', Number(e.target.value))}
+                            onChange={(val) => handleLineItemChange(idx, 'quantity', val)}
+                            allowDecimal={true}
+                            decimalScale={3}
+                            min={0}
                             className="w-full text-center border border-slate-150 rounded py-1 text-xs font-mono"
                           />
                         </td>
                         <td className="py-2 px-3 text-right">
-                          <input
-                            type="number"
+                          <NumericInput
                             value={line.rate}
-                            onChange={(e) => handleLineItemChange(idx, 'rate', Number(e.target.value))}
+                            onChange={(val) => handleLineItemChange(idx, 'rate', val)}
+                            allowDecimal={true}
+                            decimalScale={2}
+                            min={0}
                             className="w-full text-right border border-slate-150 rounded py-1 text-xs font-mono"
                           />
                         </td>
                         <td className="py-2 px-3 text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
+                          <NumericInput
                             value={line.discountPercent}
-                            onChange={(e) => handleLineItemChange(idx, 'discountPercent', Number(e.target.value))}
+                            onChange={(val) => handleLineItemChange(idx, 'discountPercent', val)}
+                            allowDecimal={true}
+                            decimalScale={2}
+                            min={0}
+                            max={100}
                             className="w-full text-right border border-slate-150 rounded py-1 text-xs font-mono"
                           />
                         </td>
@@ -409,10 +482,12 @@ export default function QuotationsView({
             <div className="space-y-5">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Quotation Advance Requirement (INR)</label>
-                <input
-                  type="number"
+                <NumericInput
                   value={advanceRequirement}
-                  onChange={(e) => setAdvanceRequirement(Number(e.target.value))}
+                  onChange={(val) => setAdvanceRequirement(val)}
+                  allowDecimal={true}
+                  decimalScale={2}
+                  min={0}
                   className="w-full md:max-w-xs h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs focus:border-blue-500 focus:outline-none font-mono"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Specify upfront billing deposit needed before processing begins.</p>
@@ -449,10 +524,12 @@ export default function QuotationsView({
                     </div>
                     <div className="flex justify-between text-xs font-medium text-slate-600 items-center">
                       <span>Logistics / Extra charges:</span>
-                      <input
-                        type="number"
+                      <NumericInput
                         value={additionalCharges}
-                        onChange={(e) => setAdditionalCharges(Number(e.target.value))}
+                        onChange={(val) => setAdditionalCharges(val)}
+                        allowDecimal={true}
+                        decimalScale={2}
+                        min={0}
                         className="w-28 text-right border border-slate-200 rounded px-2.5 py-1 text-xs font-mono bg-white"
                       />
                     </div>
@@ -472,7 +549,10 @@ export default function QuotationsView({
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-between items-center z-40 shadow-lg">
             <button
               type="button"
-              onClick={() => setIsCreating(false)}
+              onClick={() => {
+                setFormMode(null);
+                setEditingQuotationId(null);
+              }}
               className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition"
             >
               Cancel Draft
@@ -481,7 +561,7 @@ export default function QuotationsView({
               type="submit"
               className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs transition shadow-sm"
             >
-              Finalize & Dispatch Proposal
+              {formMode === 'edit' ? 'Update & Save Proposal' : formMode === 'duplicate' ? 'Save Duplicated as New' : 'Finalize & Dispatch Proposal'}
             </button>
           </div>
         </form>
@@ -502,7 +582,7 @@ export default function QuotationsView({
             </div>
             {isAdmin && (
               <button
-                onClick={() => setIsCreating(true)}
+                onClick={() => setFormMode('create')}
                 className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
               >
                 <Plus size={14} />
@@ -609,6 +689,28 @@ export default function QuotationsView({
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end space-x-2">
+                            {/* Edit Action */}
+                            {isAdmin && (
+                              <button
+                                onClick={() => startEditQuotation(q)}
+                                className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                title="Edit Quotation"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            )}
+
+                            {/* Duplicate Action */}
+                            {isAdmin && (
+                              <button
+                                onClick={() => startDuplicateQuotation(q)}
+                                className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                                title="Duplicate (Save as New)"
+                              >
+                                <Copy size={13} />
+                              </button>
+                            )}
+
                             <button
                               onClick={() => setPrintingQuotation(q)}
                               className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded"
@@ -660,6 +762,21 @@ export default function QuotationsView({
                               >
                                 <span>To Invoice</span>
                                 <ChevronRight size={10} />
+                              </button>
+                            )}
+
+                            {/* Delete Action */}
+                            {isAdmin && onDeleteQuotation && (
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete Quotation ${q.quotationNumber}? This will soft-delete the record.`)) {
+                                    onDeleteQuotation(q.id);
+                                  }
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                                title="Delete Quotation"
+                              >
+                                <Trash2 size={13} />
                               </button>
                             )}
                           </div>
