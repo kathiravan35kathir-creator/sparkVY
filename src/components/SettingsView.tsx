@@ -671,35 +671,7 @@ export default function SettingsView({
   const activeGroup = navigationGroups.find((g) => g.items.some((it) => it.id === activePage)) || navigationGroups[0];
 
   return (
-    <div className="space-y-4 animate-fade-in text-xs sm:text-sm">
-      {/* 1. HEADER MODULE WITH ALERTS */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center space-x-2">
-            <Building size={20} className="text-blue-600 shrink-0" />
-            <span>Vyapar-Style Enterprise Operations Settings</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Redesigned centralized operations settings. Define corporate profiles, taxation parameters, document serials, and custom template systems.
-          </p>
-        </div>
-        
-        <div className="flex items-center space-x-3 self-end md:self-center">
-          {hasChanges && (
-            <div className="flex items-center space-x-1 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg border border-amber-200 text-[10px] font-black uppercase tracking-wider animate-pulse">
-              <AlertTriangle size={13} />
-              <span>Unsaved Changes</span>
-            </div>
-          )}
-          {saveSuccess && (
-            <div className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-200 text-[10px] font-black uppercase tracking-wider animate-fade-in">
-              <CheckCircle2 size={13} />
-              <span>Configurations Saved</span>
-            </div>
-          )}
-        </div>
-      </div>
-
+    <div className="animate-fade-in text-xs sm:text-sm">
       {/* 2. TWO PANEL CORE GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* LEFT NAV PANEL: Desktop scrollbar layout, Mobile dropdown switcher */}
@@ -782,8 +754,22 @@ export default function SettingsView({
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">{activeNavItem.desc}</p>
             </div>
-            <div className="text-[10px] text-slate-400 font-semibold font-mono self-start sm:self-center bg-slate-100 px-2.5 py-1 rounded-full">
-              ID: {activePage}
+            <div className="flex items-center space-x-2.5 self-start sm:self-center">
+              {hasChanges && (
+                <div className="flex items-center space-x-1 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-200 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                  <AlertTriangle size={12} />
+                  <span>Unsaved Changes</span>
+                </div>
+              )}
+              {saveSuccess && (
+                <div className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-200 text-[10px] font-black uppercase tracking-wider animate-fade-in">
+                  <CheckCircle2 size={12} />
+                  <span>Saved</span>
+                </div>
+              )}
+              <div className="text-[10px] text-slate-400 font-semibold font-mono bg-slate-100 px-2.5 py-1 rounded-full">
+                ID: {activePage}
+              </div>
             </div>
           </div>
 
