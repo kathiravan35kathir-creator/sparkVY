@@ -11,7 +11,6 @@ import { Party, Item, Quotation, Invoice, Expense, Payment, ProformaInvoice, Pro
 import { listenToAuthChanges, signOutUser } from './services/authService';
 import { auth, firestoreDb } from './lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { updateGlobalSettings } from './utils/numericUtils';
 
 enum OperationType {
   CREATE = 'create',
@@ -117,17 +116,6 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-
-  // Propagate settings changes (currency & decimals) to the global formatter in real-time
-  useEffect(() => {
-    if (db?.settings) {
-      const symbol = db.settings.general?.currencySymbol || db.settings.system?.currencySymbol || '₹';
-      const decimals = db.settings.general?.amountDecimalPlaces !== undefined 
-        ? db.settings.general.amountDecimalPlaces 
-        : (db.settings.system?.decimalPlaces !== undefined ? db.settings.system.decimalPlaces : 2);
-      updateGlobalSettings(symbol, decimals);
-    }
-  }, [db?.settings]);
 
   // Sync back to local storage and Firestore whenever DB state is modified
   useEffect(() => {
@@ -1709,8 +1697,6 @@ export default function App() {
               settings={db.settings}
               onCheckPin={checkPin}
               onLogCommunication={handleAddCommunicationLog}
-              onAddParty={handleAddParty}
-              onAddItem={handleAddItem}
             />
           )}
           {activeTab === 'returns' && (
