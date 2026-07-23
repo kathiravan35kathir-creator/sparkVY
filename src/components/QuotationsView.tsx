@@ -546,20 +546,20 @@ export default function QuotationsView({
           </div>
 
           {/* BOTTOM ACTIONS BAR */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-between items-center z-40 shadow-lg">
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-between items-center z-40 shadow-lg md:pl-[240px] pl-6">
             <button
               type="button"
               onClick={() => {
                 setFormMode(null);
                 setEditingQuotationId(null);
               }}
-              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition"
+              className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold rounded-lg text-xs transition cursor-pointer"
             >
               Cancel Draft
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-xs transition shadow-sm"
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold rounded-lg text-xs transition shadow-sm cursor-pointer"
             >
               {formMode === 'edit' ? 'Update & Save Proposal' : formMode === 'duplicate' ? 'Save Duplicated as New' : 'Finalize & Dispatch Proposal'}
             </button>

@@ -585,8 +585,8 @@ export default function PartiesView({
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Business Type</label>
                 <select
-                  value={companyName ? 'Corporation' : 'Proprietorship'}
-                  onChange={() => {}}
+                  value={businessType || (companyName ? 'Corporation' : 'Proprietorship')}
+                  onChange={(e) => setBusinessType(e.target.value)}
                   className="w-full h-[42px] px-3 bg-white border border-[#D8E0EA] rounded-md text-xs text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition"
                 >
                   <option value="Proprietorship">Proprietorship / Individual</option>
@@ -904,7 +904,7 @@ export default function PartiesView({
             <button
               type="button"
               onClick={resetForm}
-              className="px-4 py-2 text-slate-600 hover:text-slate-800 font-bold text-xs transition"
+              className="px-4 py-2 text-slate-600 hover:text-slate-900 active:scale-95 font-bold text-xs transition cursor-pointer"
             >
               Reset Form
             </button>
@@ -913,7 +913,7 @@ export default function PartiesView({
                 <button
                   type="submit"
                   onClick={() => setSubmitMode('another')}
-                  className="px-4 py-2 border border-[#D8E0EA] bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+                  className="px-4 py-2 border border-[#D8E0EA] bg-white hover:bg-slate-50 active:scale-95 text-slate-700 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
                 >
                   Save & Add Another
                 </button>
@@ -921,7 +921,7 @@ export default function PartiesView({
               <button
                 type="submit"
                 onClick={() => setSubmitMode('register')}
-                className="px-5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                className="px-5 py-2 bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
               >
                 {isEditMode ? 'Save & Update Party' : 'Save & Register Party'}
               </button>

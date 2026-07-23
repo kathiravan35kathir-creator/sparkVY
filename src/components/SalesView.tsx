@@ -531,17 +531,17 @@ export default function SalesView({
           </div>
 
           {/* Bottom Actions Sticky bar */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-3.5 px-6 flex items-center justify-between z-40">
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-3.5 px-6 flex items-center justify-between z-40 md:pl-[240px] pl-6">
             <button
               type="button"
               onClick={() => { setIsCreating(false); }}
-              className="px-4 py-2 border border-[#D8E0EA] text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+              className="px-4 py-2 border border-[#D8E0EA] text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-50 active:scale-95 transition cursor-pointer"
             >
               Cancel & Discard Bill
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-md cursor-pointer"
+              className="px-6 py-2.5 bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white rounded-lg text-xs font-bold transition shadow-md cursor-pointer flex items-center gap-2"
             >
               Finalize & Save Sales Bill
             </button>
