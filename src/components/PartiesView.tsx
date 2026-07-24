@@ -26,6 +26,7 @@ import {
   updateUrlWithPrefill,
   clearPrefillFromUrl,
   detectSmartPrefill,
+  normalizeSearchString,
   findExactMatch
 } from '../utils/searchOrCreate';
 
@@ -127,6 +128,7 @@ export default function PartiesView({
   const [submitMode, setSubmitMode] = useState<'register' | 'another'>('register');
   const [termsAndNotes, setTermsAndNotes] = useState('');
   const [partyStatus, setPartyStatus] = useState<boolean>(true);
+  const [duplicateWarningMatch, setDuplicateWarningMatch] = useState<Party | null>(null);
 
   // Sync Same As Billing
   React.useEffect(() => {
@@ -177,6 +179,7 @@ export default function PartiesView({
     setGstError('');
     setTermsAndNotes('');
     setPartyStatus(true);
+    setDuplicateWarningMatch(null);
     setSelectedPartyId(null);
     setIsEditMode(false);
   };
@@ -321,29 +324,7 @@ export default function PartiesView({
     setIsOpenForm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !phone || !billingLine1) {
-      alert('Please fill in Name, Phone, and Billing Address (Line 1) as they are mandatory.');
-      return;
-    }
-
-    // Duplicate party check
-    const match = findExactMatch(
-      parties.filter((p) => p.id !== selectedPartyId),
-      name,
-      ['name', 'companyName', 'phone', 'gstNumber', 'email']
-    );
-    if (match) {
-      if (
-        !confirm(
-          `A party named "${match.name}" (Phone: ${match.phone}) already exists. Are you sure you want to save a duplicate?`
-        )
-      ) {
-        return;
-      }
-    }
-
+  const savePartyRecord = () => {
     const composedBilling = [billingLine1, billingLine2, billingCity, billingState, billingZip, billingCountry].filter(Boolean).join(', ');
     const composedShipping = [shippingLine1, shippingLine2, shippingCity, shippingState, shippingZip, shippingCountry].filter(Boolean).join(', ');
 
@@ -383,6 +364,36 @@ export default function PartiesView({
         resetForm();
       }
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !phone || !billingLine1) {
+      alert('Please fill in Name, Phone, and Billing Address (Line 1) as they are mandatory.');
+      return;
+    }
+
+    // Duplicate party check
+    const normalizedName = normalizeSearchString(name);
+    const normalizedPhone = normalizeSearchString(phone);
+    const normalizedEmail = normalizeSearchString(email);
+    const normalizedGst = normalizeSearchString(gstNumber);
+
+    const match = parties.find(p => {
+      if (p.id === selectedPartyId) return false;
+      if (normalizedName && normalizeSearchString(p.name) === normalizedName) return true;
+      if (normalizedPhone && normalizeSearchString(p.phone) === normalizedPhone) return true;
+      if (normalizedEmail && normalizeSearchString(p.email) === normalizedEmail) return true;
+      if (normalizedGst && normalizeSearchString(p.gstNumber) === normalizedGst) return true;
+      return false;
+    });
+
+    if (match && !duplicateWarningMatch) {
+      setDuplicateWarningMatch(match);
+      return;
+    }
+
+    savePartyRecord();
   };
 
   // Filter & Sort core logic
@@ -1004,6 +1015,69 @@ export default function PartiesView({
           </div>
 
         </form>
+
+        {duplicateWarningMatch && (
+          <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={20} className="text-amber-500" />
+                  <h3 className="text-sm font-bold text-slate-800">Possible Duplicate Found</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWarningMatch(null)}
+                  className="text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-5 bg-amber-50/50">
+                <p className="text-xs text-slate-700 font-medium mb-3">
+                  A similar party already exists. Please review the matched record before proceeding to avoid duplicates.
+                </p>
+                <div className="bg-white p-3 rounded-lg border border-amber-200 shadow-xs mb-4">
+                  <p className="text-xs font-bold text-slate-800">{duplicateWarningMatch.name}</p>
+                  <div className="mt-1 flex flex-col gap-1 text-[11px] text-slate-600">
+                    {duplicateWarningMatch.phone && <p>Phone: {duplicateWarningMatch.phone}</p>}
+                    {duplicateWarningMatch.email && <p>Email: {duplicateWarningMatch.email}</p>}
+                    {duplicateWarningMatch.gstNumber && <p>GST: {duplicateWarningMatch.gstNumber}</p>}
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateWarningMatch(null)}
+                  className="px-4 py-2 border border-[#D8E0EA] bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold transition shadow-2xs"
+                >
+                  Continue Editing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleOpenEdit(duplicateWarningMatch);
+                    setDuplicateWarningMatch(null);
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-xs transition"
+                >
+                  View Existing
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setDuplicateWarningMatch(null);
+                    // Temporarily bypass the check and save
+                    savePartyRecord();
+                  }}
+                  className="px-4 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
+                >
+                  Save Anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1043,7 +1117,7 @@ export default function PartiesView({
           </button>
           {isAdmin && (
             <button
-              onClick={handleOpenAdd}
+              onClick={() => handleOpenAdd()}
               className="flex items-center space-x-1.5 px-3.5 py-2 bg-[#2563EB] hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition"
             >
               <Plus size={14} />
