@@ -98,7 +98,23 @@ export default function QuotationsView({
   }[]>([{ itemId: '', quantity: 1, rate: 0, discountPercent: 0, taxPercent: 18 }]);
 
   const [pendingCreatedItemName, setPendingCreatedItemName] = useState<string | null>(null);
+  const [pendingCreatedPartyName, setPendingCreatedPartyName] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Auto-select newly created party when parties state updates
+  useEffect(() => {
+    if (pendingCreatedPartyName) {
+      const created = parties.find(
+        (p) => p.name.trim().toLowerCase() === pendingCreatedPartyName.trim().toLowerCase()
+      );
+      if (created) {
+        setPartyId(created.id);
+        setToastMessage(`Customer "${created.name}" created and automatically selected.`);
+        setTimeout(() => setToastMessage(null), 4000);
+        setPendingCreatedPartyName(null);
+      }
+    }
+  }, [parties, pendingCreatedPartyName]);
 
   // Auto-select newly created item when items state updates
   useEffect(() => {
@@ -488,16 +504,16 @@ export default function QuotationsView({
               <div className="h-px bg-[#E5EAF0] w-full mt-2" />
             </div>
             <div className="space-y-3">
-              <div className="border border-slate-150 rounded-xl overflow-hidden bg-white shadow-2xs">
+              <div className="border border-slate-150 rounded-xl bg-white shadow-2xs">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-150 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                      <th className="py-2.5 px-3 w-[45%]">Select Item or Service Description</th>
+                      <th className="py-2.5 px-3 w-[45%] first:rounded-tl-xl">Select Item or Service Description</th>
                       <th className="py-2.5 px-3 text-center w-[10%]">Qty / Units</th>
                       <th className="py-2.5 px-3 text-right w-[15%]">Rate (₹)</th>
                       <th className="py-2.5 px-3 text-right w-[10%]">Disc %</th>
                       <th className="py-2.5 px-3 text-right w-[10%]">GST %</th>
-                      <th className="py-2.5 px-3 text-right w-[10%]">Actions</th>
+                      <th className="py-2.5 px-3 text-right w-[10%] last:rounded-tr-xl">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -675,7 +691,7 @@ export default function QuotationsView({
           </div>
 
           {/* BOTTOM ACTIONS BAR */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-4 flex justify-between items-center z-40 shadow-lg md:pl-[240px] pl-6">
+          <div className="sticky bottom-0 -mx-4 md:-mx-6 -mb-24 px-4 md:px-6 py-4 bg-white border-t border-slate-200 flex justify-between items-center z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-8">
             <button
               type="button"
               onClick={() => {
@@ -969,10 +985,7 @@ export default function QuotationsView({
           onSaveParty={(newParty) => {
             onAddParty(newParty);
             setIsQuickPartyOpen(false);
-            setTimeout(() => {
-              const created = parties.find(p => p.name.toLowerCase() === newParty.name.toLowerCase());
-              if (created) setPartyId(created.id);
-            }, 50);
+            setPendingCreatedPartyName(newParty.name);
           }}
         />
       )}

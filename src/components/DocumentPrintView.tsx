@@ -280,28 +280,68 @@ export default function DocumentPrintView({
         imageTimeout: 15000,
         onclone: (clonedDoc, clonedElement) => {
           // Robust color sanitization: html2canvas v1.4.1 fails on modern CSS (oklch, color-mix)
-          // We iterate through all cloned elements and explicitly resolve colors using original computed styles
+          // We patch getComputedStyle in the cloned window to intercept and resolve any modern colors
+          // This covers normal elements, pseudo-elements, and all CSS properties automatically!
+          
+          if (clonedDoc.defaultView) {
+            const originalGetComputedStyle = clonedDoc.defaultView.getComputedStyle;
+            clonedDoc.defaultView.getComputedStyle = function(elt: Element, pseudoElt?: string | null) {
+              const style = originalGetComputedStyle.call(this, elt, pseudoElt);
+              
+              const sanitizeValue = (propName: string, val: string) => {
+                if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('lch') || val.includes('color-mix'))) {
+                  const p = propName.toLowerCase();
+                  if (p.includes('shadow')) return 'none';
+                  if (p.includes('image')) return 'none';
+                  
+                  // For composite properties like 'background' or 'border' that might contain oklch,
+                  // resolveToRgba might just return black if it fails to parse as a pure color. 
+                  // But html2canvas mostly reads longhand properties (backgroundColor, borderTopColor) which are pure colors.
+                  return resolveToRgba(val);
+                }
+                return val;
+              };
+
+              return new Proxy(style, {
+                get(target, prop, receiver) {
+                  const val = Reflect.get(target, prop, receiver);
+                  
+                  if (typeof val === 'function') {
+                    if (prop === 'getPropertyValue') {
+                       return function(...args: any[]) {
+                         const cssProp = args[0] as string;
+                         const res = val.apply(target, args);
+                         return sanitizeValue(cssProp, res);
+                       };
+                    }
+                    return function(...args: any[]) {
+                      return val.apply(target, args);
+                    };
+                  }
+                  
+                  if (typeof prop === 'string') {
+                    return sanitizeValue(prop, val);
+                  }
+                  
+                  return val;
+                }
+              });
+            };
+          }
+
+          // We still iterate through all cloned elements to fix inputs and other specific cloning quirks if needed.
+          // Since getComputedStyle is patched, we don't need to manually resolve colors on elements.
+          // However, we must ensure SVG icons or explicit inline styles without computed styles are safe (though html2canvas uses getComputedStyle for everything anyway).
+          // We can just keep the iteration for any other structural fixes, but we can safely remove the color string replacements here.
           const allCloned = clonedElement.querySelectorAll('*');
           const allOriginal = targetElement.querySelectorAll('*');
           
-          // Match and sanitize
           for (let i = 0; i < allCloned.length; i++) {
             const cEl = allCloned[i] as HTMLElement;
             const oEl = allOriginal[i] as HTMLElement;
             if (!oEl || !cEl.style) continue;
-
-            const computed = window.getComputedStyle(oEl);
-            const props = ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke', 'outlineColor', 'stopColor'];
             
-            props.forEach(prop => {
-              const cssProp = prop.replace(/[A-Z]/g, m => "-" + m.toLowerCase());
-              const val = computed.getPropertyValue(cssProp);
-              
-              if (val && (val.includes('oklch') || val.includes('oklab') || val.includes('lch') || val.includes('color-mix') || val.includes('var('))) {
-                const resolved = resolveToRgba(val);
-                cEl.style.setProperty(cssProp, resolved, 'important');
-              }
-            });
+            // Note: If you ever need to apply structural fixes (like fixing textarea values), do it here.
           }
         }
       });
