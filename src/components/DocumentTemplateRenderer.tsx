@@ -528,7 +528,7 @@ export default function DocumentTemplateRenderer({
             HEADER STYLE OVERRIDES FOR ALL 32 TEMPLATES
             ========================================================================= */}
         
-                /* RETRO TALLY BOX LAYOUT (tally_classic / tally_gst) */
+        
         {(docTemplateId === 'tally_classic' || docTemplateId === 'tally_gst') ? (
           <div className="border-2 border-slate-900 p-4 mb-4 font-mono">
             <div className="text-center border-b border-slate-900 pb-2 mb-3">
@@ -555,7 +555,6 @@ export default function DocumentTemplateRenderer({
             </div>
           </div>
         ) : docTemplateId === 'executive_minimal' ? (
-          /* EXECUTIVE MINIMAL LAYOUT */
           <div className="border-b border-slate-200 pb-4 mb-5">
             <div className="flex flex-col sm:flex-row justify-between items-baseline mb-3">
               <h1 className="font-serif font-black text-xl tracking-tight text-slate-900 uppercase">
@@ -583,7 +582,6 @@ export default function DocumentTemplateRenderer({
             </div>
           </div>
         ) : docTemplateId === 'corporate_blue' ? (
-          /* CORPORATE BLUE BORDERED HEADER */
           <div className="border-b-4 pb-4 mb-5 flex flex-col sm:flex-row justify-between items-start gap-4" style={primaryBorder}>
             <div>
               <div className="flex items-center space-x-2">
@@ -640,7 +638,6 @@ export default function DocumentTemplateRenderer({
             </div>
           </div>
         ) : (
-          /* STANDARD HIGH CONTRAST MODERN HEADER (Vyapar, Professional Orange, GST Detailed, etc) */
           <div className="border-b-2 border-slate-900 pb-4 mb-4 flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
               <div className="flex items-center space-x-2">

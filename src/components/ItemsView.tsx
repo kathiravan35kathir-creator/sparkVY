@@ -114,9 +114,9 @@ export default function ItemsView({
     setPrefillNotice(null);
   };
 
-  const handleOpenAdd = (initialName?: string) => {
+  const handleOpenAdd = (initialName?: string | any) => {
     resetForm();
-    if (initialName) {
+    if (initialName && typeof initialName === 'string') {
       setName(initialName);
       setPrefillNotice(`Creating a new item from search: "${initialName}"`);
       updateUrlWithPrefill('items', { prefillName: initialName });

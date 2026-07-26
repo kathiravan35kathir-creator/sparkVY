@@ -260,6 +260,7 @@ export default function SettingsView({
                   activeDocType === 'quotation' ? 'quotationTemplate' :
                   activeDocType === 'purchase' ? 'purchaseTemplate' : 'receiptTemplate';
     
+    console.log("handlePrintChange", field, value);
     setLocalSettings((prev) => {
       const updated = {
         ...prev,
@@ -319,6 +320,7 @@ export default function SettingsView({
 
   // Field change handler
   const handleFieldChange = (group: keyof AppSettings, field: string, value: any) => {
+    console.log("handlePrintChange", field, value);
     setLocalSettings((prev) => {
       const updated = {
         ...prev,
@@ -334,6 +336,7 @@ export default function SettingsView({
 
   // Nested numbering field change handler
   const handleNumberingChange = (docType: keyof AppSettings['numbering'], field: string, value: any) => {
+    console.log("handlePrintChange", field, value);
     setLocalSettings((prev) => {
       const updated = {
         ...prev,
@@ -352,6 +355,7 @@ export default function SettingsView({
 
   // Direct print customizations change handler
   const handlePrintChange = (field: string, value: any) => {
+    console.log("handlePrintChange", field, value);
     setLocalSettings((prev) => {
       const updated = {
         ...prev,
@@ -367,6 +371,7 @@ export default function SettingsView({
 
   // General features change handler
   const handleGeneralFeatureChange = (field: string, value: any) => {
+    console.log("handlePrintChange", field, value);
     setLocalSettings((prev) => {
       const updated = {
         ...prev,
@@ -512,6 +517,23 @@ export default function SettingsView({
         }
       } catch (err) {
         console.error('Failed to save secure WhatsApp settings:', err);
+      }
+    }
+
+    // Explicitly persist template selection to the company settings document if on a template page
+    if (['invoice_templates', 'quotation_templates', 'receipt_templates', 'purchase_templates'].includes(activePage)) {
+      if (currentUser?.id) {
+        try {
+          const { firestoreDb } = await import('../lib/firebase');
+          const { doc, setDoc } = await import('firebase/firestore');
+          await setDoc(
+            doc(firestoreDb, "companySettings", currentUser.id),
+            { print: localSettings.print },
+            { merge: true }
+          );
+        } catch (err) {
+          console.error("Failed to save template selection to companySettings:", err);
+        }
       }
     }
 
@@ -2237,7 +2259,7 @@ export default function SettingsView({
                     </div>
 
                     {/* LIVE HTML RENDER PREVIEW AREA (COL-SPAN-7) */}
-                    <div className="lg:col-span-7 bg-slate-100 p-4 rounded-3xl border border-slate-200 flex flex-col justify-start">
+                    <div className="lg:col-span-7 flex flex-col justify-start">
                       <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 shrink-0 font-sans">
                         <span className="flex items-center space-x-1.5 font-black text-[10px] text-slate-700 uppercase tracking-wider">
                           <Printer size={13} className="text-slate-400" />
@@ -2248,15 +2270,13 @@ export default function SettingsView({
                         </span>
                       </div>
 
-                      {/* SHEET CONTAINER SCROLLER */}
-                      <div className="overflow-y-auto max-h-[750px] border border-slate-300 rounded-2xl bg-white shadow-xl hover:shadow-2xl transition p-2 sm:p-5 flex justify-center">
-                        <div className="w-full">
-                          <DocumentTemplateRenderer
-                            documentType={activeDocType}
-                            settings={localSettings}
-                            customizationOverride={localSettings.print}
-                          />
-                        </div>
+                      {/* SHEET CONTAINER */}
+                      <div className="w-full flex justify-center bg-slate-100/50 pt-2 pb-6">
+                        <DocumentTemplateRenderer
+                          documentType={activeDocType}
+                          settings={localSettings}
+                          customizationOverride={localSettings.print}
+                        />
                       </div>
                     </div>
                   </div>
@@ -3247,6 +3267,33 @@ Regards,
           </form>
         </div>
       </div>
+      
+      {/* FULL SIZE TEMPLATE PREVIEW MODAL */}
+      {previewTemplateModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-200 w-full max-w-5xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 bg-white border-b border-slate-200 shrink-0">
+              <h2 className="text-lg font-bold text-slate-800 font-sans">{previewTemplateModal.name} Preview</h2>
+              <button 
+                type="button"
+                onClick={() => setPreviewTemplateModal(null)}
+                className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 md:p-8 flex justify-center items-start">
+               <div className="w-[820px] h-auto min-h-[1160px] bg-white shadow-lg shrink-0 origin-top" style={{ transform: 'scale(1)' }}>
+                  <DocumentTemplateRenderer
+                    documentType={activeDocType}
+                    settings={localSettings}
+                    customizationOverride={{ ...localSettings.print, templateId: previewTemplateModal.id }}
+                  />
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

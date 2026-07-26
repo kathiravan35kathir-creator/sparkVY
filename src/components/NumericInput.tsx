@@ -1,6 +1,8 @@
 import React, { useState, useEffect, FocusEvent, ChangeEvent, KeyboardEvent, WheelEvent, ClipboardEvent } from 'react';
 import { sanitizeNumericInput, normalizePastedNumeric, toSafeNumber } from '../utils/numericUtils';
 
+import { useSelectOnFirstFocus } from '../hooks/useSelectOnFirstFocus';
+
 export interface NumericInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'min' | 'max'> {
   value: number | string | null | undefined;
@@ -25,15 +27,17 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
   max,
   placeholder,
   className = '',
-  selectOnFocus = false,
+  selectOnFocus = true,
   onBlur,
   onFocus,
+  onMouseUp,
   onWheel,
   onPaste,
   disabled,
   ...rest
 }, ref) => {
   const [isFocused, setIsFocused] = useState(false);
+  const selectFocusProps = useSelectOnFirstFocus({ selectOnFocus });
 
   // Helper to format incoming value prop to string
   const formatInitial = (val: number | string | null | undefined): string => {
@@ -85,14 +89,13 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
 
   const handleFocus = (e: FocusEvent<HTMLInputElement>) => {
     setIsFocused(true);
-    if (selectOnFocus) {
-      e.target.select();
-    }
+    selectFocusProps.onFocus(e);
     if (onFocus) onFocus(e);
   };
 
   const handleBlur = (e: FocusEvent<HTMLInputElement>) => {
     setIsFocused(false);
+    selectFocusProps.onBlur();
 
     let currentNum = toSafeNumber(displayValue);
     let finalStr = displayValue;
@@ -120,6 +123,11 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
     if (onBlur) onBlur(e);
   };
 
+  const handleMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
+    selectFocusProps.onMouseUp(e);
+    if (onMouseUp) onMouseUp(e);
+  };
+
   const handleWheel = (e: WheelEvent<HTMLInputElement>) => {
     e.currentTarget.blur();
     if (onWheel) onWheel(e);
@@ -135,6 +143,7 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
       onChange={handleChange}
       onFocus={handleFocus}
       onBlur={handleBlur}
+      onMouseUp={handleMouseUp}
       onWheel={handleWheel}
       onPaste={handlePaste}
       placeholder={placeholder}
