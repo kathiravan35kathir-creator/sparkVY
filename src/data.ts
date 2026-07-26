@@ -334,12 +334,21 @@ export function getInitialState(): AppState {
 }
 
 export function saveState(state: AppState, uid?: string) {
-  const key = uid ? `bizops_state_${uid}` : 'bizops_state';
-  localStorage.setItem(key, JSON.stringify(state));
+  if (uid) {
+    try {
+      localStorage.setItem('spark_vy_last_uid', uid);
+    } catch (_e) {}
+  }
+  const effectiveUid = uid || (typeof localStorage !== 'undefined' ? localStorage.getItem('spark_vy_last_uid') : null);
+  const key = effectiveUid ? `bizops_state_${effectiveUid}` : 'bizops_state';
+  try {
+    localStorage.setItem(key, JSON.stringify(state));
+  } catch (_e) {}
 }
 
-export function loadState(uid?: string): AppState {
-  const key = uid ? `bizops_state_${uid}` : 'bizops_state';
+export function loadState(uid?: string): AppState | null {
+  const effectiveUid = uid || (typeof localStorage !== 'undefined' ? localStorage.getItem('spark_vy_last_uid') : null);
+  const key = effectiveUid ? `bizops_state_${effectiveUid}` : 'bizops_state';
   const data = localStorage.getItem(key);
   if (data) {
     try {
@@ -391,9 +400,7 @@ export function loadState(uid?: string): AppState {
       console.error('Error loading state from localStorage:', e);
     }
   }
-  const initialState = getInitialState();
-  saveState(initialState);
-  return initialState;
+  return null;
 }
 
 export function logAudit(

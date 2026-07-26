@@ -41,16 +41,14 @@ interface FirestoreErrorInfo {
 function sanitizeFirestoreData(obj: any): any {
   if (obj === null || obj === undefined) return null;
   if (typeof obj !== 'object') return obj;
-  if (obj.constructor && obj.constructor.name !== 'Object' && !Array.isArray(obj)) {
-    return obj;
-  }
+  if (obj instanceof Date) return obj.toISOString();
   if (Array.isArray(obj)) {
     return obj.map(item => item === undefined ? null : sanitizeFirestoreData(item));
   }
   const clean: Record<string, any> = {};
   for (const key of Object.keys(obj)) {
     const val = obj[key];
-    if (val !== undefined) {
+    if (val !== undefined && typeof val !== 'function') {
       clean[key] = sanitizeFirestoreData(val);
     }
   }
@@ -106,6 +104,8 @@ import OnboardingView from './components/auth/OnboardingView';
 export default function App() {
   // Ref to prevent circular updates between onSnapshot listener and state sync effect
   const lastSavedStrRef = React.useRef<string>("");
+  // Ref to track if data has been initially hydrated from Firestore
+  const isFirestoreLoadedRef = React.useRef<boolean>(false);
 
   // 1. Core database state loaded from LocalStorage or generated defaults
   const [db, setDb] = useState<AppState>(() => {
@@ -169,6 +169,12 @@ export default function App() {
       return;
     }
 
+    // CRITICAL FIX: Do NOT sync to Firestore until Firestore has finished initial load
+    if (!isFirestoreLoadedRef.current) {
+      saveState(db, currentUser.id);
+      return;
+    }
+
     const serialized = JSON.stringify(db);
     if (serialized !== lastSavedStrRef.current) {
       lastSavedStrRef.current = serialized;
@@ -179,6 +185,7 @@ export default function App() {
           await setDoc(doc(firestoreDb, "appData", currentUser.id), sanitizeFirestoreData(db));
         } catch (err) {
           console.error("Failed to sync state to Firestore:", err);
+          handleFirestoreError(err, OperationType.WRITE, `appData/${currentUser.id}`);
         }
       };
       syncToFirestore();
@@ -246,25 +253,30 @@ export default function App() {
             if (snapshot.exists()) {
               const data = snapshot.data() as AppState;
               const serialized = JSON.stringify(data);
-              if (serialized !== lastSavedStrRef.current) {
-                lastSavedStrRef.current = serialized;
-                setDb(data);
-              }
+              lastSavedStrRef.current = serialized;
+              setDb(data);
+              saveState(data, firebaseUser.uid);
+              isFirestoreLoadedRef.current = true;
             } else {
               // Document does not exist yet. Initialize from LocalStorage or getInitialState()
               const initialData = loadState(firebaseUser.uid) || getInitialState();
               const serialized = JSON.stringify(initialData);
               lastSavedStrRef.current = serialized;
               setDb(initialData);
+              saveState(initialData, firebaseUser.uid);
+              isFirestoreLoadedRef.current = true;
               // Save to Firestore so it exists
               setDoc(appDataRef, sanitizeFirestoreData(initialData)).catch(err => {
                 console.error("Failed to initialize appData document:", err);
+                handleFirestoreError(err, OperationType.WRITE, `appData/${firebaseUser.uid}`);
               });
             }
           }, (err) => {
             console.error("appData onSnapshot error:", err);
             // Fallback to local storage if permission is denied or missing
-            setDb(loadState(firebaseUser.uid) || getInitialState());
+            const fallbackData = loadState(firebaseUser.uid) || getInitialState();
+            setDb(fallbackData);
+            isFirestoreLoadedRef.current = true;
           });
           
           if (onboardingCompleted) {
@@ -280,6 +292,8 @@ export default function App() {
           setIsAuthChecking(false);
         }
       } else {
+        isFirestoreLoadedRef.current = false;
+        lastSavedStrRef.current = "";
         setCurrentUser(null);
         setAuthStep('login');
         setIsAuthChecking(false);
@@ -396,6 +410,8 @@ export default function App() {
 
   const handleLogout = async () => {
     await signOutUser();
+    isFirestoreLoadedRef.current = false;
+    lastSavedStrRef.current = "";
     setCurrentUser(null);
     setDb(getInitialState());
     setAuthStep('login');

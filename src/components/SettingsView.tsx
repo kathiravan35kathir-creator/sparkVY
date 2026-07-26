@@ -260,7 +260,7 @@ export default function SettingsView({
                   activeDocType === 'quotation' ? 'quotationTemplate' :
                   activeDocType === 'purchase' ? 'purchaseTemplate' : 'receiptTemplate';
     
-    console.log("handlePrintChange", field, value);
+    console.log("handlePrintChange", field, newTpl.id);
     setLocalSettings((prev) => {
       const updated = {
         ...prev,
