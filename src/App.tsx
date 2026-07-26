@@ -783,6 +783,16 @@ export default function App() {
     addAuditLog('Sales', `Generated Proforma Invoice ${proformaNumber}`);
   };
 
+  const handleEditProforma = (id: string, updated: Partial<ProformaInvoice>) => {
+    setDb((prev) => ({
+      ...prev,
+      proformaInvoices: prev.proformaInvoices.map((p) =>
+        p.id === id ? { ...p, ...updated, updatedAt: new Date().toISOString() } : p
+      )
+    }));
+    addAuditLog('Sales', `Updated Proforma Invoice ${id}`);
+  };
+
   const handleConvertProformaToInvoice = (proformaId: string) => {
     const proforma = db.proformaInvoices.find(p => p.id === proformaId);
     if (!proforma) return;
@@ -1742,6 +1752,7 @@ export default function App() {
               parties={db.parties.filter(p => !p.isDeleted)}
               items={db.items.filter(it => !it.isDeleted)}
               onAddProforma={handleAddProformaInvoice}
+              onEditProforma={handleEditProforma}
               onUpdateProformaStatus={(id, status) => setDb(prev => ({ ...prev, proformaInvoices: prev.proformaInvoices.map(p => p.id === id ? { ...p, status } : p) }))}
               onConvertToSalesInvoice={handleConvertProformaToInvoice}
               onDeleteProforma={handleDeleteProformaInvoice}

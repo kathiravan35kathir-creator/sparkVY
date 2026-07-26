@@ -266,6 +266,8 @@ export default function DocumentTemplateRenderer({
     documentTitle = 'Purchase Order';
     if (docTemplateId === 'supplier_copy') documentTitle = 'Purchase Order (Supplier Copy)';
     if (docTemplateId === 'warehouse_copy') documentTitle = 'Purchase Requisition (Warehouse Copy)';
+  } else if (normType === 'proforma_invoice' || normType === 'proforma') {
+    documentTitle = 'Proforma Invoice';
   } else if (normType === 'transaction_list') {
     documentTitle = docData.title || 'Transaction Register';
   }
@@ -546,8 +548,8 @@ export default function DocumentTemplateRenderer({
                 </div>
               </div>
               <div className="sm:col-span-5 sm:border-l sm:border-slate-300 sm:pl-4 space-y-0.5 text-[10px]">
-                <p className="font-bold text-slate-950">Voucher No: <span className="text-xs">{docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}</span></p>
-                <p>Dated: <strong>{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
+                <p className="font-bold text-slate-950">Voucher No: <span className="text-xs">{docData.proformaNumber || docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}</span></p>
+                <p>Dated: <strong>{docData.date || docData.proformaDate || docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
                 {(docData.dueDate || docData.expiryDate) && (
                   <p>Settlement Period: <strong>{docData.dueDate || docData.expiryDate}</strong></p>
                 )}
@@ -575,9 +577,9 @@ export default function DocumentTemplateRenderer({
               </div>
               <div className="sm:text-right space-y-0.5">
                 <p className="text-xs font-bold text-slate-900">
-                  REFERENCE: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
+                  REFERENCE: {docData.proformaNumber || docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
                 </p>
-                <p>Issued: <span className="font-mono text-slate-700">{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</span></p>
+                <p>Issued: <span className="font-mono text-slate-700">{docData.date || docData.proformaDate || docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</span></p>
               </div>
             </div>
           </div>
@@ -630,10 +632,10 @@ export default function DocumentTemplateRenderer({
                 {documentTitle}
               </span>
               <p className="font-mono font-bold text-slate-800 text-xs">
-                NO: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
+                NO: {docData.proformaNumber || docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
               </p>
               <div className="text-[10px] text-slate-500 mt-1 font-mono">
-                <p>Dated: <strong>{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
+                <p>Dated: <strong>{docData.date || docData.proformaDate || docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
               </div>
             </div>
           </div>
@@ -660,10 +662,10 @@ export default function DocumentTemplateRenderer({
             <div className="sm:text-right mt-1 sm:mt-0">
               <h2 className="text-base font-black text-slate-950 tracking-wide uppercase" style={primaryText}>{documentTitle}</h2>
               <p className="text-[11px] font-bold text-slate-700 font-mono mt-0.5">
-                DOC ID: {docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
+                DOC ID: {docData.proformaNumber || docData.invoiceNumber || docData.quotationNumber || docData.paymentNumber || docData.purchaseNumber}
               </p>
               <div className="text-[10px] text-slate-400 mt-1 font-medium font-mono">
-                <p>Date: <strong className="text-slate-800">{docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
+                <p>Date: <strong className="text-slate-800">{docData.date || docData.proformaDate || docData.invoiceDate || docData.quotationDate || docData.paymentDate || docData.purchaseDate}</strong></p>
               </div>
             </div>
           </div>
