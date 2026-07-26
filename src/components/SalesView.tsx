@@ -317,7 +317,7 @@ export default function SalesView({
   if (isCreating) {
     const totals = calculateTotals();
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 pb-20">
         {/* Breadcrumb / Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5EAF0]">
           <div>
@@ -614,7 +614,7 @@ export default function SalesView({
           </div>
 
           {/* Bottom Actions Sticky bar */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-3.5 px-6 flex items-center justify-between z-40 md:pl-[240px] pl-6">
+          <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-6 bg-white border-t border-slate-200 py-3.5 px-6 flex items-center justify-between z-20 shadow-md">
             <button
               type="button"
               onClick={() => { setIsCreating(false); }}

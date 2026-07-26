@@ -374,7 +374,7 @@ export default function QuotationsView({
 
   if (formMode) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 pb-20">
         {/* Breadcrumb / Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5EAF0]">
           <div>
@@ -691,7 +691,7 @@ export default function QuotationsView({
           </div>
 
           {/* BOTTOM ACTIONS BAR */}
-          <div className="sticky bottom-0 -mx-4 md:-mx-6 -mb-24 px-4 md:px-6 py-4 bg-white border-t border-slate-200 flex justify-between items-center z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] mt-8">
+          <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-6 px-4 sm:px-6 py-3.5 bg-white border-t border-slate-200 flex justify-between items-center z-20 shadow-md">
             <button
               type="button"
               onClick={() => {

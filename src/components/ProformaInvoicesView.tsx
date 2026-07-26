@@ -247,7 +247,7 @@ export default function ProformaInvoicesView({
   if (isCreating) {
     const totals = calculateTotals();
     return (
-      <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="space-y-6 pb-20 animate-in fade-in duration-300">
         <div className="flex items-center justify-between pb-4 border-b">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Create Proforma Invoice</h2>
@@ -413,7 +413,7 @@ export default function ProformaInvoicesView({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t sticky bottom-0 bg-white/80 backdrop-blur-sm p-4">
+          <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-6 py-3.5 px-6 bg-white/90 backdrop-blur-sm border-t border-slate-200 flex items-center justify-end gap-3 z-20 shadow-md">
             <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-lg hover:bg-blue-700">Save Proforma Invoice</button>
           </div>
         </form>
