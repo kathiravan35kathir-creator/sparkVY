@@ -29,6 +29,7 @@ import {
   normalizeSearchString,
   findExactMatch
 } from '../utils/searchOrCreate';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface PartiesViewProps {
   parties: Party[];
@@ -84,6 +85,18 @@ export default function PartiesView({
 
   // Detailed view Drawer
   const [viewingParty, setViewingParty] = useState<Party | null>(null);
+
+  // Delete Modal state
+  const [deletingParty, setDeletingParty] = useState<Party | null>(null);
+
+  const isPartyInUse = (party: Party) => {
+    if (!db) return false;
+    const inInvoices = db.invoices?.some(i => i.partyId === party.id && !i.isDeleted);
+    const inPurchases = db.purchases?.some(p => p.partyId === party.id && !p.isDeleted);
+    const inPayments = db.payments?.some(pay => pay.partyId === party.id && !pay.isDeleted);
+    const inQuotations = db.quotations?.some(q => q.partyId === party.id && !q.isDeleted);
+    return inInvoices || inPurchases || inPayments || inQuotations;
+  };
 
   // Form Fields
   const [name, setName] = useState('');
@@ -1302,7 +1315,7 @@ export default function PartiesView({
                     </td>
                     <td className="py-3.5 px-4 text-right font-mono font-bold">
                       <span className={party.balanceType === 'Receivable' ? 'text-rose-600' : 'text-emerald-600'}>
-                        ₹{party.currentBalance.toLocaleString()} {party.balanceType === 'Receivable' ? 'Dr' : 'Cr'}
+                        ₹{(party.currentBalance || 0).toLocaleString()} {party.balanceType === 'Receivable' ? 'Dr' : 'Cr'}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-center">
@@ -1364,12 +1377,8 @@ export default function PartiesView({
 
                             {onDeleteParty && (
                               <button
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to move ${party.name} to Trash?`)) {
-                                    onDeleteParty(party.id);
-                                  }
-                                }}
-                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                                onClick={() => setDeletingParty(party)}
+                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded cursor-pointer"
                                 title="Move to Trash"
                               >
                                 <Trash2 size={14} />
@@ -1544,6 +1553,39 @@ export default function PartiesView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingParty && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingParty}
+          onClose={() => setDeletingParty(null)}
+          onConfirm={() => {
+            if (onDeleteParty && deletingParty) {
+              onDeleteParty(deletingParty.id);
+              setDeletingParty(null);
+            }
+          }}
+          title="Delete Party Record"
+          recordType="Party Account"
+          recordNumber={deletingParty.code || deletingParty.name}
+          partyName={deletingParty.name}
+          amount={deletingParty.currentBalance}
+          impactSummary={`Party ${deletingParty.name} will be moved to Trash. Past billing transactions remain preserved in database history.`}
+          isBlocked={isPartyInUse(deletingParty)}
+          blockedReason={`Party ${deletingParty.name} has active invoices, purchases, payments or quotations associated with it and cannot be deleted directly. You can deactivate it instead.`}
+          alternativeAction={
+            isPartyInUse(deletingParty)
+              ? {
+                  label: 'Deactivate Party Instead',
+                  onClick: () => {
+                    onDeactivateParty(deletingParty.id);
+                    setDeletingParty(null);
+                  }
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

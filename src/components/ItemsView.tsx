@@ -15,9 +15,14 @@ import {
   Copy,
   X,
   PackagePlus,
-  AlertCircle
+  AlertCircle,
+  Sliders,
+  History,
+  TrendingUp,
+  TrendingDown,
+  RotateCcw
 } from 'lucide-react';
-import { Item, ItemType, Party, AppSettings } from '../types';
+import { Item, ItemType, Party, AppSettings, StockMovement, Invoice, Purchase, Quotation } from '../types';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
 import {
@@ -27,28 +32,46 @@ import {
   findExactMatch
 } from '../utils/searchOrCreate';
 import { SearchOrCreateInput } from './SearchOrCreateInput';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface ItemsViewProps {
   items: Item[];
   parties: Party[];
+  stockMovements?: StockMovement[];
   onAddItem: (item: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => void;
   onEditItem: (id: string, item: Partial<Item>) => void;
+  onAdjustStock?: (adjustment: {
+    itemId: string;
+    adjustmentType: 'Adjustment' | 'Purchase In' | 'Sale Out' | 'Damaged' | 'Expired';
+    quantity: number;
+    notes?: string;
+    batchNumber?: string;
+    expiryDate?: string;
+  }) => void;
   onDeactivateItem: (id: string) => void;
   onReactivateItem: (id: string) => void;
   onDeleteItem?: (id: string) => void;
   isAdmin: boolean;
   settings?: AppSettings;
+  invoices?: Invoice[];
+  purchases?: Purchase[];
+  quotations?: Quotation[];
 }
 
 export default function ItemsView({
   items,
   parties,
+  stockMovements = [],
   onAddItem,
   onEditItem,
+  onAdjustStock,
   onDeactivateItem,
   onReactivateItem,
   onDeleteItem,
-  isAdmin
+  isAdmin,
+  invoices = [],
+  purchases = [],
+  quotations = []
 }: ItemsViewProps) {
   // Navigation & Search States
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,6 +101,65 @@ export default function ItemsView({
   const [expiryTracking, setExpiryTracking] = useState(true);
   const [supplierId, setSupplierId] = useState('');
   const [description, setDescription] = useState('');
+
+  // Stock Adjustment Modal State
+  const [adjustingItem, setAdjustingItem] = useState<Item | null>(null);
+  const [adjMode, setAdjMode] = useState<'delta' | 'count'>('delta');
+  const [adjQty, setAdjQty] = useState<number>(0);
+  const [adjCount, setAdjCount] = useState<number>(0);
+  const [adjType, setAdjType] = useState<'Adjustment' | 'Purchase In' | 'Sale Out' | 'Damaged' | 'Expired'>('Adjustment');
+  const [adjNotes, setAdjNotes] = useState<string>('');
+  const [adjBatch, setAdjBatch] = useState<string>('');
+  const [adjExpiry, setAdjExpiry] = useState<string>('');
+
+  // Delete Modal State
+  const [deletingItem, setDeletingItem] = useState<Item | null>(null);
+
+  const handleOpenAdjustStock = (item: Item) => {
+    setAdjustingItem(item);
+    setAdjMode('delta');
+    setAdjQty(0);
+    setAdjCount(item.currentStock);
+    setAdjType('Adjustment');
+    setAdjNotes('');
+    setAdjBatch(item.barcode || '');
+    setAdjExpiry('');
+  };
+
+  const handleSaveStockAdjustment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustingItem || !onAdjustStock) return;
+
+    let delta = 0;
+    if (adjMode === 'count') {
+      delta = adjCount - adjustingItem.currentStock;
+    } else {
+      delta = adjQty;
+    }
+
+    if (delta === 0) {
+      alert('Stock adjustment delta is 0. Please enter a non-zero adjustment quantity or new physical count.');
+      return;
+    }
+
+    onAdjustStock({
+      itemId: adjustingItem.id,
+      adjustmentType: adjType,
+      quantity: delta,
+      notes: adjNotes || `Stock adjustment (${adjMode === 'count' ? `Physical Count: ${adjCount}` : `Delta: ${delta > 0 ? '+' : ''}${delta}`})`,
+      batchNumber: adjBatch,
+      expiryDate: adjExpiry
+    });
+
+    setAdjustingItem(null);
+  };
+
+  const isItemInUse = (item: Item) => {
+    const inInv = invoices.some(inv => inv.items?.some(i => i.itemId === item.id));
+    const inPur = purchases.some(pur => pur.items?.some((i: any) => i.itemId === item.id));
+    const inQuote = quotations.some(q => q.items?.some(i => i.itemId === item.id));
+    return inInv || inPur || inQuote;
+  };
 
   // Check URL prefill query parameters on load
   useEffect(() => {
@@ -774,8 +856,17 @@ export default function ItemsView({
                         {isAdmin && (
                           <div className="flex items-center justify-end space-x-1">
                             <button
+                              onClick={() => handleOpenAdjustStock(item)}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[11px] font-extrabold flex items-center space-x-1 transition cursor-pointer"
+                              title="Adjust Product Stock"
+                            >
+                              <Sliders size={12} />
+                              <span>Adjust</span>
+                            </button>
+
+                            <button
                               onClick={() => handleOpenEdit(item)}
-                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded cursor-pointer"
                               title="Edit Item Details"
                             >
                               <Edit2 size={13} />
@@ -783,7 +874,7 @@ export default function ItemsView({
 
                             <button
                               onClick={() => handleOpenDuplicate(item)}
-                              className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                              className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded cursor-pointer"
                               title="Duplicate Item (Save as New)"
                             >
                               <Copy size={13} />
@@ -791,12 +882,8 @@ export default function ItemsView({
 
                             {onDeleteItem && (
                               <button
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to move ${item.name} to Trash?`)) {
-                                    onDeleteItem(item.id);
-                                  }
-                                }}
-                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                                onClick={() => setDeletingItem(item)}
+                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded cursor-pointer"
                                 title="Move to Trash"
                               >
                                 <Trash2 size={13} />
@@ -814,7 +901,199 @@ export default function ItemsView({
         </div>
       </div>
 
+      {/* Stock Adjustment Modal */}
+      {adjustingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="p-5 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-blue-600/30 text-blue-400 rounded-xl border border-blue-500/30">
+                  <Sliders size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">Adjust Stock Level</h3>
+                  <p className="text-xs text-slate-300 font-medium">Item: <span className="text-blue-300 font-bold">{adjustingItem.name}</span> ({adjustingItem.code})</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdjustingItem(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
+            <form onSubmit={handleSaveStockAdjustment} className="p-6 space-y-4 text-xs text-slate-700">
+              {/* Current Stock Banner */}
+              <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-xl font-medium">
+                <div>
+                  <span className="text-slate-500 font-bold text-[10px] uppercase">Current Recorded Stock</span>
+                  <p className="text-lg font-black text-slate-900">{adjustingItem.currentStock} {adjustingItem.unit}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-bold text-[10px] uppercase">Min Alert Stock</span>
+                  <p className="text-sm font-bold text-slate-700">{adjustingItem.minimumStock} {adjustingItem.unit}</p>
+                </div>
+              </div>
+
+              {/* Adjustment Mode Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Adjustment Method</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdjMode('delta')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border text-center transition cursor-pointer ${adjMode === 'delta' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    Quantity Difference (+ / -)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjMode('count')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border text-center transition cursor-pointer ${adjMode === 'count' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    New Physical Count
+                  </button>
+                </div>
+              </div>
+
+              {/* Quantity Input */}
+              {adjMode === 'delta' ? (
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">Quantity Change (e.g. +10 or -5) *</label>
+                  <NumericInput
+                    value={adjQty}
+                    onChange={(val) => setAdjQty(val)}
+                    allowDecimal={true}
+                    decimalScale={3}
+                    className="w-full h-[40px] px-3 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    New stock level will be: <span className="font-bold text-blue-700">{Math.max(0, adjustingItem.currentStock + adjQty)} {adjustingItem.unit}</span>
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">Actual Physical Count *</label>
+                  <NumericInput
+                    value={adjCount}
+                    onChange={(val) => setAdjCount(val)}
+                    allowDecimal={true}
+                    decimalScale={3}
+                    min={0}
+                    className="w-full h-[40px] px-3 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Adjustment delta: <span className={`font-bold ${adjCount - adjustingItem.currentStock >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{adjCount - adjustingItem.currentStock >= 0 ? '+' : ''}{adjCount - adjustingItem.currentStock} {adjustingItem.unit}</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Adjustment Type / Reason */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Reason / Classification *</label>
+                <select
+                  value={adjType}
+                  onChange={(e) => setAdjType(e.target.value as any)}
+                  className="w-full h-[40px] px-3 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="Adjustment">Physical Count Reconciliation</option>
+                  <option value="Purchase In">Stock In / Received Excess</option>
+                  <option value="Sale Out">Stock Out / Manual Issue</option>
+                  <option value="Damaged">Damaged / Spoiled Goods</option>
+                  <option value="Expired">Expired Product Removal</option>
+                </select>
+              </div>
+
+              {/* Batch & Expiry (if enabled) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Batch Number (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Batch #"
+                    value={adjBatch}
+                    onChange={(e) => setAdjBatch(e.target.value)}
+                    className="w-full h-[38px] px-3 bg-white border border-slate-300 rounded-lg text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Expiry Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={adjExpiry}
+                    onChange={(e) => setAdjExpiry(e.target.value)}
+                    className="w-full h-[38px] px-3 bg-white border border-slate-300 rounded-lg text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Remarks / Notes */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Remarks / Remarks Reason</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Audit recount by stock manager, spill clean-up, missing inventory..."
+                  value={adjNotes}
+                  onChange={(e) => setAdjNotes(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="pt-2 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setAdjustingItem(null)}
+                  className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-xs cursor-pointer"
+                >
+                  Save Stock Adjustment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingItem && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingItem}
+          onClose={() => setDeletingItem(null)}
+          onConfirm={() => {
+            if (onDeleteItem && deletingItem) {
+              onDeleteItem(deletingItem.id);
+              setDeletingItem(null);
+            }
+          }}
+          title="Delete Catalog Item"
+          recordType="Catalog Product"
+          recordNumber={deletingItem.code || deletingItem.name}
+          partyName={deletingItem.name}
+          amount={deletingItem.sellingPrice}
+          impactSummary={`Item ${deletingItem.name} (${deletingItem.currentStock} ${deletingItem.unit} in stock) will be moved to Trash. Past transaction history remains intact.`}
+          isBlocked={isItemInUse(deletingItem)}
+          blockedReason={`This item cannot be deleted directly because active invoices, purchases or quotations refer to it. You can deactivate/archive it instead.`}
+          alternativeAction={
+            isItemInUse(deletingItem)
+              ? {
+                  label: 'Deactivate Item Instead',
+                  onClick: () => {
+                    onDeactivateItem(deletingItem.id);
+                    setDeletingItem(null);
+                  }
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

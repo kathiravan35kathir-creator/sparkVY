@@ -27,6 +27,7 @@ import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
 import ItemSearchSelect from './ItemSearchSelect';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface QuotationsViewProps {
   quotations: Quotation[];
@@ -70,6 +71,7 @@ export default function QuotationsView({
   const [formMode, setFormMode] = useState<'create' | 'edit' | 'duplicate' | null>(null);
   const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [printingQuotation, setPrintingQuotation] = useState<Quotation | null>(null);
+  const [deletingQuotation, setDeletingQuotation] = useState<Quotation | null>(null);
 
   // Quick Create Modals
   const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
@@ -939,12 +941,8 @@ export default function QuotationsView({
                             {/* Delete Action */}
                             {isAdmin && onDeleteQuotation && (
                               <button
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to delete Quotation ${q.quotationNumber}? This will soft-delete the record.`)) {
-                                    onDeleteQuotation(q.id);
-                                  }
-                                }}
-                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                                onClick={() => setDeletingQuotation(q)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
                                 title="Delete Quotation"
                               >
                                 <Trash2 size={13} />
@@ -1019,6 +1017,29 @@ export default function QuotationsView({
             setIsQuickItemOpen(false);
             setPendingCreatedItemName(newItem.name);
           }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingQuotation && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingQuotation}
+          onClose={() => setDeletingQuotation(null)}
+          onConfirm={() => {
+            if (onDeleteQuotation && deletingQuotation) {
+              onDeleteQuotation(deletingQuotation.id);
+              setDeletingQuotation(null);
+            }
+          }}
+          title="Delete Quotation"
+          recordType={deletingQuotation.stage === 'Estimate' ? 'Estimate Quotation' : 'Final Quotation'}
+          recordNumber={deletingQuotation.quotationNumber}
+          partyName={deletingQuotation.partyName}
+          date={deletingQuotation.quotationDate}
+          amount={deletingQuotation.total ?? 0}
+          impactSummary={`Quotation ${deletingQuotation.quotationNumber} for ₹${(deletingQuotation.total ?? 0).toLocaleString()} will be moved to Trash. This will not affect stock balances.`}
+          isBlocked={deletingQuotation.status === 'Converted'}
+          blockedReason={`Quotation ${deletingQuotation.quotationNumber} has already been converted to an active Sales Invoice and cannot be deleted.`}
         />
       )}
     </div>

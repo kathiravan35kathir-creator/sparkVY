@@ -29,6 +29,7 @@ import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
 import ItemSearchSelect from './ItemSearchSelect';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface SalesViewProps {
   invoices: Invoice[];
@@ -73,6 +74,7 @@ export default function SalesView({
   const [printingInvoice, setPrintingInvoice] = useState<Invoice | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [isBulkPrinting, setIsBulkPrinting] = useState(false);
+  const [deletingInvoice, setDeletingInvoice] = useState<Invoice | null>(null);
 
   // Quick Create Modals
   const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
@@ -888,12 +890,8 @@ export default function SalesView({
 
                             {isAdmin && onDeleteInvoice && (
                               <button
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to delete Invoice ${inv.invoiceNumber}? This will soft-delete the record.`)) {
-                                    onDeleteInvoice(inv.id);
-                                  }
-                                }}
-                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded"
+                                onClick={() => setDeletingInvoice(inv)}
+                                className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded cursor-pointer"
                                 title="Move to Trash"
                               >
                                 <Trash2 size={13} />
@@ -1087,6 +1085,27 @@ export default function SalesView({
             setIsQuickItemOpen(false);
             setPendingCreatedItemName(newItem.name);
           }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingInvoice && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingInvoice}
+          onClose={() => setDeletingInvoice(null)}
+          onConfirm={() => {
+            if (onDeleteInvoice && deletingInvoice) {
+              onDeleteInvoice(deletingInvoice.id);
+              setDeletingInvoice(null);
+            }
+          }}
+          title="Delete Sales Invoice"
+          recordType="Tax Invoice"
+          recordNumber={deletingInvoice.invoiceNumber}
+          partyName={deletingInvoice.partyName}
+          date={deletingInvoice.invoiceDate}
+          amount={deletingInvoice.total}
+          impactSummary={`Deleting sales invoice ${deletingInvoice.invoiceNumber} will restore inventory stock levels (+ item quantities) and reverse customer receivable ledger balance by ₹${(deletingInvoice.total ?? 0).toLocaleString()}.`}
         />
       )}
     </div>

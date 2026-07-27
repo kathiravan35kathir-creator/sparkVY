@@ -543,6 +543,55 @@ export default function App() {
     });
   };
 
+  const handleStockAdjustment = (adjustment: {
+    itemId: string;
+    adjustmentType: 'Adjustment' | 'Purchase In' | 'Sale Out' | 'Damaged' | 'Expired';
+    quantity: number;
+    notes?: string;
+    batchNumber?: string;
+    expiryDate?: string;
+  }) => {
+    setDb((prev) => {
+      const item = prev.items.find((i) => i.id === adjustment.itemId);
+      if (!item) return prev;
+
+      const delta = adjustment.quantity;
+      const nextStock = Math.max(0, item.currentStock + delta);
+
+      const movement: StockMovement = {
+        id: `mv-adj-${Date.now()}`,
+        itemId: item.id,
+        itemName: item.name,
+        type: adjustment.adjustmentType,
+        quantity: delta,
+        batchNumber: adjustment.batchNumber,
+        expiryDate: adjustment.expiryDate,
+        referenceNumber: `STK-ADJ-${Date.now().toString().slice(-6)}`,
+        user: currentUser?.full_name || currentUser?.name || 'System',
+        notes: adjustment.notes || `Stock adjustment for ${item.name}`,
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedItems = prev.items.map((i) =>
+        i.id === item.id ? { ...i, currentStock: nextStock } : i
+      );
+
+      const newState = {
+        ...prev,
+        items: updatedItems,
+        stockMovements: [movement, ...(prev.stockMovements || [])]
+      };
+
+      const audited = logAudit(newState, 'Adjust Stock', 'Catalog', item.id, item.name);
+      return notify(
+        audited,
+        'Stock Adjusted',
+        `Stock for ${item.name} updated to ${nextStock} ${item.unit}. Stock movement logged.`,
+        'success'
+      );
+    });
+  };
+
   // Quotation actions
   const handleAddQuotation = (quotePayload: Omit<Quotation, 'id' | 'quotationNumber' | 'createdAt'>) => {
     const config = quotePayload.stage === 'Estimate' ? db.settings.numbering.estimateQuotation : db.settings.numbering.quotation;
@@ -1717,13 +1766,18 @@ export default function App() {
             <ItemsView
               items={db.items.filter(it => !it.isDeleted)}
               parties={db.parties.filter(p => !p.isDeleted)}
+              stockMovements={db.stockMovements || []}
               onAddItem={handleAddItem}
               onEditItem={handleEditItem}
-              onDeactivateItem={() => {}}
-              onReactivateItem={() => {}}
+              onAdjustStock={handleStockAdjustment}
+              onDeactivateItem={(id) => handleEditItem(id, { isActive: false })}
+              onReactivateItem={(id) => handleEditItem(id, { isActive: true })}
               onDeleteItem={handleDeleteItem}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
+              invoices={db.invoices.filter(i => !i.isDeleted)}
+              purchases={db.purchases.filter(p => !p.isDeleted)}
+              quotations={db.quotations.filter(q => !q.isDeleted)}
             />
           )}
 

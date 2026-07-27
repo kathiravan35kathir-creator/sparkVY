@@ -26,6 +26,7 @@ import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
 import ItemSearchSelect from './ItemSearchSelect';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface PurchasesViewProps {
   purchases: Purchase[];
@@ -58,6 +59,7 @@ export default function PurchasesView({
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [printingPurchase, setPrintingPurchase] = useState<Purchase | null>(null);
   const [isBulkPrinting, setIsBulkPrinting] = useState(false);
+  const [deletingPurchase, setDeletingPurchase] = useState<Purchase | null>(null);
 
   // Quick Create Modals
   const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
@@ -806,13 +808,8 @@ export default function PurchasesView({
                     )}
                     {isAdmin && onDeletePurchase && (
                       <button
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete Purchase Invoice ${selectedPurchase.purchaseNumber}?`)) {
-                            onDeletePurchase(selectedPurchase.id);
-                            setSelectedPurchase(null);
-                          }
-                        }}
-                        className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded border border-rose-200"
+                        onClick={() => setDeletingPurchase(selectedPurchase)}
+                        className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded border border-rose-200 cursor-pointer"
                         title="Move to Trash"
                       >
                         <Trash2 size={13} />
@@ -965,6 +962,28 @@ export default function PurchasesView({
             setIsQuickItemOpen(false);
             setPendingCreatedItemName(newItem.name);
           }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingPurchase && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingPurchase}
+          onClose={() => setDeletingPurchase(null)}
+          onConfirm={() => {
+            if (onDeletePurchase && deletingPurchase) {
+              onDeletePurchase(deletingPurchase.id);
+              setDeletingPurchase(null);
+              setSelectedPurchase(null);
+            }
+          }}
+          title="Delete Purchase Bill"
+          recordType="Inbound Purchase"
+          recordNumber={deletingPurchase.purchaseNumber}
+          partyName={deletingPurchase.partyName}
+          date={deletingPurchase.purchaseDate}
+          amount={deletingPurchase.total}
+          impactSummary={`Deleting purchase bill ${deletingPurchase.purchaseNumber} will reverse stock additions (deduct items from current stock) and decrease vendor liability balance by ₹${(deletingPurchase.total ?? 0).toLocaleString()}.`}
         />
       )}
     </div>
