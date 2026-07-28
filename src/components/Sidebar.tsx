@@ -101,7 +101,6 @@ export default function Sidebar({
       title: 'REPORTS & SYSTEM',
       items: [
         { id: 'reports', name: 'Business Reports', icon: Activity },
-        { id: 'trash', name: 'Trash / Deleted', icon: History },
         { id: 'settings', name: 'Settings & DB', icon: Settings }
       ]
     }

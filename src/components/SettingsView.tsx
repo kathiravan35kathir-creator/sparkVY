@@ -697,9 +697,9 @@ export default function SettingsView({
       {/* 2. TWO PANEL CORE GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* LEFT NAV PANEL: Desktop scrollbar layout, Mobile dropdown switcher */}
-        <div className="lg:col-span-4 xl:col-span-3 space-y-4">
+        <div className="lg:col-span-4 xl:col-span-3 space-y-4 lg:sticky lg:top-4 lg:self-start">
           {/* Mobile switcher dropdown */}
-          <div className="lg:hidden bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+          <div className="lg:hidden bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
             <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Select Settings Sub-Module</label>
             <div className="relative">
               <select
@@ -721,19 +721,30 @@ export default function SettingsView({
             </div>
           </div>
 
-          {/* Desktop Left Sidebar Tree */}
-          <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden max-h-[85vh] overflow-y-auto">
-            <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuration Panel</span>
+          {/* Desktop Left Sidebar Tree - Integrated settings navigator */}
+          <div className="hidden lg:block space-y-5 pr-2 max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-thin">
+            {/* Header */}
+            <div className="pb-3 border-b border-slate-200/80 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Sliders size={14} className="text-blue-600" />
+                <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider">
+                  Configuration Panel
+                </span>
+              </div>
+              <span className="text-[9px] font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">
+                {allNavItems.length} Modules
+              </span>
             </div>
-            
-            <div className="divide-y divide-slate-100">
+
+            {/* Navigation Groups */}
+            <div className="space-y-5">
               {navigationGroups.map((group) => (
-                <div key={group.id} className="p-2 space-y-1">
-                  <span className="px-2 py-1 block text-[9px] font-black text-slate-400 uppercase tracking-wider">
-                    {group.label}
-                  </span>
-                  <div className="space-y-0.5">
+                <div key={group.id} className="space-y-1.5">
+                  <div className="px-1.5 py-0.5 flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span>{group.label}</span>
+                    <span className="text-[9px] text-slate-300 font-mono font-medium">({group.items.length})</span>
+                  </div>
+                  <div className="space-y-1">
                     {group.items.map((item) => {
                       const IconComponent = item.icon;
                       const isSelected = activePage === item.id;
@@ -742,17 +753,29 @@ export default function SettingsView({
                           key={item.id}
                           type="button"
                           onClick={() => setActivePage(item.id)}
-                          className={`w-full flex items-start space-x-2.5 p-2 rounded-lg text-left transition cursor-pointer ${
+                          className={`w-full flex items-start space-x-3 p-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${
                             isSelected
-                              ? 'bg-blue-50 text-blue-700 font-bold border-l-4 border-blue-600'
-                              : 'hover:bg-slate-50 text-slate-600'
+                              ? 'bg-blue-50/90 text-blue-900 font-bold border-l-3 border-blue-600 shadow-2xs'
+                              : 'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
                           }`}
                         >
-                          <IconComponent size={14} className={`mt-0.5 shrink-0 ${isSelected ? 'text-blue-600' : 'text-slate-400'}`} />
-                          <div className="overflow-hidden">
-                            <p className="text-[11px] truncate font-bold">{item.label}</p>
-                            <p className="text-[9px] text-slate-400 truncate leading-tight mt-0.5 font-normal">{item.desc}</p>
+                          <IconComponent
+                            size={16}
+                            className={`mt-0.5 shrink-0 transition-colors ${
+                              isSelected ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'
+                            }`}
+                          />
+                          <div className="overflow-hidden min-w-0 flex-1">
+                            <p className={`text-xs truncate ${isSelected ? 'font-black text-blue-900' : 'font-bold text-slate-800'}`}>
+                              {item.label}
+                            </p>
+                            <p className={`text-[10px] truncate leading-tight mt-0.5 ${isSelected ? 'text-blue-700/80 font-medium' : 'text-slate-400 font-normal'}`}>
+                              {item.desc}
+                            </p>
                           </div>
+                          {isSelected && (
+                            <ChevronRight size={13} className="text-blue-600 mt-1 shrink-0" />
+                          )}
                         </button>
                       );
                     })}
@@ -764,17 +787,17 @@ export default function SettingsView({
         </div>
 
         {/* RIGHT PANEL: Current Selected Page Form */}
-        <div className="lg:col-span-8 xl:col-span-9 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col min-h-[580px] overflow-hidden">
+        <div className="lg:col-span-8 xl:col-span-9 flex flex-col min-h-[580px]">
           {/* Form Header */}
-          <div className="p-5 border-b border-slate-100 bg-slate-50/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
+          <div className="pb-5 mb-6 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
             <div>
-              <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest block mb-0.5">
+              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest block mb-0.5">
                 {activeGroup.label}
               </span>
-              <h3 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center space-x-1.5">
-                <span>{activeNavItem.label}</span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">{activeNavItem.desc}</p>
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">
+                {activeNavItem.label}
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">{activeNavItem.desc}</p>
             </div>
             <div className="flex items-center space-x-2.5 self-start sm:self-center">
               {hasChanges && (
@@ -789,15 +812,15 @@ export default function SettingsView({
                   <span>Saved</span>
                 </div>
               )}
-              <div className="text-[10px] text-slate-400 font-semibold font-mono bg-slate-100 px-2.5 py-1 rounded-full">
+              <div className="text-[10px] text-slate-400 font-semibold font-mono bg-slate-100/80 px-2.5 py-1 rounded-full border border-slate-200/60">
                 ID: {activePage}
               </div>
             </div>
           </div>
 
           {/* Form Body */}
-          <form onSubmit={handleSave} className="flex-grow flex flex-col">
-            <div className="p-6 flex-grow space-y-6">
+          <form onSubmit={handleSave} className="flex-grow flex flex-col justify-between">
+            <div className="flex-grow space-y-8">
               
               {/* =========================================================================
                   BUSINESS SETUP SUB-PAGES
@@ -912,10 +935,10 @@ export default function SettingsView({
 
               {/* B. GENERAL SETTINGS */}
               {activePage === 'general_settings' && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                   {/* Category 1: Regional & System defaults */}
-                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">1. Regional & System Defaults</h3>
+                  <div className="space-y-4 pb-6 border-b border-slate-200/80">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-200/60 pb-2">1. Regional & System Defaults</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Default Operating Branch Name</label>
@@ -966,8 +989,8 @@ export default function SettingsView({
                   </div>
 
                   {/* Category 2: Sizing, Localization & Currency */}
-                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">2. Sizing, Localization & Currency</h3>
+                  <div className="space-y-4 pb-6 border-b border-slate-200/80">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-200/60 pb-2">2. Sizing, Localization & Currency</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Business Currency</label>
@@ -1016,8 +1039,8 @@ export default function SettingsView({
                   </div>
 
                   {/* Category 3: Security & Audit Controls */}
-                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">3. Security & Audit Controls</h3>
+                  <div className="space-y-4 pb-6 border-b border-slate-200/80">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-200/60 pb-2">3. Security & Audit Controls</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Passcode toggle */}
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
@@ -1079,8 +1102,8 @@ export default function SettingsView({
                   </div>
 
                   {/* Category 4: Transaction & Data Constraints */}
-                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">4. Transaction & Data Constraints</h3>
+                  <div className="space-y-4 pb-6 border-b border-slate-200/80">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-200/60 pb-2">4. Transaction & Data Constraints</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Enable GSTIN Toggle */}
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
@@ -1161,8 +1184,8 @@ export default function SettingsView({
                   </div>
 
                   {/* Category 5: Module & Document Enablement */}
-                  <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">5. Module & Document Enablement</h3>
+                  <div className="space-y-4 pb-6">
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-200/60 pb-2">5. Module & Document Enablement</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Estimate / Quotation toggle */}
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
@@ -3249,18 +3272,19 @@ Regards,
               )}
             </div>
             
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+            <div className="pt-6 mt-8 border-t border-slate-200/80 flex items-center justify-between shrink-0 bg-transparent">
               <button
                 type="button"
-                className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold rounded-lg text-xs transition"
+                onClick={handleReset}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition cursor-pointer"
               >
                 Cancel Changes
               </button>
               <button
                 type="submit"
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center space-x-1.5 cursor-pointer"
+                className="px-7 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center space-x-2 cursor-pointer"
               >
-                <Save size={14} />
+                <Save size={15} />
                 <span>Save All Settings</span>
               </button>
             </div>

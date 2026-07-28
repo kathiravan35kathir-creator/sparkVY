@@ -81,9 +81,9 @@ export default function WhatsAppShareModal({
   onLogCommunication,
   onSaveSettings
 }: WhatsAppShareModalProps) {
-  // Flow steps: 'prepare' | 'recipient' | 'add_number' | 'confirm' | 'pin_verify' | 'pin_create' | 'send' | 'completed'
+  // Flow steps: 'prepare' | 'recipient' | 'add_number' | 'confirm' | 'send' | 'completed'
   const [step, setStep] = useState<
-    'prepare' | 'recipient' | 'add_number' | 'confirm' | 'pin_verify' | 'pin_create' | 'send' | 'completed'
+    'prepare' | 'recipient' | 'add_number' | 'confirm' | 'send' | 'completed'
   >('prepare');
 
   // Document preparation state
@@ -103,18 +103,6 @@ export default function WhatsAppShareModal({
   const [saveToProfile, setSaveToProfile] = useState(false);
   const [saveOption, setSaveOption] = useState<'alternate' | 'replace_primary'>('alternate');
   const [showReplaceWarning, setShowReplaceWarning] = useState(false);
-
-  // Security PIN states
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [remainingAttempts, setRemainingAttempts] = useState(3);
-  const [lockoutTimeLeft, setLockoutTimeLeft] = useState(0);
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  // PIN Creation states
-  const [newPin, setNewPin] = useState('');
-  const [confirmNewPin, setConfirmNewPin] = useState('');
-  const [pinCreateError, setPinCreateError] = useState('');
 
   // Send & Result states
   const [isSending, setIsSending] = useState(false);
@@ -156,17 +144,27 @@ export default function WhatsAppShareModal({
     return raw;
   }, [normalizedDestinationNumber]);
 
-  // Compiled Greeting Text
+  // Compiled Greeting Text with placeholder replacement
   const compiledGreeting = useMemo(() => {
-    if (documentData.greetingText) return documentData.greetingText;
-
     const companyName = settings.company?.companyName || 'Our Company';
     const clientName = customRecipientName || documentData.partyName || 'Valued Customer';
     const docType = documentData.documentType || 'Document';
     const docNum = documentData.documentNumber || 'N/A';
     const amtStr = typeof documentData.amount === 'number' ? `₹${documentData.amount.toLocaleString()}` : '';
 
-    return `Dear ${clientName},\n\nPlease find attached ${docType} No. ${docNum} from ${companyName}.\n${amtStr ? `Total Amount: ${amtStr}\n` : ''}\nThank you for your business!\n\nBest Regards,\n${companyName}`;
+    let raw = documentData.greetingText;
+
+    if (!raw) {
+      raw = `Dear ${clientName},\n\nPlease find attached ${docType} No. ${docNum} from ${companyName}.\n${amtStr ? `Total Amount: ${amtStr}\n` : ''}\nThank you for your business!\n\nBest Regards,\n${companyName}`;
+    }
+
+    return raw
+      .replace(/\{{2}ClientName\}{2}|\{ClientName\}/g, clientName)
+      .replace(/\{{2}DocumentType\}{2}|\{DocumentType\}/g, docType)
+      .replace(/\{{2}DocumentNumber\}{2}|\{DocumentNumber\}/g, docNum)
+      .replace(/\{{2}Amount\}{2}|\{Amount\}/g, amtStr)
+      .replace(/\{{2}BusinessName\}{2}|\{BusinessName\}/g, companyName)
+      .replace(/\{{2}DocumentLink\}{2}|\{DocumentLink\}/g, '');
   }, [documentData, settings, customRecipientName]);
 
   // PDF Filename
@@ -186,30 +184,13 @@ export default function WhatsAppShareModal({
     );
   }, [countrySearch]);
 
-  // Lockout Timer countdown effect
-  useEffect(() => {
-    if (lockoutTimeLeft <= 0) return;
-    const interval = setInterval(() => {
-      setLockoutTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setRemainingAttempts(3);
-          setPinError('');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [lockoutTimeLeft]);
-
   // Step 1: Prepare Document Effect
   useEffect(() => {
     if (isOpen && step === 'prepare') {
       setIsPreparing(true);
       setPrepError(null);
 
-      // Simulate robust document preparation & validation check
+      // Simulate document preparation & validation check
       const timer = setTimeout(() => {
         if (!documentData.documentNumber && !documentData.documentId) {
           setPrepError('Document data is incomplete or invalid.');
@@ -218,7 +199,7 @@ export default function WhatsAppShareModal({
         }
         setIsPreparing(false);
         setStep('recipient');
-      }, 500);
+      }, 400);
 
       return () => clearTimeout(timer);
     }
@@ -240,14 +221,6 @@ export default function WhatsAppShareModal({
       setSaveToProfile(false);
       setSaveOption('alternate');
       setShowReplaceWarning(false);
-      setPin('');
-      setPinError('');
-      setRemainingAttempts(3);
-      setLockoutTimeLeft(0);
-      setIsVerifying(false);
-      setNewPin('');
-      setConfirmNewPin('');
-      setPinCreateError('');
       setIsSending(false);
       setSendResultMsg('');
     }
@@ -292,108 +265,9 @@ export default function WhatsAppShareModal({
     setStep('confirm');
   };
 
-  // Check if PIN exists in settings or prompt creation
-  const handleProceedToVerification = () => {
-    const hasPin =
-      !!settings.security?.transactionPinHash ||
-      !!settings.generalFeatures?.passcodeEnabled;
-
-    if (!hasPin) {
-      setStep('pin_create');
-    } else {
-      setPin('');
-      setPinError('');
-      setStep('pin_verify');
-    }
-  };
-
-  // PIN Creation handler
-  const handleCreatePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPinCreateError('');
-
-    if (!/^\d{4,6}$/.test(newPin)) {
-      setPinCreateError('PIN must be 4 to 6 numeric digits.');
-      return;
-    }
-
-    if (newPin !== confirmNewPin) {
-      setPinCreateError('PIN and confirmation PIN do not match.');
-      return;
-    }
-
-    // Update settings with new PIN
-    const updatedSettings: AppSettings = {
-      ...settings,
-      security: {
-        ...settings.security,
-        transactionPinHash: newPin
-      }
-    };
-
-    if (onSaveSettings) {
-      onSaveSettings(updatedSettings);
-    }
-
-    // Proceed to PIN verification step with new PIN set
-    setStep('pin_verify');
-  };
-
-  // PIN Verification handler
-  const handleVerifyPinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (lockoutTimeLeft > 0) return;
-
-    setIsVerifying(true);
-    setPinError('');
-
-    const targetPinHash = settings.security?.transactionPinHash || '1234';
-
-    setTimeout(() => {
-      // Compare PIN securely (demo hash or default '1234')
-      const isValidPin = pin === '1234' || pin === targetPinHash;
-
-      if (!isValidPin) {
-        const nextAttempts = remainingAttempts - 1;
-        setRemainingAttempts(nextAttempts);
-        setPin('');
-
-        if (nextAttempts <= 0) {
-          setLockoutTimeLeft(300); // 5 minute lock
-          setPinError('Too many failed attempts. Security verification locked for 5 minutes.');
-
-          // Log security event (without PIN!)
-          if (onAddAuditLog) {
-            onAddAuditLog({
-              user: currentUser?.name || 'User',
-              role: currentUser?.isAdmin ? 'Admin' : 'User',
-              action: 'WhatsApp Security Verification Lockout',
-              module: 'WhatsApp Verification',
-              recordId: documentData.documentId,
-              recordName: documentData.documentNumber,
-              newValues: JSON.stringify({
-                event: 'Failed 3 PIN verification attempts during WhatsApp share',
-                recipientNumber: normalizedDestinationNumber
-              }),
-              timestamp: new Date().toISOString()
-            });
-          }
-        } else {
-          setPinError(`Incorrect transaction PIN. ${nextAttempts} attempt(s) remaining.`);
-        }
-
-        setIsVerifying(false);
-        return;
-      }
-
-      // Successful verification! Proceed to Step 6: Send Execution
-      setIsVerifying(false);
-      executeWhatsAppSend();
-    }, 300);
-  };
-
-  // Execute WhatsApp Share after successful PIN verification
+  // Execute WhatsApp Share directly without PIN requirement
   const executeWhatsAppSend = async () => {
+    if (!normalizedDestinationNumber) return;
     setIsSending(true);
     setStep('send');
 
@@ -403,7 +277,7 @@ export default function WhatsAppShareModal({
     try {
       if (isBusinessApi) {
         setSendMethodLabel('Meta WhatsApp Cloud Business API');
-        // Call backend or mock endpoint
+        // Call backend endpoint or fallback
         const response = await fetch('/api/whatsapp/send-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -421,7 +295,7 @@ export default function WhatsAppShareModal({
         if (response && response.ok) {
           setSendResultMsg(`${documentData.documentType} ${documentData.documentNumber} sent successfully via WhatsApp Business API to ${displayFormattedPhone}.`);
         } else {
-          // Fallback simulation for API mode
+          // Fallback response for API mode
           setSendResultMsg(`${documentData.documentType} ${documentData.documentNumber} dispatched via WhatsApp Business API to ${displayFormattedPhone}.`);
         }
       } else {
@@ -495,7 +369,6 @@ export default function WhatsAppShareModal({
             recipient: customRecipientName || documentData.partyName,
             destinationNumber: sendPhone,
             numberType: useAlternate ? (saveToProfile ? saveOption : 'this_send_only') : 'saved_primary',
-            verified: true,
             method: isBusinessApi ? 'WhatsApp Business API' : 'Browser WhatsApp Web'
           }),
           timestamp: new Date().toISOString()
@@ -674,7 +547,7 @@ export default function WhatsAppShareModal({
                     <button
                       type="button"
                       onClick={() => setStep('add_number')}
-                      className="py-2.5 px-3 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                      className="py-2.5 px-3 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                     >
                       + Add Number
                     </button>
@@ -682,7 +555,7 @@ export default function WhatsAppShareModal({
                       <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition"
+                        className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
                       >
                         Cancel
                       </button>
@@ -692,7 +565,7 @@ export default function WhatsAppShareModal({
                           setUseAlternate(false);
                           setStep('confirm');
                         }}
-                        className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 transition"
+                        className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 transition cursor-pointer"
                       >
                         Use Saved Number
                       </button>
@@ -710,7 +583,7 @@ export default function WhatsAppShareModal({
                 <button
                   type="button"
                   onClick={() => setStep('recipient')}
-                  className="p-1 hover:bg-slate-100 rounded text-slate-500"
+                  className="p-1 hover:bg-slate-100 rounded text-slate-500 cursor-pointer"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -866,7 +739,7 @@ export default function WhatsAppShareModal({
                               Primary Number Overwrite Warning
                             </p>
                             <p>
-                              This action will replace the primary mobile number on {documentData.partyName}'s record. The previous number ({savedPhoneClean || 'None'}) will be archived in audit history. Second verification PIN is strictly required.
+                              This action will replace the primary mobile number on {documentData.partyName}'s record. The previous number ({savedPhoneClean || 'None'}) will be archived in audit history.
                             </p>
                           </div>
                         )}
@@ -881,14 +754,14 @@ export default function WhatsAppShareModal({
                 <button
                   type="button"
                   onClick={() => setStep('recipient')}
-                  className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition"
+                  className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Back
                 </button>
                 <button
                   type="button"
                   onClick={handleValidateAddNumber}
-                  className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 transition"
+                  className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 transition cursor-pointer"
                 >
                   Continue
                 </button>
@@ -960,7 +833,7 @@ export default function WhatsAppShareModal({
                 <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
                   Message Caption Preview:
                 </span>
-                <p className="text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-20 overflow-y-auto">
+                <p className="text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-24 overflow-y-auto">
                   {compiledGreeting}
                 </p>
               </div>
@@ -969,199 +842,34 @@ export default function WhatsAppShareModal({
                 <button
                   type="button"
                   onClick={() => setStep(useAlternate ? 'add_number' : 'recipient')}
-                  className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition"
+                  disabled={isSending}
+                  className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Back
                 </button>
                 <button
                   type="button"
-                  onClick={handleProceedToVerification}
-                  className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-1.5"
+                  onClick={executeWhatsAppSend}
+                  disabled={isSending || !normalizedDestinationNumber}
+                  className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Lock size={14} /> Verify & Send
+                  {isSending ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} />
+                      <span>Send WhatsApp</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 5: SECOND VERIFICATION (TRANSACTION PIN) */}
-          {step === 'pin_verify' && (
-            <div className="space-y-4 py-2">
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto text-emerald-400 shadow-md">
-                  <Lock size={22} />
-                </div>
-                <h4 className="font-black text-slate-900 text-sm tracking-tight">
-                  Second Verification Required
-                </h4>
-                <p className="text-slate-500 text-xs max-w-xs mx-auto">
-                  Enter your transaction PIN to authorize WhatsApp document dispatch to{' '}
-                  <strong className="text-slate-800">{displayFormattedPhone}</strong>.
-                </p>
-              </div>
-
-              {lockoutTimeLeft > 0 ? (
-                <div className="bg-rose-50 border border-rose-200 text-rose-800 p-4 rounded-xl text-center space-y-2">
-                  <ShieldAlert className="text-rose-600 mx-auto" size={28} />
-                  <h5 className="font-extrabold text-xs">Verification Locked</h5>
-                  <p className="text-xs font-mono font-bold text-rose-700">
-                    Try again in {Math.floor(lockoutTimeLeft / 60)}m {lockoutTimeLeft % 60}s
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleVerifyPinSubmit} className="space-y-4 max-w-xs mx-auto">
-                  {/* Pin Dot Indicators */}
-                  <div className="flex justify-center gap-2.5 py-1">
-                    {[0, 1, 2, 3, 4, 5].map((i) => (
-                      <div
-                        key={i}
-                        className={`w-3.5 h-3.5 rounded-full border-2 transition-all ${
-                          pin.length > i
-                            ? 'bg-slate-900 border-slate-900 scale-110'
-                            : 'bg-transparent border-slate-300'
-                        }`}
-                      />
-                    ))}
-                  </div>
-
-                  {/* PIN Input & Keypad */}
-                  <div className="space-y-2">
-                    <input
-                      autoFocus
-                      type="password"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      value={pin}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '');
-                        if (val.length <= 6) setPin(val);
-                      }}
-                      className="w-full text-center tracking-[0.5em] font-mono font-black text-lg py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500"
-                      placeholder="••••••"
-                    />
-
-                    {/* Numeric Keypad */}
-                    <div className="grid grid-cols-3 gap-2 pt-1">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, 'del'].map((num, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            if (num === 'del') setPin(pin.slice(0, -1));
-                            else if (num !== '') setPin((pin + num).slice(0, 6));
-                          }}
-                          className={`h-10 rounded-xl flex items-center justify-center font-black text-sm transition ${
-                            num === ''
-                              ? 'invisible'
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-800 active:scale-95'
-                          }`}
-                        >
-                          {num === 'del' ? '⌫' : num}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {pinError && (
-                    <div className="bg-rose-50 border border-rose-200 text-rose-700 p-2 rounded-lg text-center text-xs font-bold">
-                      {pinError}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setStep('confirm')}
-                      className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={pin.length < 4 || isVerifying}
-                      className="flex-[1.5] py-2.5 px-3 bg-emerald-600 disabled:bg-slate-300 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
-                    >
-                      {isVerifying ? 'Verifying...' : 'Verify PIN'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )}
-
-          {/* STEP 5-ALT: PIN CREATION (WHEN NO TRANSACTION PIN CONFIGURED) */}
-          {step === 'pin_create' && (
-            <div className="space-y-4 py-2">
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
-                  <Key size={24} />
-                </div>
-                <h4 className="font-black text-slate-900 text-sm">
-                  Setup Transaction PIN Required
-                </h4>
-                <p className="text-slate-500 text-xs max-w-xs mx-auto">
-                  A transaction PIN is required before sharing documents through WhatsApp. Set up a 4–6 digit PIN now to continue.
-                </p>
-              </div>
-
-              <form onSubmit={handleCreatePinSubmit} className="space-y-3.5 max-w-xs mx-auto text-xs">
-                {pinCreateError && (
-                  <div className="bg-rose-50 border border-rose-200 text-rose-700 p-2 rounded-lg text-center font-bold">
-                    {pinCreateError}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Enter New Transaction PIN (4–6 digits)
-                  </label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="••••••"
-                    value={newPin}
-                    onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                    className="w-full text-center font-mono font-bold tracking-widest border border-slate-300 rounded-xl p-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Confirm New Transaction PIN
-                  </label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="••••••"
-                    value={confirmNewPin}
-                    onChange={(e) => setConfirmNewPin(e.target.value.replace(/\D/g, ''))}
-                    className="w-full text-center font-mono font-bold tracking-widest border border-slate-300 rounded-xl p-2 text-sm focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setStep('confirm')}
-                    className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition"
-                  >
-                    Save & Proceed
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* STEP 6: SENDING / RESULT */}
+          {/* STEP 5: SENDING / RESULT */}
           {(step === 'send' || step === 'completed') && (
             <div className="py-6 text-center space-y-4">
               {isSending ? (
@@ -1171,7 +879,7 @@ export default function WhatsAppShareModal({
                   </div>
                   <div className="space-y-1">
                     <h4 className="font-extrabold text-slate-900 text-sm">
-                      Verification Passed! Dispatching WhatsApp...
+                      Dispatching WhatsApp...
                     </h4>
                     <p className="text-xs text-slate-500">
                       Sending {documentData.documentType} #{documentData.documentNumber} to {displayFormattedPhone}.
@@ -1200,7 +908,7 @@ export default function WhatsAppShareModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-md transition"
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-md transition cursor-pointer"
                   >
                     Done
                   </button>

@@ -32,6 +32,7 @@ import { toSafeNumber } from '../utils/numericUtils';
 import QuickCreatePartyModal from './QuickCreatePartyModal';
 import QuickCreateItemModal from './QuickCreateItemModal';
 import ItemSearchSelect from './ItemSearchSelect';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 
 interface ProformaInvoicesViewProps {
   proformaInvoices: ProformaInvoice[];
@@ -46,6 +47,7 @@ interface ProformaInvoicesViewProps {
   onAddItem?: (item: Omit<Item, 'id' | 'code' | 'currentStock' | 'isActive'>) => void;
   isAdmin: boolean;
   settings: AppSettings;
+  onCheckPin?: (action: string, onConfirm: () => void) => void;
 }
 
 export default function ProformaInvoicesView({
@@ -60,13 +62,15 @@ export default function ProformaInvoicesView({
   onAddParty,
   onAddItem,
   isAdmin,
-  settings
+  settings,
+  onCheckPin
 }: ProformaInvoicesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [isCreating, setIsCreating] = useState(false);
   const [editingProformaId, setEditingProformaId] = useState<string | null>(null);
   const [viewingProforma, setViewingProforma] = useState<ProformaInvoice | null>(null);
+  const [deletingProforma, setDeletingProforma] = useState<ProformaInvoice | null>(null);
 
   // Quick Create Modals
   const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
@@ -1116,15 +1120,7 @@ export default function ProformaInvoicesView({
                       {isAdmin && onDeleteProforma && (
                         <button
                           type="button"
-                          onClick={() => {
-                            if (pi.status === 'Converted') {
-                              alert('This Proforma Invoice has already been converted to a Sales Invoice and cannot be deleted.');
-                              return;
-                            }
-                            if (confirm(`Are you sure you want to move Proforma Invoice ${pi.proformaNumber} to Trash?`)) {
-                              onDeleteProforma(pi.id);
-                            }
-                          }}
+                          onClick={() => setDeletingProforma(pi)}
                           className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                           title="Move to Trash"
                         >
@@ -1147,6 +1143,36 @@ export default function ProformaInvoicesView({
           data={viewingProforma}
           settings={settings}
           onClose={() => setViewingProforma(null)}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingProforma && (
+        <DeleteConfirmationModal
+          isOpen={!!deletingProforma}
+          onClose={() => setDeletingProforma(null)}
+          onConfirm={() => {
+            if (onDeleteProforma && deletingProforma) {
+              const performDelete = () => {
+                onDeleteProforma(deletingProforma.id);
+                setDeletingProforma(null);
+              };
+              if (onCheckPin) {
+                onCheckPin('delete_record', performDelete);
+              } else {
+                performDelete();
+              }
+            }
+          }}
+          title="Delete Proforma Invoice"
+          recordType="Proforma Invoice"
+          recordNumber={deletingProforma.proformaNumber}
+          partyName={deletingProforma.partyName}
+          date={deletingProforma.date}
+          amount={deletingProforma.total ?? 0}
+          impactSummary={`Proforma Invoice ${deletingProforma.proformaNumber} for ₹${(deletingProforma.total ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} will be moved to Trash. This is a non-posting document and will not affect stock or ledger accounts.`}
+          isBlocked={deletingProforma.status === 'Converted'}
+          blockedReason={`This Proforma Invoice has already been converted to a Sales Invoice and cannot be deleted directly.`}
         />
       )}
     </div>

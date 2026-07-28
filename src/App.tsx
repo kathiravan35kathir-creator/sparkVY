@@ -1814,6 +1814,7 @@ export default function App() {
               onAddItem={handleAddItem}
               isAdmin={currentUser.isAdmin}
               settings={db.settings}
+              onCheckPin={checkPin}
             />
           )}
           {activeTab === 'sales' && (
