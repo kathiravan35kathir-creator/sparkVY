@@ -26,53 +26,157 @@ import WhatsAppShareModal, { WhatsAppDocumentData } from './WhatsAppShareModal';
 const colorCache = new Map<string, string>();
 
 /**
- * Resolves modern CSS colors (like oklch, lch, lab, color-mix) down to standard rgb/rgba
- * using the browser's native Canvas rendering. html2canvas fails on modern colors.
+ * Converts OKLCH colors to RGB using standard color space transformations as a pure JS fallback.
  */
-function resolveToRgba(colorStr: string): string {
-  if (!colorStr || typeof colorStr !== 'string') return colorStr;
-  
-  const lower = colorStr.toLowerCase();
-  // Include oklab, oklch, lch, lab, color-mix, light-dark, and generic color() functions
-  if (!lower.includes('oklch') && 
-      !lower.includes('oklab') && 
-      !lower.includes('lch') && 
-      !lower.includes('color-mix') && 
-      !lower.includes('lab') && 
-      !lower.includes('p3') &&
-      !lower.includes('light-dark')) {
-    return colorStr;
+function oklchToRgb(l: number, c: number, h: number, alpha: number): string {
+  const hRad = (h * Math.PI) / 180;
+  const aVal = c * Math.cos(hRad);
+  const bVal = c * Math.sin(hRad);
+
+  const l_ = l + 0.3963377774 * aVal + 0.2158037573 * bVal;
+  const m_ = l - 0.1055613458 * aVal - 0.0638541728 * bVal;
+  const s_ = l - 0.0894841775 * aVal - 0.1291986507 * bVal;
+
+  const l3 = l_ * l_ * l_;
+  const m3 = m_ * m_ * m_;
+  const s3 = s_ * s_ * s_;
+
+  const rLin = +4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
+  const gLin = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
+  const bLin = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3;
+
+  const toGamma = (x: number) => {
+    if (x <= 0.0031308) return Math.max(0, 12.92 * x);
+    return Math.max(0, 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+  };
+
+  const r = Math.min(255, Math.max(0, Math.round(toGamma(rLin) * 255)));
+  const g = Math.min(255, Math.max(0, Math.round(toGamma(gLin) * 255)));
+  const b = Math.min(255, Math.max(0, Math.round(toGamma(bLin) * 255)));
+
+  if (alpha < 1) {
+    return `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(3))})`;
   }
-  
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function parseAndConvertOklch(oklchStr: string): string {
+  try {
+    const match = oklchStr.match(/oklch\s*\(([^)]+)\)/i);
+    if (!match) return 'rgb(0, 0, 0)';
+
+    const content = match[1].trim();
+    let mainPartsStr = content;
+    let alphaStr: string | null = null;
+
+    if (content.includes('/')) {
+      const slashParts = content.split('/');
+      mainPartsStr = slashParts[0].trim();
+      alphaStr = slashParts[1].trim();
+    }
+
+    const parts = mainPartsStr.split(/[\s,]+/).filter(Boolean);
+    if (parts.length < 3) return 'rgb(0, 0, 0)';
+
+    let l = parseFloat(parts[0]);
+    if (parts[0].endsWith('%')) l = l / 100;
+
+    let c = parseFloat(parts[1]);
+    if (parts[1].endsWith('%')) c = (c / 100) * 0.4;
+
+    let h = parseFloat(parts[2]);
+    if (isNaN(h)) h = 0;
+
+    let alpha = 1;
+    if (alphaStr) {
+      alpha = parseFloat(alphaStr);
+      if (alphaStr.endsWith('%')) alpha = alpha / 100;
+    } else if (parts.length >= 4) {
+      alpha = parseFloat(parts[3]);
+      if (parts[3].endsWith('%')) alpha = alpha / 100;
+    }
+
+    if (isNaN(l)) l = 0;
+    if (isNaN(c)) c = 0;
+    if (isNaN(alpha)) alpha = 1;
+
+    return oklchToRgb(l, c, h, alpha);
+  } catch (e) {
+    return 'rgb(0, 0, 0)';
+  }
+}
+
+function resolveSingleColorToRgba(colorStr: string): string {
+  if (!colorStr || typeof colorStr !== 'string') return colorStr;
   if (colorCache.has(colorStr)) {
     return colorCache.get(colorStr)!;
   }
-  
+
   try {
     const canvas = document.createElement('canvas');
     canvas.width = 1;
     canvas.height = 1;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return colorStr;
-    
-    // Set fillStyle to the potentially problematic color
-    ctx.fillStyle = colorStr;
-    ctx.fillRect(0, 0, 1, 1);
-    
-    // The browser's Canvas implementation automatically resolves modern colors to RGBA
-    const data = ctx.getImageData(0, 0, 1, 1).data;
-    const r = data[0];
-    const g = data[1];
-    const b = data[2];
-    const a = Number((data[3] / 255).toFixed(3));
-    
-    // Return a clean RGB or RGBA string that html2canvas can definitely parse
-    const resolved = a === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
-    colorCache.set(colorStr, resolved);
-    return resolved;
+    if (ctx) {
+      ctx.fillStyle = colorStr;
+      ctx.fillRect(0, 0, 1, 1);
+      const data = ctx.getImageData(0, 0, 1, 1).data;
+      const r = data[0];
+      const g = data[1];
+      const b = data[2];
+      const a = Number((data[3] / 255).toFixed(3));
+
+      if (data[3] > 0 || colorStr.toLowerCase().includes('transparent') || colorStr.includes('/ 0')) {
+        const resolved = a === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`;
+        colorCache.set(colorStr, resolved);
+        return resolved;
+      }
+    }
   } catch (e) {
-    return colorStr;
+    // Fallback below
   }
+
+  if (colorStr.toLowerCase().includes('oklch')) {
+    const converted = parseAndConvertOklch(colorStr);
+    colorCache.set(colorStr, converted);
+    return converted;
+  }
+
+  const fallback = 'rgba(0, 0, 0, 0)';
+  colorCache.set(colorStr, fallback);
+  return fallback;
+}
+
+/**
+ * Replaces modern CSS color functions (oklch, oklab, lch, lab, color-mix, light-dark, color)
+ * in any string or declaration (including box-shadow, linear-gradient, style tags)
+ * with standard rgb/rgba strings that html2canvas can parse without errors.
+ */
+function replaceModernColorsInString(input: string): string {
+  if (!input || typeof input !== 'string') return input;
+
+  const lower = input.toLowerCase();
+  if (
+    !lower.includes('oklch') &&
+    !lower.includes('oklab') &&
+    !lower.includes('lch') &&
+    !lower.includes('color-mix') &&
+    !lower.includes('lab') &&
+    !lower.includes('light-dark') &&
+    !lower.includes('color(')
+  ) {
+    return input;
+  }
+
+  const colorFuncRegex = /(?:oklch|oklab|lch|lab|color-mix|light-dark|color)\s*\((?:[^()]+|\((?:[^()]+|\([^()]*\))*\))*\)/gi;
+
+  return input.replace(colorFuncRegex, (match) => {
+    const resolved = resolveSingleColorToRgba(match);
+    if (!resolved || resolved.toLowerCase().includes('oklch') || resolved.toLowerCase().includes('oklab')) {
+      return 'rgba(0, 0, 0, 0)';
+    }
+    return resolved;
+  });
 }
 
 interface DocumentPrintViewProps {
@@ -279,69 +383,91 @@ export default function DocumentPrintView({
         allowTaint: true,
         imageTimeout: 15000,
         onclone: (clonedDoc, clonedElement) => {
-          // Robust color sanitization: html2canvas v1.4.1 fails on modern CSS (oklch, color-mix)
-          // We patch getComputedStyle in the cloned window to intercept and resolve any modern colors
-          // This covers normal elements, pseudo-elements, and all CSS properties automatically!
-          
+          // Robust color sanitization: html2canvas fails on modern CSS (oklch, color-mix, etc.)
+          // 1. Sanitize all <style> tags in cloned document
+          try {
+            const styleTags = clonedDoc.querySelectorAll('style');
+            styleTags.forEach((styleTag) => {
+              if (styleTag.textContent) {
+                styleTag.textContent = replaceModernColorsInString(styleTag.textContent);
+              }
+            });
+          } catch (e) {
+            // ignore
+          }
+
+          // 2. Sanitize inline style attributes on all elements
+          try {
+            const allElements = clonedDoc.querySelectorAll('*');
+            allElements.forEach((el) => {
+              const htmlEl = el as HTMLElement;
+              if (htmlEl.hasAttribute('style')) {
+                const styleAttr = htmlEl.getAttribute('style');
+                if (styleAttr) {
+                  htmlEl.setAttribute('style', replaceModernColorsInString(styleAttr));
+                }
+              }
+            });
+          } catch (e) {
+            // ignore
+          }
+
+          // 3. Traverse clonedDoc.styleSheets rules if available
+          try {
+            Array.from(clonedDoc.styleSheets).forEach((sheet) => {
+              try {
+                const rules = sheet.cssRules || sheet.rules;
+                if (rules) {
+                  Array.from(rules).forEach((rule: any) => {
+                    if (rule.style && rule.style.cssText) {
+                      if (
+                        rule.style.cssText.includes('oklch') ||
+                        rule.style.cssText.includes('oklab') ||
+                        rule.style.cssText.includes('color-mix')
+                      ) {
+                        rule.style.cssText = replaceModernColorsInString(rule.style.cssText);
+                      }
+                    }
+                  });
+                }
+              } catch (e) {
+                // Cross-origin sheets ignored
+              }
+            });
+          } catch (e) {
+            // ignore
+          }
+
+          // 4. Patch getComputedStyle on clonedDoc defaultView
           if (clonedDoc.defaultView) {
             const originalGetComputedStyle = clonedDoc.defaultView.getComputedStyle;
             clonedDoc.defaultView.getComputedStyle = function(elt: Element, pseudoElt?: string | null) {
               const style = originalGetComputedStyle.call(this, elt, pseudoElt);
-              
-              const sanitizeValue = (propName: string, val: string) => {
-                if (typeof val === 'string' && (val.includes('oklch') || val.includes('oklab') || val.includes('lch') || val.includes('color-mix'))) {
-                  const p = propName.toLowerCase();
-                  if (p.includes('shadow')) return 'none';
-                  if (p.includes('image')) return 'none';
-                  
-                  // For composite properties like 'background' or 'border' that might contain oklch,
-                  // resolveToRgba might just return black if it fails to parse as a pure color. 
-                  // But html2canvas mostly reads longhand properties (backgroundColor, borderTopColor) which are pure colors.
-                  return resolveToRgba(val);
-                }
-                return val;
-              };
 
               return new Proxy(style, {
                 get(target, prop, receiver) {
                   const val = Reflect.get(target, prop, receiver);
-                  
+
                   if (typeof val === 'function') {
                     if (prop === 'getPropertyValue') {
-                       return function(...args: any[]) {
-                         const cssProp = args[0] as string;
-                         const res = val.apply(target, args);
-                         return sanitizeValue(cssProp, res);
-                       };
+                      return function(...args: any[]) {
+                        const res = val.apply(target, args);
+                        return typeof res === 'string' ? replaceModernColorsInString(res) : res;
+                      };
                     }
                     return function(...args: any[]) {
                       return val.apply(target, args);
                     };
                   }
-                  
+
                   if (typeof prop === 'string') {
-                    return sanitizeValue(prop, val);
+                    return typeof val === 'string' ? replaceModernColorsInString(val) : val;
                   }
-                  
+
                   return val;
                 }
               });
             };
-          }
-
-          // We still iterate through all cloned elements to fix inputs and other specific cloning quirks if needed.
-          // Since getComputedStyle is patched, we don't need to manually resolve colors on elements.
-          // However, we must ensure SVG icons or explicit inline styles without computed styles are safe (though html2canvas uses getComputedStyle for everything anyway).
-          // We can just keep the iteration for any other structural fixes, but we can safely remove the color string replacements here.
-          const allCloned = clonedElement.querySelectorAll('*');
-          const allOriginal = targetElement.querySelectorAll('*');
-          
-          for (let i = 0; i < allCloned.length; i++) {
-            const cEl = allCloned[i] as HTMLElement;
-            const oEl = allOriginal[i] as HTMLElement;
-            if (!oEl || !cEl.style) continue;
-            
-            // Note: If you ever need to apply structural fixes (like fixing textarea values), do it here.
           }
         }
       });

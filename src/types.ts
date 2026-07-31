@@ -484,7 +484,20 @@ export interface AppSettings {
     displayCompanyName: string;
     businessType: string;
     logoUrl?: string;
+    companyLogoUrl?: string;
+    companyLogoPublicId?: string;
     secondaryLogoUrl?: string;
+    signatureUrl?: string;
+    companySignatureUrl?: string;
+    authorizedSignatureUrl?: string;
+    companySignaturePublicId?: string;
+    brandingUpdatedAt?: string;
+    brandingUpdatedBy?: string;
+    companyQrCodeUrl?: string;
+    companyQrCodeStoragePath?: string;
+    companyQrCodePublicId?: string;
+    companyQrCodeType?: string;
+    showQrCodeOnDocuments?: boolean;
     address: string;
     address1: string;
     address2: string;
@@ -648,6 +661,7 @@ export interface AppSettings {
     fontSizeScale: 'small' | 'medium' | 'large';
     logoPosition: 'left' | 'center' | 'right';
     logoSize: 'small' | 'medium' | 'large';
+    showLogo?: boolean;
     headerAlignment: 'left' | 'center' | 'right';
     showAddress: boolean;
     showPhone: boolean;
@@ -709,6 +723,9 @@ export interface AppSettings {
     screenScale: number;
   };
 }
+
+export type CompanyDetails = AppSettings['company'];
+export type CompanySettings = AppSettings['company'];
 
 export interface CommunicationLog {
   id: string;

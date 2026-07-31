@@ -12,6 +12,8 @@ import { listenToAuthChanges, signOutUser } from './services/authService';
 import { auth, firestoreDb } from './lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
+import { CompanyBrandingProvider } from './context/CompanyBrandingContext';
+
 enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -38,8 +40,17 @@ interface FirestoreErrorInfo {
   }
 }
 
-function sanitizeFirestoreData(obj: any): any {
+export function sanitizeFirestoreData(obj: any): any {
   if (obj === null || obj === undefined) return null;
+  if (typeof obj === 'string') {
+    // If string is a raw image base64 data URL string over 150,000 characters (~110KB),
+    // strip it to prevent breaking Firestore's 1MB document limit.
+    if (obj.startsWith('data:image/') && obj.length > 150000) {
+      console.warn('[Firestore Guard] Stripping oversized image base64 string to keep document under 1MB limit');
+      return '';
+    }
+    return obj;
+  }
   if (typeof obj !== 'object') return obj;
   if (obj instanceof Date) return obj.toISOString();
   if (Array.isArray(obj)) {
@@ -1679,7 +1690,8 @@ export default function App() {
 
   // If user is logged in, show full enterprise workspace shell!
   return (
-    <div className="flex h-screen bg-[#F4F7FB] text-[#172033] font-sans antialiased overflow-hidden text-[13px] sm:text-sm">
+    <CompanyBrandingProvider settings={db.settings}>
+      <div className="flex h-screen bg-[#F4F7FB] text-[#172033] font-sans antialiased overflow-hidden text-[13px] sm:text-sm">
       {/* 1. COLLAPSIBLE ROLE-AWARE SIDEBAR */}
       <Sidebar
         activeTab={activeTab}
@@ -2025,5 +2037,6 @@ export default function App() {
         />
       </div>
     </div>
+  </CompanyBrandingProvider>
   );
 }

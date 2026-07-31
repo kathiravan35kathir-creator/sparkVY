@@ -46,6 +46,8 @@ async function testConnection() {
 testConnection();
 
 const storage = getStorage(app);
+storage.maxUploadRetryTime = 4000;
+storage.maxOperationRetryTime = 4000;
 
 let analytics: any = null;
 

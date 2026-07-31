@@ -393,6 +393,14 @@ export function loadState(uid?: string): AppState | null {
           numbering: { ...DEFAULT_SETTINGS.numbering, ...parsed.settings.numbering },
           print: { ...DEFAULT_SETTINGS.print, ...parsed.settings.print },
           generalFeatures: { ...DEFAULT_SETTINGS.generalFeatures, ...parsed.settings.generalFeatures },
+          communication: {
+            ...DEFAULT_SETTINGS.communication,
+            ...parsed.settings.communication,
+            whatsapp: {
+              ...DEFAULT_SETTINGS.communication.whatsapp,
+              ...parsed.settings.communication?.whatsapp
+            }
+          },
         };
       }
       return parsed;

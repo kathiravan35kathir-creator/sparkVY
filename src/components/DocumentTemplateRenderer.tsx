@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppSettings } from '../types';
 import { formatCurrency, getCurrencySymbol } from '../utils/numericUtils';
+import { getCompanyLogoUrl, getCompanySignatureUrl, getCompanyName, getCompanyQrCodeUrl, getCompanyQrCodeType, getShowQrCodeOnDocuments } from '../utils/companyBranding';
 import {
   ShieldAlert,
   FileText,
@@ -181,6 +182,13 @@ export default function DocumentTemplateRenderer({
   const showUpi = customizationOverride?.showUpi !== undefined ? customizationOverride.showUpi : printSettings.showUpi;
   const showQrPayment = customizationOverride?.showQrPayment !== undefined ? customizationOverride.showQrPayment : printSettings.showQrPayment;
   const showSignature = customizationOverride?.showSignature !== undefined ? customizationOverride.showSignature : printSettings.showSignature;
+  const showLogo = customizationOverride?.showLogo !== undefined ? customizationOverride.showLogo : (printSettings.showLogo !== false);
+  const companyLogoUrl = getCompanyLogoUrl(company);
+  const companySignatureUrl = getCompanySignatureUrl(company);
+  const companyQrCodeUrl = getCompanyQrCodeUrl(company);
+  const companyQrCodeType = getCompanyQrCodeType(company);
+  const showQrCode = customizationOverride?.showQrCodeOnDocuments !== undefined ? customizationOverride.showQrCodeOnDocuments : (company.showQrCodeOnDocuments ?? true);
+  const companyName = getCompanyName(company);
   const showTerms = customizationOverride?.showTerms !== undefined ? customizationOverride.showTerms : printSettings.showTerms;
   const showNotes = customizationOverride?.showNotes !== undefined ? customizationOverride.showNotes : printSettings.showNotes;
   const showFooter = customizationOverride?.showFooter !== undefined ? customizationOverride.showFooter : printSettings.showFooter;
@@ -533,13 +541,23 @@ export default function DocumentTemplateRenderer({
         
         {(docTemplateId === 'tally_classic' || docTemplateId === 'tally_gst') ? (
           <div className="border-2 border-slate-900 p-4 mb-4 font-mono">
-            <div className="text-center border-b border-slate-900 pb-2 mb-3">
-              <h2 className="text-sm font-black tracking-widest uppercase text-slate-950">{documentTitle}</h2>
-              <p className="text-[9px] tracking-wide text-slate-500">(INDIAN GST LEDGER FORMAT)</p>
+            <div className="text-center border-b border-slate-900 pb-2 mb-3 flex items-center justify-center gap-3">
+              {showLogo && companyLogoUrl && (
+                <img
+                  src={companyLogoUrl}
+                  alt="Company Logo"
+                  referrerPolicy="no-referrer"
+                  className="h-10 max-w-[120px] object-contain shrink-0"
+                />
+              )}
+              <div>
+                <h2 className="text-sm font-black tracking-widest uppercase text-slate-950">{documentTitle}</h2>
+                <p className="text-[9px] tracking-wide text-slate-500">(INDIAN GST LEDGER FORMAT)</p>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
               <div className="sm:col-span-7 space-y-1">
-                <h1 className="font-extrabold text-sm text-slate-950 uppercase">{company.legalName || company.companyName}</h1>
+                <h1 className="font-extrabold text-sm text-slate-950 uppercase">{company.legalName || companyName}</h1>
                 {showAddress && <p className="text-[10px] text-slate-600 leading-tight">{company.address}</p>}
                 <div className="text-[10px] text-slate-500 pt-0.5">
                   {showPhone && <span>PHONE: {company.primaryPhone} </span>}
@@ -558,10 +576,20 @@ export default function DocumentTemplateRenderer({
           </div>
         ) : docTemplateId === 'executive_minimal' ? (
           <div className="border-b border-slate-200 pb-4 mb-5">
-            <div className="flex flex-col sm:flex-row justify-between items-baseline mb-3">
-              <h1 className="font-serif font-black text-xl tracking-tight text-slate-900 uppercase">
-                {company.displayCompanyName || company.companyName}
-              </h1>
+            <div className="flex flex-col sm:flex-row justify-between items-baseline mb-3 gap-3">
+              <div className="flex items-center gap-3">
+                {showLogo && companyLogoUrl && (
+                  <img
+                    src={companyLogoUrl}
+                    alt="Company Logo"
+                    referrerPolicy="no-referrer"
+                    className="h-10 max-w-[120px] object-contain shrink-0"
+                  />
+                )}
+                <h1 className="font-serif font-black text-xl tracking-tight text-slate-900 uppercase">
+                  {company.displayCompanyName || companyName}
+                </h1>
+              </div>
               <span className="text-xs font-light tracking-widest text-slate-400 uppercase">
                 {documentTitle}
               </span>
@@ -587,17 +615,21 @@ export default function DocumentTemplateRenderer({
           <div className="border-b-4 pb-4 mb-5 flex flex-col sm:flex-row justify-between items-start gap-4" style={primaryBorder}>
             <div>
               <div className="flex items-center space-x-2">
-                {company.logoUrl && (
+                {showLogo && companyLogoUrl ? (
                   <img
-                    src={company.logoUrl}
+                    src={companyLogoUrl}
                     alt="Logo"
                     referrerPolicy="no-referrer"
-                    className="object-contain bg-slate-50 border border-slate-100 rounded-lg p-0.5"
+                    className="object-contain bg-slate-50 border border-slate-100 rounded-lg p-0.5 shrink-0"
                     style={{ height: logoSize === 'small' ? '30px' : logoSize === 'large' ? '54px' : '40px' }}
                   />
+                ) : (
+                  <div className="text-white px-2.5 py-1 rounded-md font-black text-sm shrink-0 uppercase tracking-widest" style={primaryBg}>
+                    {companyName.slice(0, 2) || 'BO'}
+                  </div>
                 )}
                 <div>
-                  <h1 className="font-black text-base tracking-wide uppercase text-slate-900">{company.displayCompanyName || company.companyName}</h1>
+                  <h1 className="font-black text-base tracking-wide uppercase text-slate-900">{company.displayCompanyName || companyName}</h1>
                   <p className="text-[9px] font-black tracking-widest uppercase text-slate-400" style={primaryText}>
                     {company.businessType} • REG CO: {company.cin || 'U12000KA2026PTC'}
                   </p>
@@ -643,11 +675,20 @@ export default function DocumentTemplateRenderer({
           <div className="border-b-2 border-slate-900 pb-4 mb-4 flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
               <div className="flex items-center space-x-2">
-                <div className="text-white px-2.5 py-1 rounded-md font-black text-sm shrink-0 uppercase tracking-widest" style={primaryBg}>
-                  {company.companyName?.slice(0, 2) || 'BO'}
-                </div>
+                {showLogo && companyLogoUrl ? (
+                  <img
+                    src={companyLogoUrl}
+                    alt="Company Logo"
+                    referrerPolicy="no-referrer"
+                    className="h-10 max-w-[120px] object-contain bg-slate-50 border border-slate-100 rounded-lg p-0.5 shrink-0"
+                  />
+                ) : (
+                  <div className="text-white px-2.5 py-1 rounded-md font-black text-sm shrink-0 uppercase tracking-widest" style={primaryBg}>
+                    {companyName.slice(0, 2) || 'BO'}
+                  </div>
+                )}
                 <div>
-                  <h1 className="font-extrabold text-base text-slate-900 tracking-wide uppercase">{company.companyName}</h1>
+                  <h1 className="font-extrabold text-base text-slate-900 tracking-wide uppercase">{companyName}</h1>
                   <p className="text-[9px] text-slate-400 font-bold tracking-wider uppercase">
                     BIZOPS ENTERPRISE SYSTEM {company.gstNumber ? `• GSTIN: ${company.gstNumber}` : ''}
                   </p>
@@ -879,9 +920,33 @@ export default function DocumentTemplateRenderer({
           ========================================================================= */}
       <div className="border-t border-slate-200 pt-4 mt-4 shrink-0">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
-          {/* UPI QR Payment Block */}
+          {/* UPI/Company QR Payment Block */}
           <div className="sm:col-span-4 text-center sm:text-left">
-            {showQrPayment && settings.bank?.upiId && (
+            {showQrCode && companyQrCodeUrl ? (
+              <div className="inline-flex items-center space-x-2 bg-slate-50 p-2 rounded border border-slate-200">
+                <div className="w-16 h-16 bg-white rounded border border-slate-200 shrink-0 flex items-center justify-center p-1 overflow-hidden">
+                  <img
+                    src={companyQrCodeUrl}
+                    alt="Company QR Code"
+                    referrerPolicy="no-referrer"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+                <div className="text-[9px] text-left">
+                  <p className="font-black text-slate-800 uppercase tracking-wider">
+                    {companyQrCodeType === 'Bank Payment QR' ? 'SCAN FOR BANK PAYMENT' :
+                     companyQrCodeType === 'Company Website QR' ? 'SCAN TO VISIT WEBSITE' :
+                     companyQrCodeType === 'Business Contact QR' ? 'SCAN FOR CONTACT' :
+                     companyQrCodeType === 'Custom QR Code' ? 'SCAN QR CODE' : 'UPI SCAN TO PAY'}
+                  </p>
+                  <p className="text-[8.5px] text-slate-500 font-bold">{companyQrCodeType}</p>
+                  {settings.bank?.upiId && (
+                    <p className="font-mono text-slate-600 font-bold mt-0.5">{settings.bank.upiId}</p>
+                  )}
+                  <p className="text-[8px] text-slate-400 font-bold">Acc: {settings.bank?.accountHolderName || companyName}</p>
+                </div>
+              </div>
+            ) : showQrPayment && settings.bank?.upiId ? (
               <div className="inline-flex items-center space-x-2 bg-slate-50 p-2 rounded border border-slate-150">
                 <div className="p-1 bg-white rounded border border-slate-200 shrink-0">
                   <QrCode size={40} className="text-slate-800" />
@@ -889,10 +954,10 @@ export default function DocumentTemplateRenderer({
                 <div className="text-[9px] text-left">
                   <p className="font-black text-slate-800 uppercase tracking-wider">UPI SCAN TO PAY</p>
                   <p className="font-mono text-slate-500 font-bold">{settings.bank.upiId}</p>
-                  <p className="text-[8px] text-slate-400 font-bold">Acc: {settings.bank.upiDisplayName || company.companyName}</p>
+                  <p className="text-[8px] text-slate-400 font-bold">Acc: {settings.bank.upiDisplayName || companyName}</p>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Business Terms Policy */}
@@ -909,10 +974,15 @@ export default function DocumentTemplateRenderer({
           <div className="sm:col-span-3 text-center flex flex-col justify-end items-center h-16">
             {showSignature && (
               <>
-                <div className="h-8 flex items-center justify-center">
-                  <div className="border border-dashed border-blue-400/80 bg-blue-50/50 text-blue-600 rounded-sm font-black text-[8px] tracking-widest px-1.5 py-0.5 uppercase rotate-[-2deg]">
-                    ★ BizOps Secured ★
-                  </div>
+                <div className="h-10 flex items-center justify-center">
+                  {companySignatureUrl ? (
+                    <img
+                      src={companySignatureUrl}
+                      alt="Authorized Signature"
+                      referrerPolicy="no-referrer"
+                      className="max-h-10 object-contain"
+                    />
+                  ) : null}
                 </div>
                 <div className="border-t border-slate-300 w-full pt-1 text-[8.5px] text-slate-400 uppercase tracking-widest font-black">
                   {settings.invoice?.signatureText || 'Authorized Signatory'}

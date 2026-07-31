@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { compressImage } from '../utils/imageCompressor';
+import { sanitizeFirestoreData } from '../App';
 import {
   Building,
   Sliders,
@@ -22,6 +24,10 @@ import {
   Palette,
   Bell,
   Download,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
+  AlertCircle,
   ShieldAlert,
   Lock,
   RotateCcw,
@@ -38,7 +44,7 @@ import {
   Calendar,
   Grid,
   FileCheck,
-  MessageSquare
+  QrCode
 } from 'lucide-react';
 import { AppSettings } from '../types';
 import DocumentTemplateRenderer from './DocumentTemplateRenderer';
@@ -102,8 +108,6 @@ type ActivePageId =
   | 'stock_settings' | 'units_settings' | 'categories_settings' | 'locations_settings'
   // Print & Templates
   | 'invoice_templates' | 'quotation_templates' | 'receipt_templates' | 'purchase_templates' | 'print_layout_settings'
-  // Communication
-  | 'whatsapp_business'
   // Application
   | 'date_time_settings' | 'currency_number_settings' | 'theme_layout_settings' | 'security_settings' | 'notifications_settings' | 'backup_export_settings' | 'admin_profile_settings';
 
@@ -147,75 +151,213 @@ export default function SettingsView({
   const [showPasswords, setShowPasswords] = useState(false);
   const [numberingType, setNumberingType] = useState<keyof AppSettings['numbering']>('invoice');
   const [backupLog, setBackupLog] = useState<string[]>([]);
-  
-  // WhatsApp Business Test Connection state
-  const [testConnectionStatus, setTestConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
-  const [testConnectionMessage, setTestConnectionMessage] = useState('');
-  const [showTokens, setShowTokens] = useState(false);
-  const [whatsappSettingsTab, setWhatsappSettingsTab] = useState<'config' | 'logs'>('config');
-  const [communicationLogsList, setCommunicationLogsList] = useState<any[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
 
-  const fetchCommunicationLogs = async () => {
-    setLogsLoading(true);
+  // Branding & Authorization state
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [isUploadingSignature, setIsUploadingSignature] = useState(false);
+  const [selectedSignatureFile, setSelectedSignatureFile] = useState<File | null>(null);
+
+  const [qrPreview, setQrPreview] = useState<string | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [isUploadingQr, setIsUploadingQr] = useState(false);
+  const [selectedQrFile, setSelectedQrFile] = useState<File | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [savingStatus, setSavingStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hasChanges) {
+      setLocalSettings(settings);
+    }
+  }, [settings]);
+
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoError(null);
+
+    // MIME & extension check
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const allowedExts = ['png', 'jpg', 'jpeg', 'webp'];
+    if (!allowedTypes.includes(file.type) || !allowedExts.includes(ext)) {
+      setLogoError('Invalid file format. Only PNG, JPG, and WEBP images are allowed.');
+      e.target.value = '';
+      return;
+    }
+
+    // Size limit check
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoError('Logo file must be smaller than 5 MB.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingLogo(true);
     try {
-      const res = await fetch('/api/communication/logs');
-      const data = await res.json();
-      if (res.ok && data.success && data.logs) {
-        setCommunicationLogsList(data.logs);
-      }
+      // Create local preview
+      const previewUrl = await compressImage(file, 400, 400, 0.85);
+      setLogoPreview(previewUrl);
+      setSelectedLogoFile(file);
+      setHasChanges(true);
+      console.log('[Branding Select] Logo file selected for upload:', file.name, file.size, 'bytes');
     } catch (err) {
-      console.error('Failed to fetch communication logs:', err);
+      setLogoError('Failed to process selected logo image preview.');
     } finally {
-      setLogsLoading(false);
+      setIsUploadingLogo(false);
     }
   };
 
-  const handleRetryLog = async (logId: string) => {
+  const handleSignatureSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSignatureError(null);
+
+    // MIME & extension check
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const allowedExts = ['png', 'jpg', 'jpeg', 'webp'];
+    if (!allowedTypes.includes(file.type) || !allowedExts.includes(ext)) {
+      setSignatureError('Invalid file format. Only PNG, JPG, and WEBP images are allowed.');
+      e.target.value = '';
+      return;
+    }
+
+    // Size limit check
+    if (file.size > 5 * 1024 * 1024) {
+      setSignatureError('Signature file must be smaller than 5 MB.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingSignature(true);
     try {
-      const res = await fetch(`/api/whatsapp/retry-log/${logId}`, {
-        method: 'POST'
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert('Retry request sent successfully! Checking delivery status...');
-        setTimeout(fetchCommunicationLogs, 1500);
-      } else {
-        alert(`Failed to retry: ${data.error || 'Unknown error'}`);
-      }
+      // Create local preview
+      const previewUrl = await compressImage(file, 500, 200, 0.85);
+      setSignaturePreview(previewUrl);
+      setSelectedSignatureFile(file);
+      setHasChanges(true);
+      console.log('[Branding Select] Signature file selected for upload:', file.name, file.size, 'bytes');
     } catch (err) {
-      console.error('Retry failed:', err);
+      setSignatureError('Failed to process selected signature image preview.');
+    } finally {
+      setIsUploadingSignature(false);
     }
   };
 
-  const handleTestWhatsAppConnection = async () => {
-    setTestConnectionStatus('testing');
-    setTestConnectionMessage('');
-    try {
-      const res = await fetch('/api/whatsapp/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accessToken: localSettings.communication?.whatsapp?.accessToken || '',
-          permanentAccessToken: localSettings.communication?.whatsapp?.permanentAccessToken || '',
-          phoneNumberId: localSettings.communication?.whatsapp?.phoneNumberId || '',
-          businessAccountId: localSettings.communication?.whatsapp?.businessAccountId || '',
-          apiVersion: localSettings.communication?.whatsapp?.apiVersion || 'v18.0',
-          defaultSenderName: localSettings.communication?.whatsapp?.defaultSenderName || 'BizOps ERP',
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTestConnectionStatus('success');
-        setTestConnectionMessage(data.message || 'Meta Cloud API connection test passed!');
-      } else {
-        setTestConnectionStatus('failed');
-        setTestConnectionMessage(data.error || 'Connection failed. Please check your credentials.');
+  const handleRemoveLogo = () => {
+    setLogoPreview(null);
+    setSelectedLogoFile(null);
+    setLogoError(null);
+    setLocalSettings(prev => ({
+      ...prev,
+      company: {
+        ...prev.company,
+        companyLogoUrl: '',
+        logoUrl: '',
+        companyLogoPublicId: '',
+        brandingUpdatedAt: new Date().toISOString(),
+        brandingUpdatedBy: currentUser?.full_name || currentUser?.email || 'User'
       }
-    } catch (err: any) {
-      setTestConnectionStatus('failed');
-      setTestConnectionMessage(err?.message || 'Network error occurred.');
+    }));
+    setHasChanges(true);
+  };
+
+  const handleRemoveSignature = () => {
+    setSignaturePreview(null);
+    setSelectedSignatureFile(null);
+    setSignatureError(null);
+    setLocalSettings(prev => ({
+      ...prev,
+      company: {
+        ...prev.company,
+        companySignatureUrl: '',
+        signatureUrl: '',
+        companySignaturePublicId: '',
+        brandingUpdatedAt: new Date().toISOString(),
+        brandingUpdatedBy: currentUser?.full_name || currentUser?.email || 'User'
+      }
+    }));
+    setHasChanges(true);
+  };
+
+  const handleQrSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQrError(null);
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const allowedExts = ['png', 'jpg', 'jpeg', 'webp'];
+    if (!allowedTypes.includes(file.type) || !allowedExts.includes(ext)) {
+      setQrError('Unsupported QR image format. Only PNG, JPG, and WEBP images are allowed.');
+      e.target.value = '';
+      return;
     }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setQrError('QR image is too large. Must be smaller than 5 MB.');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = objectUrl;
+      });
+      URL.revokeObjectURL(objectUrl);
+
+      if (img.width < 300 || img.height < 300) {
+        setQrError('Upload a clear QR code image of at least 300 × 300 pixels.');
+        e.target.value = '';
+        return;
+      }
+    } catch (dimErr) {
+      setQrError('QR image could not be read or is corrupted.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsUploadingQr(true);
+    try {
+      const previewUrl = await compressImage(file, 400, 400, 0.85);
+      setQrPreview(previewUrl);
+      setSelectedQrFile(file);
+      setHasChanges(true);
+    } catch (err) {
+      setQrError('Failed to process QR image preview.');
+    } finally {
+      setIsUploadingQr(false);
+    }
+  };
+
+  const handleRemoveQr = () => {
+    setQrPreview(null);
+    setSelectedQrFile(null);
+    setQrError(null);
+    setLocalSettings(prev => ({
+      ...prev,
+      company: {
+        ...prev.company,
+        companyQrCodeUrl: '',
+        companyQrCodeStoragePath: '',
+        companyQrCodePublicId: '',
+        showQrCodeOnDocuments: false,
+        brandingUpdatedAt: new Date().toISOString(),
+        brandingUpdatedBy: currentUser?.full_name || currentUser?.email || 'User'
+      }
+    }));
+    setHasChanges(true);
   };
 
   // Template Management Center states
@@ -289,35 +431,6 @@ export default function SettingsView({
     }
   }, [activePage]);
 
-  useEffect(() => {
-    if (activePage === 'whatsapp_business') {
-      const fetchWhatsAppSettings = async () => {
-        try {
-          const res = await fetch('/api/whatsapp/settings');
-          const data = await res.json();
-          if (res.ok && data.success && data.config) {
-            setLocalSettings(prev => ({
-              ...prev,
-              communication: {
-                ...prev.communication,
-                whatsapp: data.config
-              }
-            }));
-          }
-        } catch (err) {
-          console.error('Failed to fetch WhatsApp Business Settings:', err);
-        }
-      };
-      fetchWhatsAppSettings();
-    }
-  }, [activePage]);
-
-  useEffect(() => {
-    if (activePage === 'whatsapp_business' && whatsappSettingsTab === 'logs') {
-      fetchCommunicationLogs();
-    }
-  }, [activePage, whatsappSettingsTab]);
-
   // Field change handler
   const handleFieldChange = (group: keyof AppSettings, field: string, value: any) => {
     console.log("handlePrintChange", field, value);
@@ -325,7 +438,7 @@ export default function SettingsView({
       const updated = {
         ...prev,
         [group]: {
-          ...prev[group],
+          ...(prev[group] || {}),
           [field]: value
         }
       };
@@ -448,98 +561,233 @@ export default function SettingsView({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateSettings(localSettings);
-    
-    // Also save user profile if we're on the admin profile page
-    if (activePage === 'admin_profile_settings' && currentUser && onUpdateUser) {
-      try {
-        const payload: any = {
-          full_name: profileState.full_name,
-          designation: profileState.designation,
-          mobile: profileState.mobile,
-        };
-        
-        if (passwordState.newPassword) {
-          if (passwordState.newPassword !== passwordState.confirmPassword) {
-            alert('New passwords do not match');
-            return;
+    if (isSaving) return;
+    setIsSaving(true);
+    setSavingStatus('Preparing settings...');
+
+    try {
+      let finalCompany = { ...localSettings.company };
+      let logoUploadedUrl: string | null = null;
+      let signatureUploadedUrl: string | null = null;
+
+      const companyId = currentUser?.id || 'default_company';
+
+      // 1. Handle Logo Upload if a file was selected
+      if (selectedLogoFile) {
+        setSavingStatus('Uploading logo to storage...');
+        console.log('[Branding Upload] Processing logo file upload:', selectedLogoFile.name);
+        try {
+          const { storage } = await import('../lib/firebase');
+          const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+          
+          if (storage) {
+            storage.maxUploadRetryTime = 3000;
+            storage.maxOperationRetryTime = 3000;
           }
-          // Note: Password update requires reauthentication if it's been a while,
-          // for simplicity we attempt it directly.
-          import('firebase/auth').then(({ getAuth, updatePassword }) => {
+
+          const cleanName = selectedLogoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `companies/${companyId}/branding/logo/${Date.now()}_${cleanName}`;
+          const logoRef = ref(storage, storagePath);
+
+          const uploadTask = (async () => {
+            const snapshot = await uploadBytes(logoRef, selectedLogoFile, { contentType: selectedLogoFile.type || 'image/png' });
+            return await getDownloadURL(snapshot.ref);
+          })();
+
+          const timeoutTask = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Firebase Storage upload timed out after 4s')), 4000);
+          });
+
+          logoUploadedUrl = await Promise.race([uploadTask, timeoutTask]);
+          console.log('[Branding Upload] Permanent Logo HTTPS URL obtained:', logoUploadedUrl);
+        } catch (uploadErr: any) {
+          console.warn('[Branding Upload] Firebase Storage upload unavailable for logo (' + (uploadErr?.message || uploadErr) + '). Storing fallback compact Data URL.');
+          logoUploadedUrl = await compressImage(selectedLogoFile, 400, 400, 0.85);
+        }
+      }
+
+      // 2. Handle Signature Upload if a file was selected
+      if (selectedSignatureFile) {
+        setSavingStatus('Uploading signature to storage...');
+        console.log('[Branding Upload] Processing signature file upload:', selectedSignatureFile.name);
+        try {
+          const { storage } = await import('../lib/firebase');
+          const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+          
+          if (storage) {
+            storage.maxUploadRetryTime = 3000;
+            storage.maxOperationRetryTime = 3000;
+          }
+
+          const cleanName = selectedSignatureFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `companies/${companyId}/branding/signature/${Date.now()}_${cleanName}`;
+          const sigRef = ref(storage, storagePath);
+
+          const uploadTask = (async () => {
+            const snapshot = await uploadBytes(sigRef, selectedSignatureFile, { contentType: selectedSignatureFile.type || 'image/png' });
+            return await getDownloadURL(snapshot.ref);
+          })();
+
+          const timeoutTask = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Firebase Storage upload timed out after 4s')), 4000);
+          });
+
+          signatureUploadedUrl = await Promise.race([uploadTask, timeoutTask]);
+          console.log('[Branding Upload] Permanent Signature HTTPS URL obtained:', signatureUploadedUrl);
+        } catch (uploadErr: any) {
+          console.warn('[Branding Upload] Firebase Storage upload unavailable for signature (' + (uploadErr?.message || uploadErr) + '). Storing fallback compact Data URL.');
+          signatureUploadedUrl = await compressImage(selectedSignatureFile, 500, 200, 0.85);
+        }
+      }
+
+      // 3. Handle QR Code Upload if a file was selected
+      let qrUploadedUrl: string | null = null;
+      if (selectedQrFile) {
+        setSavingStatus('Uploading QR code to storage...');
+        try {
+          const { storage } = await import('../lib/firebase');
+          const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+          if (storage) {
+            storage.maxUploadRetryTime = 3000;
+            storage.maxOperationRetryTime = 3000;
+          }
+          const cleanName = selectedQrFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `companies/${companyId}/branding/qr/${Date.now()}_${cleanName}`;
+          const qrRef = ref(storage, storagePath);
+          const uploadTask = (async () => {
+            const snapshot = await uploadBytes(qrRef, selectedQrFile, { contentType: selectedQrFile.type || 'image/png' });
+            return await getDownloadURL(snapshot.ref);
+          })();
+          const timeoutTask = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Firebase Storage upload timed out after 4s')), 4000);
+          });
+          qrUploadedUrl = await Promise.race([uploadTask, timeoutTask]);
+        } catch (uploadErr: any) {
+          console.warn('[Branding Upload] Firebase Storage upload unavailable for QR code. Storing fallback data URL.');
+          qrUploadedUrl = await compressImage(selectedQrFile, 400, 400, 0.85);
+        }
+      }
+
+      // 4. Apply uploaded branding URLs (ensuring blob: URLs are never stored)
+      if (logoUploadedUrl !== null && !logoUploadedUrl.startsWith('blob:')) {
+        finalCompany.companyLogoUrl = logoUploadedUrl;
+        finalCompany.logoUrl = logoUploadedUrl;
+        finalCompany.companyLogoPublicId = `logo_${Date.now()}`;
+      }
+      if (signatureUploadedUrl !== null && !signatureUploadedUrl.startsWith('blob:')) {
+        finalCompany.companySignatureUrl = signatureUploadedUrl;
+        finalCompany.signatureUrl = signatureUploadedUrl;
+        finalCompany.companySignaturePublicId = `signature_${Date.now()}`;
+      }
+      if (qrUploadedUrl !== null && !qrUploadedUrl.startsWith('blob:')) {
+        finalCompany.companyQrCodeUrl = qrUploadedUrl;
+        finalCompany.companyQrCodeStoragePath = `companies/${companyId}/branding/qr`;
+        finalCompany.companyQrCodePublicId = `qr_${Date.now()}`;
+      }
+
+      finalCompany.brandingUpdatedAt = new Date().toISOString();
+      finalCompany.brandingUpdatedBy = currentUser?.full_name || currentUser?.email || 'User';
+
+      const updatedSettings = {
+        ...localSettings,
+        company: finalCompany
+      };
+
+      setLocalSettings(updatedSettings);
+
+      // Also save user profile if we're on the admin profile page
+      if (activePage === 'admin_profile_settings' && currentUser && onUpdateUser) {
+        try {
+          const payload: any = {
+            full_name: profileState.full_name,
+            designation: profileState.designation,
+            mobile: profileState.mobile,
+          };
+          
+          if (passwordState.newPassword) {
+            if (passwordState.newPassword !== passwordState.confirmPassword) {
+              alert('New passwords do not match');
+              return;
+            }
+            const { getAuth, updatePassword } = await import('firebase/auth');
             const auth = getAuth();
             if (auth.currentUser) {
-              updatePassword(auth.currentUser, passwordState.newPassword)
-                .then(() => {
-                  alert('Password changed successfully.');
-                  setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                })
-                .catch(err => alert('Failed to change password: ' + err.message));
+              await updatePassword(auth.currentUser, passwordState.newPassword);
+              alert('Password changed successfully.');
+              setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
             }
-          });
-        }
+          }
 
-        import('../lib/firebase').then(({ firestoreDb }) => {
-          import('firebase/firestore').then(({ doc, setDoc }) => {
-            if (currentUser?.id) {
-               const userProfileData: Record<string, any> = {};
-               if (payload.full_name !== undefined) userProfileData.full_name = payload.full_name || '';
-               if (payload.designation !== undefined) userProfileData.designation = payload.designation || '';
-               if (payload.mobile !== undefined) userProfileData.mobile = payload.mobile || '';
-
-               setDoc(doc(firestoreDb, "users", currentUser.id), userProfileData, { merge: true }).then(() => {
-                 onUpdateUser && onUpdateUser({ ...currentUser, ...payload });
-                 alert("Profile updated.");
-               }).catch(e => {
-                 console.error(e);
-                 alert("Failed to update profile data in Firestore");
-               });
-            }
-          });
-        });
-      } catch (err) {
-        console.error('Failed to update user profile:', err);
-      }
-    }
-
-    // Also save WhatsApp settings if we're on the WhatsApp page
-    if (activePage === 'whatsapp_business') {
-      try {
-        const res = await fetch('/api/whatsapp/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config: localSettings.communication?.whatsapp })
-        });
-        if (!res.ok) {
-          const data = await res.json();
-          alert(`Failed to save WhatsApp Secure Credentials: ${data.error || 'Unknown error'}`);
-          return;
-        }
-      } catch (err) {
-        console.error('Failed to save secure WhatsApp settings:', err);
-      }
-    }
-
-    // Explicitly persist template selection to the company settings document if on a template page
-    if (['invoice_templates', 'quotation_templates', 'receipt_templates', 'purchase_templates'].includes(activePage)) {
-      if (currentUser?.id) {
-        try {
           const { firestoreDb } = await import('../lib/firebase');
           const { doc, setDoc } = await import('firebase/firestore');
-          await setDoc(
-            doc(firestoreDb, "companySettings", currentUser.id),
-            { print: localSettings.print },
-            { merge: true }
-          );
-        } catch (err) {
-          console.error("Failed to save template selection to companySettings:", err);
+          if (currentUser?.id) {
+             const userProfileData: Record<string, any> = {};
+             if (payload.full_name !== undefined) userProfileData.full_name = payload.full_name || '';
+             if (payload.designation !== undefined) userProfileData.designation = payload.designation || '';
+             if (payload.mobile !== undefined) userProfileData.mobile = payload.mobile || '';
+
+             await setDoc(doc(firestoreDb, "users", currentUser.id), userProfileData, { merge: true });
+             onUpdateUser && onUpdateUser({ ...currentUser, ...payload });
+          }
+        } catch (err: any) {
+          console.error('Failed to update user profile:', err);
         }
       }
-    }
 
-    setHasChanges(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+      // Update parent state (updates appData in Firestore)
+      onUpdateSettings(updatedSettings);
+
+      // Explicitly persist company details & branding to companySettings collection
+      if (currentUser?.id) {
+        setSavingStatus('Persisting company branding to Firestore...');
+        try {
+          const { firestoreDb } = await import('../lib/firebase');
+          const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+          await setDoc(
+            doc(firestoreDb, "companySettings", currentUser.id),
+            sanitizeFirestoreData({
+              company: finalCompany,
+              updatedAt: serverTimestamp()
+            }),
+            { merge: true }
+          );
+          console.log('[Branding Save] Company settings saved to companySettings collection in Firestore.');
+        } catch (err) {
+          console.error("Failed to save company details to companySettings:", err);
+        }
+      }
+
+      // Explicitly persist template selection to company settings document if on a template page
+      if (['invoice_templates', 'quotation_templates', 'receipt_templates', 'purchase_templates'].includes(activePage)) {
+        if (currentUser?.id) {
+          try {
+            const { firestoreDb } = await import('../lib/firebase');
+            const { doc, setDoc } = await import('firebase/firestore');
+            await setDoc(
+              doc(firestoreDb, "companySettings", currentUser.id),
+              sanitizeFirestoreData({ print: localSettings.print }),
+              { merge: true }
+            );
+          } catch (err) {
+            console.error("Failed to save template selection to companySettings:", err);
+          }
+        }
+      }
+
+      // Clear selected file handles after successful upload
+      setSelectedLogoFile(null);
+      setSelectedSignatureFile(null);
+
+      setHasChanges(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Failed to save settings:', err);
+      alert('Failed to save settings: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsSaving(false);
+      setSavingStatus(null);
+    }
   };
 
   const handleReset = () => {
@@ -661,13 +909,6 @@ export default function SettingsView({
         { id: 'receipt_templates', label: 'Receipt Templates', desc: 'Customize receipt layout & live preview', icon: Receipt },
         { id: 'purchase_templates', label: 'Purchase Templates', desc: 'Customize purchase order layout & live preview', icon: ShoppingCart },
         { id: 'print_layout_settings', label: 'Print Layout Settings', desc: 'Global primary colors, fonts, and margin rules', icon: Palette }
-      ]
-    },
-    {
-      id: 'communication',
-      label: 'Communication',
-      items: [
-        { id: 'whatsapp_business', label: 'WhatsApp Business', desc: 'Meta Cloud API credentials & template sharing', icon: MessageSquare }
       ]
     },
     {
@@ -928,6 +1169,254 @@ export default function SettingsView({
                         value={localSettings.company.address}
                         onChange={(e) => handleFieldChange('company', 'address', e.target.value)}
                       />
+                    </div>
+                  </div>
+
+                  {/* BRANDING & AUTHORIZATION SECTION */}
+                  <div className="pt-6 border-t border-slate-200/80 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                          <Upload size={14} className="text-blue-600" />
+                          Branding & Authorization
+                        </h3>
+                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                          Upload official company logo and authorized signature image for generated business documents.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                      {/* 1. COMPANY LOGO */}
+                      <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                              <Building size={12} className="text-slate-400" />
+                              Company Logo
+                            </label>
+                            <span className="text-[9px] font-semibold text-slate-400">PNG, JPG, WEBP (Max 2MB)</span>
+                          </div>
+
+                          {/* Logo Preview Box */}
+                          <div className="relative min-h-[120px] max-h-[140px] bg-white border-2 border-dashed border-slate-200 rounded-lg p-3 flex flex-col items-center justify-center overflow-hidden transition-all hover:border-blue-300">
+                            {logoPreview || localSettings.company.companyLogoUrl || localSettings.company.logoUrl ? (
+                              <div className="relative w-full h-28 flex items-center justify-center">
+                                <img
+                                  src={logoPreview || localSettings.company.companyLogoUrl || localSettings.company.logoUrl}
+                                  alt="Company Logo Preview"
+                                  className="max-h-full max-w-full object-contain drop-shadow-xs"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-center p-2">
+                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                                  <ImageIcon size={20} />
+                                </div>
+                                <p className="text-[11px] font-bold text-slate-600">No logo uploaded</p>
+                                <p className="text-[9px] text-slate-400 mt-0.5">Will appear on header of generated documents</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Validation error display */}
+                          {logoError && (
+                            <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-md p-2 flex items-center gap-1.5">
+                              <AlertCircle size={12} className="shrink-0" />
+                              <span>{logoError}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Controls */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60">
+                          <label className="flex-1 cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors">
+                            <Upload size={13} />
+                            <span>{isUploadingLogo ? 'Processing...' : (logoPreview || localSettings.company.companyLogoUrl || localSettings.company.logoUrl) ? 'Replace Logo' : 'Upload Logo'}</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              className="hidden"
+                              onChange={handleLogoSelect}
+                              disabled={isUploadingLogo}
+                            />
+                          </label>
+                          {(logoPreview || localSettings.company.companyLogoUrl || localSettings.company.logoUrl) && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveLogo}
+                              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                              <span>Remove</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 2. AUTHORIZED SIGNATURE */}
+                      <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                              <FileText size={12} className="text-slate-400" />
+                              Authorized Signature
+                            </label>
+                            <span className="text-[9px] font-semibold text-slate-400">PNG, JPG, WEBP (Max 1MB)</span>
+                          </div>
+
+                          {/* Signature Preview Box */}
+                          <div className="relative min-h-[120px] max-h-[140px] bg-white border-2 border-dashed border-slate-200 rounded-lg p-3 flex flex-col items-center justify-center overflow-hidden transition-all hover:border-blue-300">
+                            {signaturePreview || localSettings.company.companySignatureUrl || localSettings.company.signatureUrl ? (
+                              <div className="relative w-full h-28 flex items-center justify-center">
+                                <img
+                                  src={signaturePreview || localSettings.company.companySignatureUrl || localSettings.company.signatureUrl}
+                                  alt="Authorized Signature Preview"
+                                  className="max-h-full max-w-full object-contain"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-center p-2">
+                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                                  <FileText size={20} />
+                                </div>
+                                <p className="text-[11px] font-bold text-slate-600">No signature uploaded</p>
+                                <p className="text-[9px] text-slate-400 mt-0.5">Will appear on signatory area of generated documents</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Validation error display */}
+                          {signatureError && (
+                            <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-md p-2 flex items-center gap-1.5">
+                              <AlertCircle size={12} className="shrink-0" />
+                              <span>{signatureError}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Controls */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60">
+                          <label className="flex-1 cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors">
+                            <Upload size={13} />
+                            <span>{isUploadingSignature ? 'Processing...' : (signaturePreview || localSettings.company.companySignatureUrl || localSettings.company.signatureUrl) ? 'Replace Signature' : 'Upload Signature'}</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              className="hidden"
+                              onChange={handleSignatureSelect}
+                              disabled={isUploadingSignature}
+                            />
+                          </label>
+                          {(signaturePreview || localSettings.company.companySignatureUrl || localSettings.company.signatureUrl) && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveSignature}
+                              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                              <span>Remove</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 3. COMPANY QR CODE */}
+                      <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between space-y-4">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-[10px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                              <QrCode size={12} className="text-slate-400" />
+                              Company QR Code
+                            </label>
+                            <span className="text-[9px] font-semibold text-slate-400">PNG, JPG, WEBP (Min 300px)</span>
+                          </div>
+
+                          {/* QR Preview Box */}
+                          <div className="relative min-h-[120px] max-h-[140px] bg-white border-2 border-dashed border-slate-200 rounded-lg p-3 flex flex-col items-center justify-center overflow-hidden transition-all hover:border-blue-300">
+                            {qrPreview || localSettings.company.companyQrCodeUrl ? (
+                              <div className="relative w-full h-28 flex items-center justify-center">
+                                <img
+                                  src={qrPreview || localSettings.company.companyQrCodeUrl}
+                                  alt="Company QR Preview"
+                                  className="max-h-full max-w-full object-contain"
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-center p-2">
+                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
+                                  <QrCode size={20} />
+                                </div>
+                                <p className="text-[11px] font-bold text-slate-600">No QR code uploaded</p>
+                                <p className="text-[9px] text-slate-400 mt-0.5">Will appear on remittance & payment sections</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* QR Settings Controls */}
+                          <div className="mt-3 space-y-2">
+                            <div>
+                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">QR Code Type</label>
+                              <select
+                                className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500"
+                                value={localSettings.company.companyQrCodeType || 'UPI Payment QR'}
+                                onChange={(e) => handleFieldChange('company', 'companyQrCodeType', e.target.value)}
+                              >
+                                <option value="UPI Payment QR">UPI Payment QR</option>
+                                <option value="Bank Payment QR">Bank Payment QR</option>
+                                <option value="Company Website QR">Company Website QR</option>
+                                <option value="Business Contact QR">Business Contact QR</option>
+                                <option value="Custom QR Code">Custom QR Code</option>
+                              </select>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-1">
+                              <label className="text-[10px] font-bold text-slate-700 flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={!!localSettings.company.showQrCodeOnDocuments}
+                                  onChange={(e) => handleFieldChange('company', 'showQrCodeOnDocuments', e.target.checked)}
+                                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                                />
+                                Display on Documents
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Validation error display */}
+                          {qrError && (
+                            <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-md p-2 flex items-center gap-1.5">
+                              <AlertCircle size={12} className="shrink-0" />
+                              <span>{qrError}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Controls */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60">
+                          <label className="flex-1 cursor-pointer inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors">
+                            <Upload size={13} />
+                            <span>{isUploadingQr ? 'Processing...' : (qrPreview || localSettings.company.companyQrCodeUrl) ? 'Replace QR' : 'Upload QR'}</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg,image/webp"
+                              className="hidden"
+                              onChange={handleQrSelect}
+                              disabled={isUploadingQr}
+                            />
+                          </label>
+                          {(qrPreview || localSettings.company.companyQrCodeUrl) && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveQr}
+                              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Trash2 size={13} />
+                              <span>Remove</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2823,453 +3312,6 @@ export default function SettingsView({
                   </div>
                 </div>
               )}
-
-              {activePage === 'whatsapp_business' && (
-                <div className="space-y-6">
-                  {/* Tab Bar */}
-                  <div className="flex border-b border-slate-200">
-                    <button
-                      type="button"
-                      id="whatsapp-config-tab"
-                      onClick={() => setWhatsappSettingsTab('config')}
-                      className={`px-4 py-2 text-xs font-bold border-b-2 transition ${
-                        whatsappSettingsTab === 'config'
-                          ? 'border-blue-600 text-blue-600'
-                          : 'border-transparent text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      API Configuration
-                    </button>
-                    <button
-                      type="button"
-                      id="whatsapp-logs-tab"
-                      onClick={() => setWhatsappSettingsTab('logs')}
-                      className={`px-4 py-2 text-xs font-bold border-b-2 transition ${
-                        whatsappSettingsTab === 'logs'
-                          ? 'border-blue-600 text-blue-600'
-                          : 'border-transparent text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      Delivery Logs
-                    </button>
-                  </div>
-
-                  {whatsappSettingsTab === 'config' && (
-                    <div className="space-y-6">
-                      {/* Toggle header */}
-                      <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-xl border border-blue-100">
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-800 animate-fade-in">WhatsApp Business Cloud API Settings</h4>
-                          <p className="text-xs text-slate-500 mt-1 animate-fade-in">
-                            Configure Meta Cloud API credentials to enable direct document sharing with PDF attachments.
-                          </p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            id="enable-whatsapp-api-toggle"
-                            checked={localSettings.communication?.whatsapp?.enableBusinessApi || false}
-                            onChange={(e) => {
-                              const val = e.target.checked;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    enableBusinessApi: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                          <span className="ml-2 text-xs font-semibold text-slate-700">
-                            {localSettings.communication?.whatsapp?.enableBusinessApi ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </label>
-                      </div>
-
-                      {/* Settings fields */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">API Version</label>
-                          <input
-                            type="text"
-                            placeholder="v18.0"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                            value={localSettings.communication?.whatsapp?.apiVersion || 'v18.0'}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    apiVersion: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Default Sender Name</label>
-                          <input
-                            type="text"
-                            placeholder="BizOps ERP"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                            value={localSettings.communication?.whatsapp?.defaultSenderName || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    defaultSenderName: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Phone Number ID</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. 106518739213454"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                            value={localSettings.communication?.whatsapp?.phoneNumberId || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    phoneNumberId: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">WhatsApp Business Account ID</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. 106518739213454"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                            value={localSettings.communication?.whatsapp?.businessAccountId || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    businessAccountId: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Webhook Verify Token</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. my_bizops_verify_token"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                            value={localSettings.communication?.whatsapp?.webhookVerifyToken || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    webhookVerifyToken: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Webhook Secret</label>
-                          <input
-                            type="password"
-                            placeholder="e.g. whsec_..."
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
-                            value={localSettings.communication?.whatsapp?.webhookSecret || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    webhookSecret: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider">Access Token</label>
-                            <button
-                              type="button"
-                              id="reveal-whatsapp-token-btn"
-                              onClick={() => setShowTokens(!showTokens)}
-                              className="text-[9px] text-blue-600 font-bold hover:underline"
-                            >
-                              {showTokens ? 'Hide Tokens' : 'Reveal Tokens'}
-                            </button>
-                          </div>
-                          <input
-                            type={showTokens ? 'text' : 'password'}
-                            placeholder="EAABw..."
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-mono text-xs font-semibold"
-                            value={localSettings.communication?.whatsapp?.accessToken || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    accessToken: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Permanent Access Token (Optional)</label>
-                          <input
-                            type={showTokens ? 'text' : 'password'}
-                            placeholder="EAABw..."
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-mono text-xs font-semibold"
-                            value={localSettings.communication?.whatsapp?.permanentAccessToken || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalSettings(prev => ({
-                                ...prev,
-                                communication: {
-                                  ...prev.communication,
-                                  whatsapp: {
-                                    ...prev.communication.whatsapp,
-                                    permanentAccessToken: val
-                                  }
-                                }
-                              }));
-                              setHasChanges(true);
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Test Connection Button and Feedback Panel */}
-                      <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <button
-                          type="button"
-                          id="test-whatsapp-connection-btn"
-                          onClick={handleTestWhatsAppConnection}
-                          disabled={testConnectionStatus === 'testing'}
-                          className="px-5 py-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-400 text-white font-bold rounded-lg text-xs transition shadow-sm self-start"
-                        >
-                          {testConnectionStatus === 'testing' ? 'Testing Connection...' : 'Test Connection'}
-                        </button>
-
-                        {testConnectionStatus !== 'idle' && (
-                          <div className={`p-3 rounded-lg border text-xs flex-grow flex items-center space-x-2 ${
-                            testConnectionStatus === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
-                          }`}>
-                            <div className="font-bold uppercase tracking-wide text-[10px]">
-                              {testConnectionStatus === 'success' ? 'Passed' : 'Failed'}:
-                            </div>
-                            <div className="font-medium">{testConnectionMessage}</div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* failover fields */}
-                      <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-                          <div>
-                            <p className="text-xs font-bold text-slate-700">Second-Step Verification</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Require OTP for sharing sensitive documents.</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleFieldChange('communication', 'whatsapp', { ...localSettings.communication.whatsapp, enableSecondStepVerification: !localSettings.communication.whatsapp.enableSecondStepVerification })}
-                            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                              localSettings.communication.whatsapp.enableSecondStepVerification ? 'bg-blue-600' : 'bg-slate-300'
-                            }`}
-                          >
-                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white ring-0 transition duration-200 ease-in-out ${
-                              localSettings.communication.whatsapp.enableSecondStepVerification ? 'translate-x-5' : 'translate-x-0'
-                            }`} />
-                          </button>
-                        </div>
-                        <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Alternate Alert Number</label>
-                          <input
-                            type="text"
-                            placeholder="+919876543210"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-bold"
-                            value={localSettings.communication.whatsapp.alternateNumber || ''}
-                            onChange={(e) => handleFieldChange('communication', 'whatsapp', { ...localSettings.communication.whatsapp, alternateNumber: e.target.value })}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Informational Panel */}
-                      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                        <h5 className="text-xs font-bold text-slate-700">Supported Message Placeholders & Template</h5>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Below is the default message caption template that will accompany your shared PDF document:
-                        </p>
-                        <pre className="bg-white p-3 rounded-lg border border-slate-200 font-mono text-[10px] text-slate-600 leading-relaxed whitespace-pre-wrap">
-                          {`Hello {{customer_name}},
-
-Greetings from {{company_name}}.
-
-Please find your document attached.
-
-Document: {{document_number}}
-Amount: {{amount}}
-
-Thank you.
-
-Regards,
-{{company_name}}`}
-                        </pre>
-                        <div className="text-[10px] text-slate-500">
-                          <strong>Available Variables:</strong> <code className="bg-white px-1 border rounded">{"{{customer_name}}"}</code>, <code className="bg-white px-1 border rounded">{"{{company_name}}"}</code>, <code className="bg-white px-1 border rounded">{"{{document_number}}"}</code>, <code className="bg-white px-1 border rounded">{"{{document_date}}"}</code>, <code className="bg-white px-1 border rounded">{"{{amount}}"}</code>, <code className="bg-white px-1 border rounded">{"{{due_date}}"}</code>, <code className="bg-white px-1 border rounded">{"{{payment_status}}"}</code>, <code className="bg-white px-1 border rounded">{"{{support_phone}}"}</code>, <code className="bg-white px-1 border rounded">{"{{business_email}}"}</code>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {whatsappSettingsTab === 'logs' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-800">Communication Delivery Status History</h4>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Track the delivery statuses of messages dispatched via the WhatsApp Business Cloud API.
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          id="refresh-logs-btn"
-                          onClick={fetchCommunicationLogs}
-                          disabled={logsLoading}
-                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition"
-                        >
-                          {logsLoading ? 'Refreshing...' : 'Refresh Logs'}
-                        </button>
-                      </div>
-
-                      {logsLoading && communicationLogsList.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-500">Loading delivery history...</div>
-                      ) : communicationLogsList.length === 0 ? (
-                        <div className="py-12 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                          No document sharing history found yet. Share a document using the Enterprise Business API to populate this log.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
-                          <table className="w-full text-left text-xs border-collapse">
-                            <thead>
-                              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[9px]">
-                                <th className="p-3">Recipient</th>
-                                <th className="p-3">Document</th>
-                                <th className="p-3">Channel</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3">Timestamp</th>
-                                <th className="p-3 text-center">Retries</th>
-                                <th className="p-3">API Response / ID</th>
-                                <th className="p-3 text-right">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {communicationLogsList.map((log: any) => (
-                                <tr key={log.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50">
-                                  <td className="p-3 font-semibold text-slate-700">{log.recipient}</td>
-                                  <td className="p-3">
-                                    <div className="font-semibold text-slate-800">{log.document}</div>
-                                    <div className="text-[10px] text-slate-400">{log.documentType}</div>
-                                  </td>
-                                  <td className="p-3">
-                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold">
-                                      {log.channel}
-                                    </span>
-                                  </td>
-                                  <td className="p-3">
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                      log.status === 'Queued' ? 'bg-amber-100 text-amber-800' :
-                                      log.status === 'Sent' ? 'bg-blue-100 text-blue-800' :
-                                      log.status === 'Delivered' ? 'bg-indigo-100 text-indigo-800' :
-                                      log.status === 'Read' ? 'bg-emerald-100 text-emerald-800' :
-                                      'bg-rose-100 text-rose-800'
-                                    }`}>
-                                      {log.status}
-                                    </span>
-                                  </td>
-                                  <td className="p-3 text-slate-500 text-[10px]">
-                                    {new Date(log.timestamp).toLocaleString()}
-                                  </td>
-                                  <td className="p-3 text-slate-600 font-bold text-center">{log.retryCount || 0}</td>
-                                  <td className="p-3 text-slate-500 font-mono text-[9px] max-w-[200px] truncate" title={log.apiResponse}>
-                                    {log.apiResponse}
-                                  </td>
-                                  <td className="p-3 text-right">
-                                    {log.status === 'Failed' && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRetryLog(log.id)}
-                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px] shadow-sm transition"
-                                      >
-                                        Retry
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
             
             <div className="pt-6 mt-8 border-t border-slate-200/80 flex items-center justify-between shrink-0 bg-transparent">
@@ -3282,10 +3324,11 @@ Regards,
               </button>
               <button
                 type="submit"
-                className="px-7 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center space-x-2 cursor-pointer"
+                disabled={isSaving}
+                className="px-7 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-lg text-xs transition shadow-sm flex items-center space-x-2 cursor-pointer disabled:cursor-not-allowed"
               >
                 <Save size={15} />
-                <span>Save All Settings</span>
+                <span>{savingStatus || 'Save All Settings'}</span>
               </button>
             </div>
           </form>
