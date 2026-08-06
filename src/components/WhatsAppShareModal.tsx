@@ -112,27 +112,72 @@ export default function WhatsAppShareModal({
   // Filter country codes in search
   const [countrySearch, setCountrySearch] = useState('');
 
-  // Normalize saved party phone number
-  const savedPhoneClean = useMemo(() => {
-    return documentData.savedPhone || party?.phone || '';
-  }, [documentData.savedPhone, party?.phone]);
+  // Collect all saved contact options from party and documentData
+  const savedContactOptions = useMemo(() => {
+    const list: Array<{ id: string; label: string; number: string; type: string }> = [];
+
+    const primary = documentData.savedPhone || party?.phone || '';
+    if (primary && primary.trim()) {
+      list.push({
+        id: 'primary',
+        label: 'Primary Mobile Number',
+        number: primary.trim(),
+        type: 'Primary'
+      });
+    }
+
+    const alt = party?.alternatePhone || '';
+    if (alt && alt.trim() && alt.trim() !== primary.trim()) {
+      list.push({
+        id: 'alternate',
+        label: 'Alternate Mobile Number',
+        number: alt.trim(),
+        type: 'Alternate'
+      });
+    }
+
+    if (party?.alternateWhatsAppNumbers && Array.isArray(party.alternateWhatsAppNumbers)) {
+      party.alternateWhatsAppNumbers.forEach((item, idx) => {
+        if (item.number && item.number.trim() && item.number.trim() !== primary.trim() && item.number.trim() !== alt.trim()) {
+          list.push({
+            id: `alt_wa_${item.id || idx}`,
+            label: item.label || `Alternate WhatsApp #${idx + 1}`,
+            number: item.number.trim(),
+            type: 'WhatsApp'
+          });
+        }
+      });
+    }
+
+    return list;
+  }, [party, documentData.savedPhone]);
+
+  const [selectedContactId, setSelectedContactId] = useState<string>('');
+
+  useEffect(() => {
+    if (savedContactOptions.length > 0 && !selectedContactId) {
+      setSelectedContactId(savedContactOptions[0].id);
+    }
+  }, [savedContactOptions, selectedContactId]);
 
   // Derived normalized target destination phone number (E.164)
   const normalizedDestinationNumber = useMemo(() => {
     if (!useAlternate) {
-      if (!savedPhoneClean) return '';
+      const selectedOpt = savedContactOptions.find(o => o.id === selectedContactId) || savedContactOptions[0];
+      const phoneStr = selectedOpt ? selectedOpt.number : (documentData.savedPhone || party?.phone || '');
+      if (!phoneStr) return '';
       // Format clean saved phone
-      const digits = savedPhoneClean.replace(/\D/g, '');
-      if (savedPhoneClean.startsWith('+')) return savedPhoneClean;
+      const digits = phoneStr.replace(/\D/g, '');
+      if (phoneStr.startsWith('+')) return phoneStr;
       if (digits.length === 10) return `+91${digits}`;
       if (digits.length > 10) return `+${digits}`;
-      return savedPhoneClean;
+      return phoneStr;
     } else {
       const cleanDigits = rawMobileNumber.replace(/\D/g, '');
       if (!cleanDigits) return '';
       return `${selectedCountryCode}${cleanDigits}`;
     }
-  }, [useAlternate, savedPhoneClean, selectedCountryCode, rawMobileNumber]);
+  }, [useAlternate, selectedContactId, savedContactOptions, documentData.savedPhone, party?.phone, selectedCountryCode, rawMobileNumber]);
 
   // Display formatted phone for UI preview
   const displayFormattedPhone = useMemo(() => {
@@ -472,7 +517,7 @@ export default function WhatsAppShareModal({
                 </div>
               </div>
 
-              {!savedPhoneClean ? (
+              {savedContactOptions.length === 0 ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
                   <div className="flex gap-2.5 items-start">
                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={18} />
@@ -481,47 +526,83 @@ export default function WhatsAppShareModal({
                         No WhatsApp Number Saved
                       </h4>
                       <p className="text-[11px] text-amber-700 mt-0.5">
-                        No WhatsApp phone number is available on profile for {documentData.partyName}. Please click 'Add Number' to enter recipient details.
+                        No WhatsApp phone number is available on profile for {documentData.partyName}. Please click 'Send to Another Number' to enter recipient details.
                       </p>
                     </div>
                   </div>
                   <div className="pt-2 flex gap-2 justify-end">
                     <button
                       onClick={onClose}
-                      className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-lg"
+                      className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-lg cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => setStep('add_number')}
-                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs"
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
                     >
-                      + Add Number
+                      Send to Another Number
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-3.5">
-                  <div className="border border-slate-200 rounded-xl p-4 space-y-2.5 bg-white">
-                    <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">
-                      Saved WhatsApp Recipient
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">
+                      Select Recipient Number ({savedContactOptions.length} available)
                     </span>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
-                          <UserCheck size={18} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-900">{documentData.partyName}</p>
-                          <p className="text-xs font-mono font-bold text-emerald-700">
-                            {savedPhoneClean}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-2 py-0.5 rounded border border-emerald-200">
-                        Saved Profile
-                      </span>
+                    <div className="space-y-2">
+                      {savedContactOptions.map((opt) => {
+                        const isSelected = selectedContactId === opt.id && !useAlternate;
+                        return (
+                          <div
+                            key={opt.id}
+                            onClick={() => {
+                              setUseAlternate(false);
+                              setSelectedContactId(opt.id);
+                            }}
+                            className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-emerald-50/70 border-emerald-500 shadow-xs'
+                                : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="radio"
+                                name="savedContactChoice"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setUseAlternate(false);
+                                  setSelectedContactId(opt.id);
+                                }}
+                                className="text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                              />
+                              <div>
+                                <p className="text-xs font-black text-slate-900">{opt.label}</p>
+                                <p className="text-xs font-mono font-bold text-emerald-700">
+                                  {opt.number}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+                              {opt.type}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
+                  </div>
+
+                  {/* Send to Another Number button option */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setStep('add_number')}
+                      className="w-full py-2 px-3 border border-dashed border-emerald-300 hover:bg-emerald-50/50 text-emerald-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>+ Send to Another Number</span>
+                    </button>
                   </div>
 
                   {/* Document & Greeting Preview */}
@@ -546,30 +627,22 @@ export default function WhatsAppShareModal({
                   <div className="pt-2 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setStep('add_number')}
-                      className="py-2.5 px-3 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                      onClick={onClose}
+                      className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
                     >
-                      + Add Number
+                      Cancel
                     </button>
-                    <div className="flex-1 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 py-2.5 px-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUseAlternate(false);
-                          setStep('confirm');
-                        }}
-                        className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 transition cursor-pointer"
-                      >
-                        Use Saved Number
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUseAlternate(false);
+                        setStep('confirm');
+                      }}
+                      disabled={!selectedContactId}
+                      className="flex-[1.5] py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                    >
+                      Continue
+                    </button>
                   </div>
                 </div>
               )}
@@ -739,7 +812,7 @@ export default function WhatsAppShareModal({
                               Primary Number Overwrite Warning
                             </p>
                             <p>
-                              This action will replace the primary mobile number on {documentData.partyName}'s record. The previous number ({savedPhoneClean || 'None'}) will be archived in audit history.
+                              This action will replace the primary mobile number on {documentData.partyName}'s record. The previous number ({party?.phone || documentData.savedPhone || 'None'}) will be archived in audit history.
                             </p>
                           </div>
                         )}
@@ -796,12 +869,12 @@ export default function WhatsAppShareModal({
                     <span className="text-slate-500 font-medium">Number Type:</span>
                     <span className="font-bold text-slate-700">
                       {!useAlternate
-                        ? 'Saved Profile Number'
+                        ? (savedContactOptions.find(o => o.id === selectedContactId)?.label || 'Saved Profile Number')
                         : saveToProfile
                         ? saveOption === 'alternate'
                           ? 'New Alternate WhatsApp Number'
                           : 'Replaces Primary Number'
-                        : 'Alternate Number (This Send Only)'}
+                        : 'One-Time Number (This Send Only)'}
                     </span>
                   </div>
 

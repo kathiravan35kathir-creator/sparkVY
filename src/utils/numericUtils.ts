@@ -66,18 +66,59 @@ export function normalizePastedNumeric(
   return sanitizeNumericInput(cleaned, { allowDecimal, allowNegative });
 }
 
+export const SUPPORTED_CURRENCIES = [
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee', locale: 'en-IN' },
+  { code: 'USD', symbol: '$', name: 'US Dollar', locale: 'en-US' },
+  { code: 'EUR', symbol: '€', name: 'Euro', locale: 'de-DE' },
+  { code: 'GBP', symbol: '£', name: 'British Pound', locale: 'en-GB' },
+  { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham', locale: 'ar-AE' },
+  { code: 'SAR', symbol: 'ر.س', name: 'Saudi Riyal', locale: 'ar-SA' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', locale: 'en-SG' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', locale: 'en-AU' },
+  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', locale: 'en-CA' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen', locale: 'ja-JP' },
+];
+
 /**
  * Helper to get active currency symbol from settings
  */
 export function getCurrencySymbol(settings?: any): string {
-  return settings?.generalFeatures?.currencySymbol || settings?.system?.currencySymbol || '₹';
+  return (
+    settings?.generalFeatures?.currencySymbol ||
+    settings?.system?.currencySymbol ||
+    settings?.company?.currencySymbol ||
+    settings?.company?.currency ||
+    '₹'
+  );
+}
+
+export function getCurrencyCode(settings?: any): string {
+  return (
+    settings?.generalFeatures?.currencyCode ||
+    settings?.system?.currencyCode ||
+    settings?.company?.currency ||
+    settings?.system?.currencyFormat ||
+    'INR'
+  );
+}
+
+export function getCurrencyLocale(settings?: any): string {
+  return (
+    settings?.generalFeatures?.currencyLocale ||
+    settings?.system?.currencyLocale ||
+    (getCurrencyCode(settings) === 'INR' ? 'en-IN' : 'en-US')
+  );
 }
 
 /**
  * Helper to get active amount decimal places from settings
  */
 export function getAmountDecimals(settings?: any): number {
-  return settings?.generalFeatures?.amountDecimalPlaces ?? settings?.system?.decimalPlaces ?? 2;
+  return (
+    settings?.generalFeatures?.amountDecimalPlaces ??
+    settings?.system?.decimalPlaces ??
+    2
+  );
 }
 
 /**
@@ -90,7 +131,11 @@ export function formatAmount(
 ): string {
   const num = toSafeNumber(amount);
   const decimals = decimalsOverride ?? getAmountDecimals(settings);
-  return num.toLocaleString(undefined, {
+  const locale = getCurrencyLocale(settings);
+  const grouping = settings?.system?.numberGroupingFormat || settings?.generalFeatures?.numberGroupingFormat;
+  const useLocale = grouping === 'Indian' ? 'en-IN' : locale;
+
+  return num.toLocaleString(useLocale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
@@ -105,12 +150,7 @@ export function formatCurrency(
 ): string {
   const num = toSafeNumber(amount);
   const symbol = getCurrencySymbol(settings);
-  const decimals = getAmountDecimals(settings);
-  
-  const formattedNum = num.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  const formattedNum = formatAmount(num, settings);
   
   return `${symbol}${formattedNum}`;
 }

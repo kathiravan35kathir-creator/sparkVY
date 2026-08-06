@@ -15,6 +15,7 @@ export interface NumericInputProps
   placeholder?: string;
   className?: string;
   selectOnFocus?: boolean;
+  replaceZeroOnType?: boolean;
 }
 
 export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(({
@@ -28,6 +29,7 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
   placeholder,
   className = '',
   selectOnFocus = true,
+  replaceZeroOnType = false,
   onBlur,
   onFocus,
   onMouseUp,
@@ -66,7 +68,10 @@ export const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps
   }, [value, isFocused]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
+    let raw = e.target.value;
+    if (replaceZeroOnType && displayValue === '0' && raw.length === 2 && raw.startsWith('0')) {
+      raw = raw[1];
+    }
     const sanitized = sanitizeNumericInput(raw, { allowDecimal, decimalScale, allowNegative });
     setDisplayValue(sanitized);
 

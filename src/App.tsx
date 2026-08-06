@@ -108,6 +108,7 @@ import SettingsView from './components/SettingsView';
 import TrashView from './components/TrashView';
 import SecurityPinDialog from './components/SecurityPinDialog';
 import CommandPaletteModal from './components/CommandPaletteModal';
+import { QADiagnosticPanel } from './components/QADiagnosticPanel';
 // Auth Components
 import LoginView from './components/auth/LoginView';
 import OnboardingView from './components/auth/OnboardingView';
@@ -960,7 +961,7 @@ export default function App() {
       }
 
       // Update Stock Movements (In)
-      const movements: StockMovement[] = sr.items.filter(i => i.restockOption).map((item) => ({
+      const movements: StockMovement[] = sr.items.filter(i => i.restockOption && i.condition === 'Resalable').map((item) => ({
         id: `sm-ret-${Date.now()}-${item.itemId}`,
         itemId: item.itemId,
         itemName: item.itemName,
@@ -969,13 +970,13 @@ export default function App() {
         referenceId: newReturn.id,
         referenceNumber: newReturn.returnNumber,
         user: currentUser?.name || 'System',
-        notes: `Sales Return from ${sr.partyName}`,
+        notes: `Sales Return from ${sr.partyName} - Reason: ${item.reason}, Condition: ${item.condition}`,
         timestamp: new Date().toISOString()
       }));
 
       // Update Items currentStock
       const updatedItems = prev.items.map((it) => {
-        const line = sr.items.find((li) => li.itemId === it.id && li.restockOption);
+        const line = sr.items.find((li) => li.itemId === it.id && li.restockOption && li.condition === 'Resalable');
         if (line) {
           return { ...it, currentStock: it.currentStock + line.returnQuantity };
         }
@@ -1106,8 +1107,24 @@ export default function App() {
 
   const handleCancelInvoice = (id: string) => {
     setDb((prev) => {
-      const inv = prev.invoices.find((x) => x.id === id)!;
-      if (inv.status === 'Cancelled') return prev;
+      const inv = prev.invoices.find((x) => x.id === id);
+      if (!inv) return prev;
+      if (inv.status === 'Cancelled' || inv.isDeleted) return prev;
+
+      // Check payments
+      const hasPayments = inv.amountPaid > 0 || (prev.payments || []).some(p => !p.isDeleted && p.allocations?.some((a: any) => a.invoiceId === id));
+      if (hasPayments) {
+        alert("This invoice has linked payments. Please reverse or delete the linked payments first.");
+        return prev;
+      }
+
+      // Check Sales Returns & Credit Notes
+      const hasReturns = (prev.salesReturns || []).some(sr => !sr.isDeleted && sr.originalInvoiceId === id);
+      const hasCreditNotes = (prev.creditNotes || []).some(cn => !cn.isDeleted && cn.originalInvoiceId === id);
+      if (hasReturns || hasCreditNotes) {
+        alert("This invoice has linked Sales Return/Credit Note records and cannot be cancelled directly.");
+        return prev;
+      }
 
       const updatedInvoices = prev.invoices.map((x) => (x.id === id ? { ...x, status: 'Cancelled' as const, balanceDue: 0 } : x));
 
@@ -1116,9 +1133,40 @@ export default function App() {
         p.id === inv.partyId ? { ...p, currentBalance: Math.max(0, p.currentBalance - inv.balanceDue) } : p
       );
 
-      const newState = { ...prev, invoices: updatedInvoices, parties: updatedParties };
+      // Restore stock
+      let updatedItems = [...prev.items];
+      let newMovements: StockMovement[] = [];
+      inv.items.forEach((line) => {
+        updatedItems = updatedItems.map((it) => {
+          if (it.id === line.itemId) {
+            return { ...it, currentStock: it.currentStock + line.quantity };
+          }
+          return it;
+        });
+
+        newMovements.push({
+          id: `sm-canc-${Date.now()}-${line.itemId}`,
+          itemId: line.itemId,
+          itemName: line.itemName,
+          type: 'Return',
+          quantity: line.quantity,
+          referenceId: inv.id,
+          referenceNumber: inv.invoiceNumber,
+          user: currentUser?.name || 'System',
+          notes: `Invoice Cancelled & Reversed: ${inv.invoiceNumber}`,
+          timestamp: new Date().toISOString()
+        });
+      });
+
+      const newState = { 
+        ...prev, 
+        invoices: updatedInvoices, 
+        parties: updatedParties, 
+        items: updatedItems,
+        stockMovements: [...newMovements, ...prev.stockMovements]
+      };
       const audited = logAudit(newState, 'Cancel Invoice', 'Sales', id, inv.invoiceNumber);
-      return notify(audited, 'Invoice Cancelled', `Sales invoice ${inv.invoiceNumber} has been revoked.`, 'warning');
+      return notify(audited, 'Invoice Cancelled', `Sales invoice ${inv.invoiceNumber} has been revoked and stock restored.`, 'warning');
     });
   };
 
@@ -1303,15 +1351,29 @@ export default function App() {
     setDb((prev) => {
       const inv = prev.invoices.find(x => x.id === id);
       if (!inv) return prev;
-      
-      const hasPayments = inv.amountPaid > 0 || prev.payments.some(p => p.allocations?.some((a: any) => a.invoiceId === id));
+      if (inv.isDeleted) return prev;
+
+      if (inv.isLocked) {
+        alert("Finalized invoices must be cancelled, not deleted. Please use the Cancel action.");
+        return prev;
+      }
+
+      const hasPayments = inv.amountPaid > 0 || (prev.payments || []).some(p => !p.isDeleted && p.allocations?.some((a: any) => a.invoiceId === id));
       if (hasPayments) {
         alert("This invoice has linked payments. Deletion is blocked. Please reverse or delete the linked payments first.");
         return prev;
       }
 
+      const hasReturns = (prev.salesReturns || []).some(sr => !sr.isDeleted && sr.originalInvoiceId === id);
+      const hasCreditNotes = (prev.creditNotes || []).some(cn => !cn.isDeleted && cn.originalInvoiceId === id);
+      if (hasReturns || hasCreditNotes) {
+        alert("This invoice has linked Sales Return/Credit Note records and cannot be deleted directly.");
+        return prev;
+      }
+
       let updatedParties = [...prev.parties];
       let updatedItems = [...prev.items];
+      let newMovements: StockMovement[] = [];
       if (inv.status !== 'Cancelled') {
         updatedParties = prev.parties.map((p) =>
           p.id === inv.partyId ? { ...p, currentBalance: Math.max(0, p.currentBalance - inv.total) } : p
@@ -1324,6 +1386,19 @@ export default function App() {
             }
             return it;
           });
+
+          newMovements.push({
+            id: `sm-del-${Date.now()}-${line.itemId}`,
+            itemId: line.itemId,
+            itemName: line.itemName,
+            type: 'Return',
+            quantity: line.quantity,
+            referenceId: inv.id,
+            referenceNumber: inv.invoiceNumber,
+            user: currentUser?.name || 'System',
+            notes: `Invoice Deleted: ${inv.invoiceNumber}`,
+            timestamp: new Date().toISOString()
+          });
         });
       }
 
@@ -1333,7 +1408,13 @@ export default function App() {
         deletedAt: new Date().toISOString(), 
         deletedBy: currentUser?.full_name || currentUser?.name || 'System'
       } : x);
-      const newState = { ...prev, invoices: updated, parties: updatedParties, items: updatedItems };
+      const newState = { 
+        ...prev, 
+        invoices: updated, 
+        parties: updatedParties, 
+        items: updatedItems,
+        stockMovements: [...newMovements, ...prev.stockMovements]
+      };
       const audited = logAudit(newState, 'Delete Invoice', 'Sales', id, inv.invoiceNumber);
       return notify(audited, 'Invoice Deleted', `Sales Invoice ${inv.invoiceNumber} deleted successfully.`, 'success');
     });
@@ -1852,6 +1933,7 @@ export default function App() {
               salesReturns={(db.salesReturns || []).filter(sr => !sr.isDeleted)}
               parties={db.parties.filter(p => !p.isDeleted)}
               invoices={db.invoices.filter(inv => !inv.isDeleted)}
+              items={db.items.filter(i => !i.isDeleted)}
               onAddSalesReturn={handleAddSalesReturn}
               onDeleteSalesReturn={handleDeleteSalesReturn}
               isAdmin={currentUser.isAdmin}
@@ -2035,6 +2117,7 @@ export default function App() {
           pinHash={db.settings.security.transactionPinHash}
           actionName={pinAction?.name || ''}
         />
+        <QADiagnosticPanel />
       </div>
     </div>
   </CompanyBrandingProvider>

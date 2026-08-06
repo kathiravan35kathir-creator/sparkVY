@@ -239,7 +239,7 @@ export interface ProcurementOrder extends BaseDeletedEntity {
 }
 
 export type SalesReturnReason = 'Damaged item' | 'Wrong item supplied' | 'Quality issue' | 'Excess quantity' | 'Customer cancellation' | 'Expired item' | 'Other';
-export type ItemCondition = 'Resalable' | 'Damaged' | 'Expired' | 'Non-stock item';
+export type ItemCondition = 'Resalable' | 'Damaged' | 'Expired' | 'Inspection Required' | 'Non-stock item';
 
 export interface SalesReturnLineItem extends InvoiceLineItem {
   returnQuantity: number;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -17,7 +17,7 @@ import {
   Copy,
   X
 } from 'lucide-react';
-import { SalesReturn, Party, Invoice, SalesReturnLineItem, AppSettings, SalesReturnReason, ItemCondition, PaymentMethod, SalesReturnLineItem as SRLineItem } from '../types';
+import { SalesReturn, Party, Invoice, SalesReturnLineItem, AppSettings, SalesReturnReason, ItemCondition, PaymentMethod, SalesReturnLineItem as SRLineItem, Item } from '../types';
 import DocumentPrintView from './DocumentPrintView';
 import { NumericInput } from './NumericInput';
 import { toSafeNumber } from '../utils/numericUtils';
@@ -26,6 +26,7 @@ interface SalesReturnsViewProps {
   salesReturns: SalesReturn[];
   parties: Party[];
   invoices: Invoice[];
+  items: Item[];
   onAddSalesReturn: (sr: Omit<SalesReturn, 'id' | 'createdAt' | 'returnNumber'>) => void;
   onDeleteSalesReturn?: (id: string) => void;
   isAdmin: boolean;
@@ -36,6 +37,7 @@ export default function SalesReturnsView({
   salesReturns,
   parties,
   invoices,
+  items,
   onAddSalesReturn,
   onDeleteSalesReturn,
   isAdmin,
@@ -52,15 +54,27 @@ export default function SalesReturnsView({
   const [refundMethod, setRefundMethod] = useState<PaymentMethod | ''>('');
   const [issueCreditNote, setIssueCreditNote] = useState(true);
   const [notes, setNotes] = useState('');
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
+  const [invoiceLoadError, setInvoiceLoadError] = useState<string | null>(null);
+
+  const isWholeUnit = (unitName = '') => {
+    const u = unitName.toLowerCase();
+    const wholeKeywords = ['pcs', 'piece', 'pieces', 'box', 'nos', 'unit', 'packet', 'bottle', 'set', 'pair', 'dozen', 'pack', 'strip', 'tablet', 'vial', 'kit', 'number', 'no'];
+    return wholeKeywords.some(kw => u.includes(kw));
+  };
 
   const [returnItems, setReturnItems] = useState<{
     itemId: string;
     itemName: string;
     itemCode: string;
     originalQuantity: number;
+    alreadyReturned: number;
+    remainingQuantity: number;
     returnQuantity: number;
     rate: number;
+    discountPercent: number;
     taxPercent: number;
+    allowsDecimal: boolean;
     reason: SalesReturnReason;
     condition: ItemCondition;
     restockOption: boolean;
@@ -73,51 +87,163 @@ export default function SalesReturnsView({
     setRefundMethod(sr.refundMethod || '');
     setIssueCreditNote(sr.creditNoteIssued);
     setNotes(sr.notes || '');
-    setReturnItems(sr.items.map(it => ({
-      itemId: it.itemId,
-      itemName: it.itemName,
-      itemCode: it.itemCode,
-      originalQuantity: it.quantity,
-      returnQuantity: it.returnQuantity,
-      rate: it.rate,
-      taxPercent: it.taxPercent,
-      reason: it.reason,
-      condition: it.condition,
-      restockOption: it.restockOption
-    })));
+
+    const selectedInvoice = invoices.find(inv => inv.id === sr.originalInvoiceId);
+    const alreadyReturnedMap = salesReturns
+      .filter(s => s.originalInvoiceId === sr.originalInvoiceId && s.id !== sr.id)
+      .reduce((acc, s) => {
+        s.items.forEach(it => {
+          acc[it.itemId] = (acc[it.itemId] || 0) + (it.returnQuantity || 0);
+        });
+        return acc;
+      }, {} as Record<string, number>);
+
+    if (selectedInvoice) {
+      setReturnItems(selectedInvoice.items.map(item => {
+        const alreadyReturned = alreadyReturnedMap[item.itemId] || 0;
+        const remaining = Math.max(0, item.quantity - alreadyReturned);
+        const existingSrItem = sr.items.find(i => i.itemId === item.itemId);
+        const itemObj = items.find(i => i.id === item.itemId);
+        const unit = itemObj?.unit || (item as any).unit || 'Pcs';
+        const allowsDecimal = !isWholeUnit(unit);
+
+        return {
+          itemId: item.itemId,
+          itemName: item.itemName,
+          itemCode: item.itemCode,
+          originalQuantity: item.quantity,
+          alreadyReturned,
+          remainingQuantity: remaining,
+          returnQuantity: existingSrItem ? existingSrItem.returnQuantity : 0,
+          rate: item.rate,
+          discountPercent: item.discountPercent || 0,
+          taxPercent: item.taxPercent,
+          allowsDecimal,
+          reason: existingSrItem?.reason || 'Wrong item supplied',
+          condition: existingSrItem?.condition || 'Resalable',
+          restockOption: existingSrItem ? existingSrItem.restockOption : true
+        };
+      }));
+    } else {
+      setReturnItems(sr.items.map(it => {
+        const itemObj = items.find(i => i.id === it.itemId);
+        const unit = itemObj?.unit || (it as any).unit || 'Pcs';
+        const allowsDecimal = !isWholeUnit(unit);
+        return {
+          itemId: it.itemId,
+          itemName: it.itemName,
+          itemCode: it.itemCode,
+          originalQuantity: it.quantity,
+          alreadyReturned: 0,
+          remainingQuantity: it.quantity,
+          returnQuantity: it.returnQuantity,
+          rate: it.rate,
+          discountPercent: it.discountPercent || 0,
+          taxPercent: it.taxPercent,
+          allowsDecimal,
+          reason: it.reason,
+          condition: it.condition,
+          restockOption: it.restockOption
+        };
+      }));
+    }
     setIsCreating(true);
   };
 
   const customers = parties.filter((p) => p.type === 'Customer' || p.type === 'Both');
-  const customerInvoices = invoices.filter(inv => inv.partyId === partyId && inv.status !== 'Cancelled');
+  // Include invoiceId so selected invoice never disappears from select options
+  const customerInvoices = invoices.filter(inv => (inv.partyId === partyId || inv.id === invoiceId) && inv.status !== 'Cancelled');
 
-  const handleInvoiceSelect = (id: string) => {
+  const handleInvoiceSelect = async (id: string) => {
     setInvoiceId(id);
-    const selectedInvoice = invoices.find(inv => inv.id === id);
-    if (selectedInvoice) {
-      setReturnItems(selectedInvoice.items.map(item => ({
-        itemId: item.itemId,
-        itemName: item.itemName,
-        itemCode: item.itemCode,
-        originalQuantity: item.quantity,
-        returnQuantity: 0,
-        rate: item.rate,
-        taxPercent: item.taxPercent,
-        reason: 'Damaged item',
-        condition: 'Resalable',
-        restockOption: true
-      })));
-    } else {
+    setInvoiceLoadError(null);
+    if (!id) {
       setReturnItems([]);
+      return;
+    }
+    setIsLoadingInvoice(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 150));
+      const selectedInvoice = invoices.find(inv => inv.id === id);
+      if (!selectedInvoice) {
+        throw new Error('Invoice not found or failed to load.');
+      }
+
+      const alreadyReturnedMap = salesReturns
+        .filter(sr => sr.originalInvoiceId === id)
+        .reduce((acc, sr) => {
+          sr.items.forEach(it => {
+            acc[it.itemId] = (acc[it.itemId] || 0) + (it.returnQuantity || 0);
+          });
+          return acc;
+        }, {} as Record<string, number>);
+
+      setReturnItems(selectedInvoice.items.map(item => {
+        const alreadyReturned = alreadyReturnedMap[item.itemId] || 0;
+        const remaining = Math.max(0, item.quantity - alreadyReturned);
+        const itemObj = items.find(i => i.id === item.itemId);
+        const unit = itemObj?.unit || (item as any).unit || 'Pcs';
+        const allowsDecimal = !isWholeUnit(unit);
+
+        return {
+          itemId: item.itemId,
+          itemName: item.itemName,
+          itemCode: item.itemCode,
+          originalQuantity: item.quantity,
+          alreadyReturned,
+          remainingQuantity: remaining,
+          returnQuantity: 0,
+          rate: item.rate,
+          discountPercent: item.discountPercent || 0,
+          taxPercent: item.taxPercent,
+          allowsDecimal,
+          reason: 'Wrong item supplied',
+          condition: 'Resalable',
+          restockOption: true
+        };
+      }));
+    } catch (err: any) {
+      console.error('Failed to load invoice items:', err);
+      setInvoiceLoadError(err.message || 'Unable to load invoice items.');
+      setReturnItems([]);
+    } finally {
+      setIsLoadingInvoice(false);
     }
   };
+
+  useEffect(() => {
+    if (invoiceId && returnItems.length === 0 && !isLoadingInvoice && !invoiceLoadError) {
+      handleInvoiceSelect(invoiceId);
+    }
+  }, [invoiceId, invoices]);
 
   const handleReturnItemChange = (idx: number, field: string, value: any) => {
     const updated = [...returnItems];
     if (field === 'returnQuantity') {
       const val = toSafeNumber(value);
-      if (val > updated[idx].originalQuantity) return;
+      if (val < 0) return;
+      if (val > updated[idx].remainingQuantity) return;
+      if (!updated[idx].allowsDecimal && !Number.isInteger(val)) return;
       updated[idx].returnQuantity = val;
+    } else if (field === 'reason') {
+      const newReason = value;
+      updated[idx].reason = newReason;
+      // Sensible default stock condition based on reason
+      if (newReason === 'Damaged item') {
+        updated[idx].condition = 'Damaged';
+      } else if (newReason === 'Expired item') {
+        updated[idx].condition = 'Expired';
+      } else if (newReason === 'Wrong item supplied' || newReason === 'Excess quantity' || newReason === 'Customer cancellation') {
+        updated[idx].condition = 'Resalable';
+      } else if (newReason === 'Quality issue') {
+        updated[idx].condition = 'Inspection Required';
+      } else {
+        updated[idx].condition = 'Resalable';
+      }
+      updated[idx].restockOption = updated[idx].condition === 'Resalable';
+    } else if (field === 'condition') {
+      updated[idx].condition = value;
+      updated[idx].restockOption = value === 'Resalable';
     } else {
       (updated[idx] as any)[field] = value;
     }
@@ -126,7 +252,13 @@ export default function SalesReturnsView({
 
   const calculateTotal = () => {
     return returnItems.reduce((acc, item) => {
-      const amount = toSafeNumber(item.returnQuantity) * toSafeNumber(item.rate) * (1 + toSafeNumber(item.taxPercent) / 100);
+      const qty = toSafeNumber(item.returnQuantity);
+      if (qty <= 0) return acc;
+      const rate = toSafeNumber(item.rate);
+      const discountPercent = toSafeNumber(item.discountPercent);
+      const taxPercent = toSafeNumber(item.taxPercent);
+      const discountedRate = rate * (1 - discountPercent / 100);
+      const amount = qty * discountedRate * (1 + taxPercent / 100);
       return acc + amount;
     }, 0);
   };
@@ -136,24 +268,49 @@ export default function SalesReturnsView({
     if (!partyId) return alert('Select customer');
     const selectedParty = parties.find(p => p.id === partyId)!;
     const itemsToReturn = returnItems.filter(item => item.returnQuantity > 0);
-    if (itemsToReturn.length === 0) return alert('No items selected for return');
+    if (itemsToReturn.length === 0) {
+      alert('Enter a return quantity for at least one item.');
+      return;
+    }
 
-    const mappedItems: SRLineItem[] = itemsToReturn.map((item, idx) => ({
-      id: `sr-line-${Date.now()}-${idx}`,
-      itemId: item.itemId,
-      itemName: item.itemName,
-      itemCode: item.itemCode,
-      quantity: item.originalQuantity,
-      rate: item.rate,
-      discountPercent: 0,
-      taxPercent: item.taxPercent,
-      taxAmount: (item.returnQuantity * item.rate * item.taxPercent / 100),
-      amount: (item.returnQuantity * item.rate * (1 + item.taxPercent / 100)),
-      returnQuantity: item.returnQuantity,
-      reason: item.reason,
-      condition: item.condition,
-      restockOption: item.restockOption
-    }));
+    // Validate reason and condition consistency
+    for (const item of itemsToReturn) {
+      if ((item.reason === 'Damaged item' || item.reason === 'Expired item') && item.condition === 'Resalable') {
+        alert(`${item.itemName}: Damaged items cannot be marked as Resalable (Restock).`);
+        return;
+      }
+      if ((item.reason === 'Wrong item supplied' || item.reason === 'Excess quantity' || item.reason === 'Customer cancellation') && (item.condition === 'Damaged' || item.condition === 'Expired')) {
+        alert(`${item.itemName}: ${item.reason} items cannot be marked as ${item.condition}.`);
+        return;
+      }
+    }
+
+    const mappedItems: SRLineItem[] = itemsToReturn.map((item, idx) => {
+      const qty = item.returnQuantity;
+      const rate = item.rate;
+      const disc = item.discountPercent || 0;
+      const tax = item.taxPercent || 0;
+      const discountedRate = rate * (1 - disc / 100);
+      const taxAmount = qty * discountedRate * (tax / 100);
+      const amount = qty * discountedRate * (1 + tax / 100);
+
+      return {
+        id: `sr-line-${Date.now()}-${idx}`,
+        itemId: item.itemId,
+        itemName: item.itemName,
+        itemCode: item.itemCode,
+        quantity: item.originalQuantity,
+        rate: item.rate,
+        discountPercent: disc,
+        taxPercent: tax,
+        taxAmount,
+        amount,
+        returnQuantity: qty,
+        reason: item.reason,
+        condition: item.condition,
+        restockOption: item.restockOption
+      };
+    });
 
     onAddSalesReturn({
       partyId,
@@ -228,16 +385,22 @@ export default function SalesReturnsView({
               <thead className="bg-slate-50 border-b font-bold uppercase text-slate-500 text-[10px]">
                 <tr>
                   <th className="p-3 w-1/4">Item</th>
-                  <th className="p-3 text-center">Inv Qty</th>
+                  <th className="p-3 text-center">Invoiced Qty</th>
+                  <th className="p-3 text-center">Already Returned</th>
+                  <th className="p-3 text-center">Remaining</th>
                   <th className="p-3 text-center w-24">Return Qty</th>
-                  <th className="p-3 text-right">Rate</th>
+                  <th className="p-3 text-right">Rate & Tax</th>
                   <th className="p-3">Reason</th>
                   <th className="p-3">Stock Condition</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {returnItems.length === 0 ? (
-                  <tr><td colSpan={6} className="p-8 text-center text-slate-400 italic">Select a customer/invoice to load items for return.</td></tr>
+                {isLoadingInvoice ? (
+                  <tr><td colSpan={8} className="p-8 text-center text-blue-600 font-bold animate-pulse">Loading invoice items...</td></tr>
+                ) : invoiceLoadError ? (
+                  <tr><td colSpan={8} className="p-8 text-center text-rose-600 font-bold">{invoiceLoadError}</td></tr>
+                ) : returnItems.length === 0 ? (
+                  <tr><td colSpan={8} className="p-8 text-center text-slate-400 italic">Select a customer/invoice to load items for return.</td></tr>
                 ) : (
                   returnItems.map((item, idx) => (
                     <tr key={idx} className={item.returnQuantity > 0 ? 'bg-amber-50/30' : ''}>
@@ -245,19 +408,25 @@ export default function SalesReturnsView({
                         <p className="font-bold">{item.itemName}</p>
                         <p className="text-[10px] text-slate-400 font-mono">{item.itemCode}</p>
                       </td>
-                      <td className="p-3 text-center font-bold text-slate-400">{item.originalQuantity}</td>
+                      <td className="p-3 text-center font-bold text-slate-600">{item.originalQuantity}</td>
+                      <td className="p-3 text-center font-bold text-amber-600">{item.alreadyReturned}</td>
+                      <td className="p-3 text-center font-bold text-emerald-600">{item.remainingQuantity}</td>
                       <td className="p-3">
                         <NumericInput
                           value={item.returnQuantity}
                           onChange={(val) => handleReturnItemChange(idx, 'returnQuantity', val)}
-                          allowDecimal={true}
-                          decimalScale={3}
+                          allowDecimal={item.allowsDecimal}
+                          decimalScale={item.allowsDecimal ? 3 : 0}
                           min={0}
-                          max={item.originalQuantity}
-                          className="w-full border rounded p-1 text-center font-bold text-blue-600 font-mono text-xs"
+                          max={item.remainingQuantity}
+                          replaceZeroOnType={true}
+                          className="w-full border rounded p-1 text-center font-bold text-blue-600 font-mono text-xs appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </td>
-                      <td className="p-3 text-right font-mono">₹{item.rate.toLocaleString()}</td>
+                      <td className="p-3 text-right font-mono">
+                        <div>₹{item.rate.toLocaleString()}</div>
+                        <div className="text-[10px] text-slate-400">Tax: {item.taxPercent}%</div>
+                      </td>
                       <td className="p-3">
                         <select value={item.reason} onChange={(e) => handleReturnItemChange(idx, 'reason', e.target.value)} className="w-full border rounded p-1 text-[10px]">
                           <option value="Damaged item">Damaged</option>
@@ -270,9 +439,10 @@ export default function SalesReturnsView({
                       </td>
                       <td className="p-3">
                         <select value={item.condition} onChange={(e) => handleReturnItemChange(idx, 'condition', e.target.value)} className="w-full border rounded p-1 text-[10px]">
-                          <option value="Resalable">Resalable (Restock)</option>
-                          <option value="Damaged">Damaged (No Restock)</option>
-                          <option value="Expired">Expired</option>
+                          <option value="Resalable" disabled={item.reason === 'Damaged item' || item.reason === 'Expired item'}>Resalable (Restock)</option>
+                          <option value="Damaged" disabled={item.reason === 'Wrong item supplied' || item.reason === 'Excess quantity' || item.reason === 'Customer cancellation'}>Damaged (No Restock)</option>
+                          <option value="Expired" disabled={item.reason === 'Wrong item supplied' || item.reason === 'Excess quantity' || item.reason === 'Customer cancellation'}>Expired</option>
+                          <option value="Inspection Required">Inspection Required</option>
                           <option value="Non-stock item">Non-stock</option>
                         </select>
                       </td>
@@ -302,7 +472,13 @@ export default function SalesReturnsView({
           </div>
 
           <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-6 py-3.5 px-6 bg-white/90 backdrop-blur-sm border-t border-slate-200 flex items-center justify-end gap-3 z-20 shadow-md">
-            <button type="submit" className="px-8 py-2.5 bg-blue-600 text-white rounded-lg font-bold shadow-lg hover:bg-blue-700 transition active:scale-95">Post Sales Return Record</button>
+            <button 
+              type="submit" 
+              disabled={!returnItems.some(item => item.returnQuantity > 0)}
+              className="px-8 py-2.5 bg-blue-600 text-white rounded-lg font-bold shadow-lg hover:bg-blue-700 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Post Sales Return Record
+            </button>
           </div>
         </form>
       </div>

@@ -245,6 +245,7 @@ export default function DocumentPrintView({
   const [recipientPhone, setRecipientPhone] = useState(initialPhone);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
 
   // Update text when preset changes
   const handlePresetSelect = (presetId: string) => {
@@ -315,20 +316,73 @@ export default function DocumentPrintView({
 
   const compiledText = compileMessage(customMessageText);
 
-  // Handle browser native printing
-  const handlePrint = () => {
-    const originalTitle = document.title;
-    let docNum = '';
-    if (documentType === 'invoice') docNum = data.invoiceNumber || '';
-    if (documentType === 'quotation') docNum = data.quotationNumber || '';
-    if (documentType === 'receipt') docNum = data.receiptNumber || '';
-    if (documentType === 'purchase') docNum = data.purchaseNumber || '';
-    if (documentType === 'report') docNum = data.reportNumber || '';
-    if (documentType === 'party_ledger') docNum = data.partyName || '';
-    
-    document.title = `${documentType.toUpperCase()}_${docNum}`;
-    window.print();
-    document.title = originalTitle;
+  // Handle browser native printing with asset synchronization & Capacitor native fallback
+  const handlePrint = async () => {
+    if (isPreparingPrint) return;
+    setIsPreparingPrint(true);
+    setShareSuccess('Preparing Print...');
+
+    try {
+      const element = printRef.current;
+      if (!element) {
+        throw new Error('Print preview element not found.');
+      }
+
+      // Check if running in Capacitor native (Android/iOS)
+      let isCapacitorNative = false;
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        isCapacitorNative = Capacitor.isNativePlatform();
+      } catch (e) {
+        // Not capacitor
+      }
+
+      if (isCapacitorNative) {
+        // On Capacitor mobile, invoke the native PDF export/share flow since direct browser print dialog isn't supported in WebView
+        await handleDownloadPDF();
+        setIsPreparingPrint(false);
+        return;
+      }
+
+      // Wait for fonts and all images to be fully loaded
+      await document.fonts.ready;
+      const images = element.querySelectorAll('img');
+      const imagePromises = Array.from(images).map(img => {
+        const htmlImg = img as HTMLImageElement;
+        if (htmlImg.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          htmlImg.onload = resolve;
+          htmlImg.onerror = resolve;
+        });
+      });
+      await Promise.all(imagePromises);
+
+      const originalTitle = document.title;
+      let docNum = '';
+      if (documentType === 'invoice') docNum = data.invoiceNumber || '';
+      else if (documentType === 'quotation') docNum = data.quotationNumber || '';
+      else if (documentType === 'receipt') docNum = data.receiptNumber || '';
+      else if (documentType === 'purchase') docNum = data.purchaseNumber || '';
+      else if (documentType === 'report') docNum = data.reportNumber || '';
+      else if (documentType === 'party_ledger') docNum = data.partyName || '';
+      else docNum = data.documentNumber || data.id || 'DOC';
+
+      document.title = `${documentType.toUpperCase()}_${docNum}`;
+      setShareSuccess('Opening print dialog...');
+
+      setTimeout(() => {
+        window.print();
+        document.title = originalTitle;
+        setShareSuccess(null);
+        setIsPreparingPrint(false);
+      }, 250);
+
+    } catch (err: any) {
+      console.error('Print preparation error:', err);
+      alert(`Unable to prepare this document for printing. ${err.message || ''}`);
+      setShareSuccess(null);
+      setIsPreparingPrint(false);
+    }
   };
 
   // Real PDF download helper using html2canvas and jsPDF
@@ -587,16 +641,74 @@ export default function DocumentPrintView({
 
       const fileName = `${documentType}_${docNum}.pdf`;
 
-      // Download PDF
-      const objectUrl = URL.createObjectURL(pdfBlob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
+      // Check if running in Capacitor native (Android/iOS)
+      let isCapacitorNative = false;
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        isCapacitorNative = Capacitor.isNativePlatform();
+      } catch (e) {
+        // Not capacitor or failed check
+      }
 
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      if (isCapacitorNative) {
+        setShareSuccess('Saving PDF to device...');
+        try {
+          const { Filesystem, Directory } = await import('@capacitor/filesystem');
+          const { Share } = await import('@capacitor/share');
+
+          // Convert blob to base64
+          const reader = new FileReader();
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+              const res = reader.result as string;
+              // Remove data url prefix e.g. "data:application/pdf;base64,"
+              const base64 = res.includes(',') ? res.split(',')[1] : res;
+              resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(pdfBlob);
+          });
+
+          // Write file to Cache or Documents directory
+          const savedFile = await Filesystem.writeFile({
+            path: fileName,
+            data: base64Data,
+            directory: Directory.Cache
+          });
+
+          setShareSuccess('PDF saved successfully!');
+
+          // Offer native share/open
+          await Share.share({
+            title: `Export ${fileName}`,
+            text: `Generated PDF document ${fileName} from Spark-VY ERP.`,
+            url: savedFile.uri,
+            dialogTitle: 'Open or Share PDF'
+          });
+        } catch (nativeErr: any) {
+          console.error('Capacitor native PDF save/share error:', nativeErr);
+          // Fallback to web anchor if native write/share fails
+          const objectUrl = URL.createObjectURL(pdfBlob);
+          const anchor = document.createElement('a');
+          anchor.href = objectUrl;
+          anchor.download = fileName;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+        }
+      } else {
+        // Desktop / Web browser download
+        const objectUrl = URL.createObjectURL(pdfBlob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+      }
 
       setShareSuccess('PDF generated & downloaded!');
     } catch (err: any) {
@@ -683,10 +795,15 @@ export default function DocumentPrintView({
 
             <button
               onClick={handlePrint}
-              className="flex items-center space-x-1.5 bg-blue-600 text-white px-3 py-1.5 rounded text-[11px] font-bold hover:bg-blue-700 transition cursor-pointer"
+              disabled={isPreparingPrint}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded text-[11px] font-bold transition cursor-pointer ${
+                isPreparingPrint
+                  ? 'bg-slate-700 text-slate-400 border-slate-600 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
             >
               <Printer size={13} />
-              <span>Print Sheet</span>
+              <span>{isPreparingPrint ? 'Preparing Print...' : 'Print Sheet'}</span>
             </button>
 
             <button

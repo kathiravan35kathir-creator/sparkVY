@@ -505,7 +505,7 @@ export default function DocumentTemplateRenderer({
   return (
     <div
       id="printed-document-root"
-      className={`bg-white text-slate-800 shadow-sm relative border border-slate-100 ${fontClass} ${baseTextSize} ${marginClass} flex flex-col justify-between`}
+      className={`bg-white text-slate-800 shadow-sm relative border border-slate-100 ${fontClass} ${baseTextSize} ${marginClass} flex flex-col`}
       style={{
         width: '100%',
         maxWidth: '820px',
@@ -521,19 +521,63 @@ export default function DocumentTemplateRenderer({
         </div>
       )}
 
-      {/* Estimate Watermark */}
+      {/* Canonical Watermark Layer */}
       {normType === 'quotation' && docData.stage === 'Estimate' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center opacity-[0.03] pointer-events-none z-0 overflow-hidden text-slate-900 rotate-[-45deg]">
-          <p className="text-[120px] font-black uppercase tracking-tighter leading-none">
-            ESTIMATE
-          </p>
-          <p className="text-[40px] font-bold uppercase tracking-widest leading-none mt-4">
-            Approximate Pricing Only
-          </p>
+        <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden flex items-center justify-center text-slate-900">
+          <div
+            style={{
+              transform: 'rotate(-45deg)',
+              transformOrigin: 'center center',
+              opacity: 0.055,
+              textAlign: 'center',
+            }}
+          >
+            <p className="text-[120px] font-black uppercase tracking-tighter leading-none">
+              ESTIMATE
+            </p>
+            <p className="text-[36px] font-bold uppercase tracking-widest leading-none mt-3">
+              Approximate Pricing Only
+            </p>
+          </div>
+        </div>
+      )}
+      {normType === 'proforma_invoice' && (
+        <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden flex items-center justify-center text-slate-900">
+          <div
+            style={{
+              transform: 'rotate(-45deg)',
+              transformOrigin: 'center center',
+              opacity: 0.055,
+              textAlign: 'center',
+            }}
+          >
+            <p className="text-[120px] font-black uppercase tracking-tighter leading-none">
+              PROFORMA
+            </p>
+            <p className="text-[36px] font-bold uppercase tracking-widest leading-none mt-3">
+              Not a Tax Invoice
+            </p>
+          </div>
+        </div>
+      )}
+      {docData.status === 'Draft' && (
+        <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden flex items-center justify-center text-slate-900">
+          <div
+            style={{
+              transform: 'rotate(-45deg)',
+              transformOrigin: 'center center',
+              opacity: 0.055,
+              textAlign: 'center',
+            }}
+          >
+            <p className="text-[120px] font-black uppercase tracking-tighter leading-none">
+              DRAFT
+            </p>
+          </div>
         </div>
       )}
 
-      <div>
+      <div className="flex-1">
         {/* =========================================================================
             HEADER STYLE OVERRIDES FOR ALL 32 TEMPLATES
             ========================================================================= */}
@@ -918,7 +962,7 @@ export default function DocumentTemplateRenderer({
       {/* =========================================================================
           QR CODES & SECURITY DIGITAL SIGNATURE FOOTERS
           ========================================================================= */}
-      <div className="border-t border-slate-200 pt-4 mt-4 shrink-0">
+      <div className="border-t border-slate-200 pt-4 mt-6">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
           {/* UPI/Company QR Payment Block */}
           <div className="sm:col-span-4 text-center sm:text-left">
@@ -971,19 +1015,21 @@ export default function DocumentTemplateRenderer({
           </div>
 
           {/* Signatory Authority */}
-          <div className="sm:col-span-3 text-center flex flex-col justify-end items-center h-16">
+          <div className="sm:col-span-3 text-center flex flex-col justify-end items-center">
             {showSignature && (
               <>
-                <div className="h-10 flex items-center justify-center">
-                  {companySignatureUrl ? (
+                {companySignatureUrl ? (
+                  <div className="h-10 flex items-center justify-center mb-1">
                     <img
                       src={companySignatureUrl}
                       alt="Authorized Signature"
                       referrerPolicy="no-referrer"
                       className="max-h-10 object-contain"
                     />
-                  ) : null}
-                </div>
+                  </div>
+                ) : (
+                  <div className="h-4"></div>
+                )}
                 <div className="border-t border-slate-300 w-full pt-1 text-[8.5px] text-slate-400 uppercase tracking-widest font-black">
                   {settings.invoice?.signatureText || 'Authorized Signatory'}
                 </div>

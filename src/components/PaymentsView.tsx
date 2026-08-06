@@ -23,7 +23,7 @@ import {
 import { Payment, Party, AppSettings, PaymentMethod, PaymentType } from '../types';
 import DocumentPrintView from './DocumentPrintView';
 import { NumericInput } from './NumericInput';
-import { toSafeNumber } from '../utils/numericUtils';
+import { toSafeNumber, formatCurrency, getCurrencySymbol } from '../utils/numericUtils';
 
 interface PaymentsViewProps {
   payments: Payment[];
@@ -148,9 +148,9 @@ export default function PaymentsView({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Amount (₹) *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Amount ({getCurrencySymbol(settings)}) *</label>
               <div className="relative">
-                <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 font-bold font-mono text-sm">{getCurrencySymbol(settings)}</span>
                 <NumericInput
                   required
                   value={amount}

@@ -75,6 +75,7 @@ export default function SalesView({
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [isBulkPrinting, setIsBulkPrinting] = useState(false);
   const [deletingInvoice, setDeletingInvoice] = useState<Invoice | null>(null);
+  const [cancellingInvoice, setCancellingInvoice] = useState<Invoice | null>(null);
 
   // Quick Create Modals
   const [isQuickPartyOpen, setIsQuickPartyOpen] = useState(false);
@@ -427,7 +428,7 @@ export default function SalesView({
               <div className="h-px bg-[#E5EAF0] w-full mt-2" />
             </div>
 
-            <div className="border border-[#D8E0EA] rounded-xl overflow-hidden bg-white shadow-xs">
+            <div className="border border-[#D8E0EA] rounded-xl overflow-visible bg-white shadow-xs">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-[#D8E0EA] text-[10px] text-slate-500 font-bold uppercase tracking-wider">
@@ -1099,13 +1100,32 @@ export default function SalesView({
               setDeletingInvoice(null);
             }
           }}
-          title="Delete Sales Invoice"
-          recordType="Tax Invoice"
+          title="Delete Sales Invoice?"
+          recordType="Draft Invoice"
           recordNumber={deletingInvoice.invoiceNumber}
           partyName={deletingInvoice.partyName}
           date={deletingInvoice.invoiceDate}
           amount={deletingInvoice.total}
-          impactSummary={`Deleting sales invoice ${deletingInvoice.invoiceNumber} will restore inventory stock levels (+ item quantities) and reverse customer receivable ledger balance by ₹${(deletingInvoice.total ?? 0).toLocaleString()}.`}
+          impactSummary="This draft invoice will be moved to Trash. Inventory stock will be restored and customer ledger adjusted."
+        />
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {cancellingInvoice && (
+        <DeleteConfirmationModal
+          isOpen={!!cancellingInvoice}
+          onClose={() => setCancellingInvoice(null)}
+          onConfirm={() => {
+            onCancelInvoice(cancellingInvoice.id);
+            setCancellingInvoice(null);
+          }}
+          title="Cancel Sales Invoice?"
+          recordType="Tax Invoice"
+          recordNumber={cancellingInvoice.invoiceNumber}
+          partyName={cancellingInvoice.partyName}
+          date={cancellingInvoice.invoiceDate}
+          amount={cancellingInvoice.total}
+          impactSummary="This action will reverse posted stock, ledger and receivable effects. The invoice record will remain for audit purposes."
         />
       )}
     </div>

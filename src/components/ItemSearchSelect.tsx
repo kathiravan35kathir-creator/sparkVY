@@ -186,6 +186,7 @@ export default function ItemSearchSelect({
         </div>
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             onClearSelection();
             setTimeout(() => inputRef.current?.focus(), 50);
@@ -273,6 +274,7 @@ export default function ItemSearchSelect({
                   <button
                     key={item.id}
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       onSelectItem(item);
                       setIsOpen(false);
@@ -336,6 +338,7 @@ export default function ItemSearchSelect({
               {canCreateItem ? (
                 <button
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={handleCreateClick}
                   onMouseEnter={() => setHighlightedIndex(filteredItems.length)}
                   className={`w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold rounded-lg text-xs transition shadow-xs cursor-pointer ${

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { compressImage } from '../utils/imageCompressor';
 import { sanitizeFirestoreData } from '../App';
+import { SUPPORTED_CURRENCIES } from '../utils/numericUtils';
 import {
   Building,
   Sliders,
@@ -519,20 +520,19 @@ export default function SettingsView({
       
       // Auto-sync certain fields to existing settings for compatibility
       if (field === 'currencyCode') {
-        const currencySymbols: Record<string, string> = {
-          INR: '₹',
-          USD: '$',
-          EUR: '€',
-          GBP: '£',
-          AED: 'د.إ',
-          SGD: 'S$'
-        };
-        const symbol = currencySymbols[value] || '₹';
-        updated.generalFeatures.currencySymbol = symbol;
+        const curr = SUPPORTED_CURRENCIES.find(c => c.code === value) || SUPPORTED_CURRENCIES[0];
+        updated.generalFeatures.currencySymbol = curr.symbol;
+        updated.generalFeatures.currencyLocale = curr.locale;
         updated.system = {
           ...updated.system,
           currencyFormat: value,
-          currencySymbol: symbol
+          currencyCode: value,
+          currencySymbol: curr.symbol,
+          currencyLocale: curr.locale,
+        };
+        updated.company = {
+          ...updated.company,
+          currency: value
         };
       }
       if (field === 'amountDecimalPlaces') {
@@ -707,14 +707,36 @@ export default function SettingsView({
           if (passwordState.newPassword) {
             if (passwordState.newPassword !== passwordState.confirmPassword) {
               alert('New passwords do not match');
+              setIsSaving(false);
+              setSavingStatus(null);
               return;
             }
-            const { getAuth, updatePassword } = await import('firebase/auth');
-            const auth = getAuth();
-            if (auth.currentUser) {
-              await updatePassword(auth.currentUser, passwordState.newPassword);
-              alert('Password changed successfully.');
-              setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            if (passwordState.newPassword.length < 6) {
+              alert('Password should be at least 6 characters.');
+              setIsSaving(false);
+              setSavingStatus(null);
+              return;
+            }
+            try {
+              const { getAuth, updatePassword } = await import('firebase/auth');
+              const auth = getAuth();
+              if (auth.currentUser) {
+                await updatePassword(auth.currentUser, passwordState.newPassword);
+                alert('Password changed successfully.');
+                setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+              }
+            } catch (authErr: any) {
+              console.error('Password update error:', authErr);
+              let msg = authErr.message || 'Failed to update password.';
+              if (authErr.code === 'auth/weak-password') {
+                msg = 'Password should be at least 6 characters.';
+              } else if (authErr.code === 'auth/requires-recent-login') {
+                msg = 'Please log out and log back in before changing your password.';
+              }
+              alert(msg);
+              setIsSaving(false);
+              setSavingStatus(null);
+              return;
             }
           }
 
@@ -1488,12 +1510,11 @@ export default function SettingsView({
                           value={localSettings.generalFeatures?.currencyCode || 'INR'}
                           onChange={(e) => handleGeneralFeatureChange('currencyCode', e.target.value)}
                         >
-                          <option value="INR">INR (₹) - Indian Rupee</option>
-                          <option value="USD">USD ($) - US Dollar</option>
-                          <option value="EUR">EUR (€) - Euro</option>
-                          <option value="GBP">GBP (£) - British Pound</option>
-                          <option value="AED">AED (د.إ) - UAE Dirham</option>
-                          <option value="SGD">SGD (S$) - Singapore Dollar</option>
+                          {SUPPORTED_CURRENCIES.map(c => (
+                            <option key={c.code} value={c.code}>
+                              {c.name} — {c.code} — {c.symbol}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div>
@@ -2974,13 +2995,18 @@ export default function SettingsView({
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Base Currency Symbol</label>
-                      <input
-                        type="text"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 font-mono font-bold focus:outline-none focus:border-blue-500"
-                        value={localSettings.system.currencySymbol}
-                        onChange={(e) => handleFieldChange('system', 'currencySymbol', e.target.value)}
-                      />
+                      <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Base Business Currency</label>
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold text-sm"
+                        value={localSettings.generalFeatures?.currencyCode || localSettings.system?.currencyCode || 'INR'}
+                        onChange={(e) => handleGeneralFeatureChange('currencyCode', e.target.value)}
+                      >
+                        {SUPPORTED_CURRENCIES.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.name} — {c.code} — {c.symbol}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Grouping Pattern Format</label>
@@ -3285,7 +3311,7 @@ export default function SettingsView({
                       </div>
                       <div className="hidden sm:block"></div>
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">New Password / PIN</label>
+                        <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">New Password / PIN <span className="text-slate-400 font-normal lowercase">(min 6 chars)</span></label>
                         <input
                           type={showPasswords ? 'text' : 'password'}
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500 font-semibold"
