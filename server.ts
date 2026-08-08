@@ -10,6 +10,7 @@ import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import fs from 'fs';
+import { generateBackendPdf } from './src/server/generatePdf';
 
 // Load config for fallback
 let fallbackConfig: any = { projectId: 'spark-vy' };
@@ -57,7 +58,8 @@ try {
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
@@ -196,6 +198,91 @@ app.post('/api/auth/firebase', async (req, res) => {
   } catch (err) {
     console.error('Firebase auth verify error', err);
     res.status(400).json({ error: 'Firebase authentication failed' });
+  }
+});
+
+app.get('/api/proxy-image', async (req, res) => {
+  let imageUrl = req.query.url as string;
+  // If query parsing cut off at nested '&' parameters, reconstruct full URL from req.originalUrl
+  if (req.originalUrl && req.originalUrl.includes('url=')) {
+    const rawParam = req.originalUrl.substring(req.originalUrl.indexOf('url=') + 4);
+    try {
+      imageUrl = decodeURIComponent(rawParam);
+    } catch {
+      imageUrl = rawParam;
+    }
+  }
+
+  if (!imageUrl) {
+    return res.status(400).json({ error: 'Missing url parameter' });
+  }
+
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `Failed to fetch image: ${response.status} ${response.statusText}` });
+    }
+    const contentType = response.headers.get('content-type') || 'image/png';
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+    const dataUrl = `data:${contentType};base64,${base64}`;
+    res.json({ dataUrl });
+  } catch (err: any) {
+    console.error('Image proxy error:', err);
+    res.status(500).json({ error: err.message || 'Internal error' });
+  }
+});
+
+app.post(['/api/generate-pdf', '/api/generate-business-pdf'], async (req, res) => {
+  try {
+    const { documentType, documentId, data, settings } = req.body;
+
+    let docData = data;
+    let settingsData = settings;
+
+    if (!docData && documentId && db) {
+      try {
+        const docRef = await db.collection('documents').doc(documentId).get();
+        if (docRef.exists) {
+          docData = docRef.data();
+        }
+      } catch (e) {
+        console.warn('Failed to fetch document from Firestore:', e);
+      }
+    }
+
+    if (!settingsData && db) {
+      try {
+        const settingsRef = await db.collection('settings').doc('appSettings').get();
+        if (settingsRef.exists) {
+          settingsData = settingsRef.data();
+        }
+      } catch (e) {
+        console.warn('Failed to fetch settings from Firestore:', e);
+      }
+    }
+
+    if (!docData) {
+      return res.status(400).json({ error: 'Document data is required' });
+    }
+
+    const pdfBuffer = await generateBackendPdf(documentType || 'invoice', docData, settingsData);
+
+    const docNum = docData.invoiceNumber || docData.quotationNumber || docData.receiptNumber || docData.purchaseNumber || docData.documentNumber || docData.id || 'export';
+    const filename = `${(documentType || 'DOCUMENT').toUpperCase()}_${docNum}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error('Backend PDF route error:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate PDF on server' });
   }
 });
 

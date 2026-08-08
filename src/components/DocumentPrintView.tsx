@@ -319,7 +319,57 @@ export default function DocumentPrintView({
 
   const compiledText = compileMessage(customMessageText);
 
-  // Handle browser native printing with asset synchronization & Capacitor native fallback
+  // Helper to convert remote image URLs to Data URLs for reliable print & PDF rendering
+  const urlToDataUrl = async (url: string): Promise<string> => {
+    if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
+
+    try {
+      const response = await fetch(`/api/proxy-image?url=${encodeURIComponent(url)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.dataUrl) {
+          return data.dataUrl;
+        }
+      }
+    } catch (proxyErr) {
+      console.warn('Image proxy failed, falling back to fetch/canvas:', url, proxyErr);
+    }
+
+    return new Promise<string>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width || 200;
+          canvas.height = img.naturalHeight || img.height || 200;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/png'));
+            return;
+          }
+        } catch (e) {
+          // tainted
+        }
+        resolve(url);
+      };
+      img.onerror = () => {
+        fetch(url, { mode: 'cors' })
+          .then((res) => res.blob())
+          .then((blob) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(url);
+            reader.readAsDataURL(blob);
+          })
+          .catch(() => resolve(url));
+      };
+      img.src = url;
+    });
+  };
+
+  // Handle browser native printing via an isolated iframe with asset synchronization
   const handlePrint = async () => {
     if (isPreparingPrint) return;
     setIsPreparingPrint(true);
@@ -341,17 +391,34 @@ export default function DocumentPrintView({
       }
 
       if (isCapacitorNative) {
-        // On Capacitor mobile, invoke the native PDF export/share flow since direct browser print dialog isn't supported in WebView
         await handleDownloadPDF();
         setIsPreparingPrint(false);
         return;
       }
 
-      // Wait for fonts and all images (including QR and signature) to be fully loaded
-      await document.fonts.ready;
-      await waitForDocumentImages(element);
+      // 1. Clone exact working Preview DOM
+      const clone = element.cloneNode(true) as HTMLElement;
 
-      const originalTitle = document.title;
+      // 2. Convert ALL remote images in clone (Logo, QR, Signature) to Base64 Data URLs
+      const cloneImgs = Array.from(clone.querySelectorAll('img')) as HTMLImageElement[];
+      for (const img of cloneImgs) {
+        if (img.src && !img.src.startsWith('data:') && !img.src.startsWith('blob:')) {
+          const dataUrl = await urlToDataUrl(img.src);
+          if (dataUrl && dataUrl.startsWith('data:')) {
+            img.src = dataUrl;
+          }
+        }
+      }
+
+      // Check QR image in clone if configured
+      const qrInClone = clone.querySelector('img[data-pdf-asset="qr"]') as HTMLImageElement || clone.querySelector('img[alt*="QR"]') as HTMLImageElement;
+      if (qrInClone) {
+        if (!qrInClone.src || (!qrInClone.src.startsWith('data:') && !qrInClone.src.startsWith('blob:'))) {
+          throw new Error('Unable to prepare the uploaded QR Code for printing.');
+        }
+      }
+
+      // 3. Document title setup
       let docNum = '';
       if (documentType === 'invoice') docNum = data.invoiceNumber || '';
       else if (documentType === 'quotation') docNum = data.quotationNumber || '';
@@ -361,15 +428,141 @@ export default function DocumentPrintView({
       else if (documentType === 'party_ledger') docNum = data.partyName || '';
       else docNum = data.documentNumber || data.id || 'DOC';
 
-      document.title = `${documentType.toUpperCase()}_${docNum}`;
+      const docTitle = `${documentType.toUpperCase()}_${docNum}`;
+
+      // 4. Create isolated hidden print iframe
+      const oldIframe = document.getElementById('bizops-print-iframe');
+      if (oldIframe && document.body.contains(oldIframe)) {
+        document.body.removeChild(oldIframe);
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'bizops-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-10000px';
+      iframe.style.left = '-10000px';
+      iframe.style.width = '210mm';
+      iframe.style.height = '297mm';
+      iframe.style.border = 'none';
+      iframe.style.zIndex = '-9999';
+      iframe.style.opacity = '0';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!iframeDoc) {
+        throw new Error('Could not access print iframe document.');
+      }
+
+      iframeDoc.open();
+      iframeDoc.write(`<!DOCTYPE html><html><head><title>${docTitle}</title></head><body></body></html>`);
+      iframeDoc.close();
+
+      // Copy stylesheet links and inline style tags from main document head to iframe head
+      const styleEls = document.head.querySelectorAll('link[rel="stylesheet"], style');
+      styleEls.forEach((styleNode) => {
+        iframeDoc.head.appendChild(styleNode.cloneNode(true));
+      });
+
+      // Append clean page print override styles
+      const customPrintStyle = iframeDoc.createElement('style');
+      customPrintStyle.textContent = `
+        @page {
+          size: A4 portrait;
+          margin: 10mm;
+        }
+        *, ::before, ::after {
+          box-sizing: border-box !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+          width: 210mm !important;
+        }
+        body * {
+          visibility: visible !important;
+        }
+        #document-print-root, #printable-document-sheet {
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          background: #ffffff !important;
+          transform: none !important;
+          zoom: 1 !important;
+          overflow: visible !important;
+        }
+        #bank-details-section, [data-pdf-asset="qr"], img, table, tr {
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+        }
+        img {
+          max-width: 100% !important;
+          height: auto !important;
+        }
+      `;
+      iframeDoc.head.appendChild(customPrintStyle);
+
+      // Append cloned DOM to iframe body
+      iframeDoc.body.appendChild(clone);
+
+      // 5. Wait for fonts & images inside iframe
+      await iframeDoc.fonts?.ready;
+
+      const iframeImgs = Array.from(iframeDoc.querySelectorAll('img')) as HTMLImageElement[];
+      await Promise.all(
+        iframeImgs.map((img) => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+          return new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            setTimeout(resolve, 3000);
+          });
+        })
+      );
+
+      // Verify QR image readiness inside iframe
+      const qrInIframe = iframeDoc.querySelector('img[data-pdf-asset="qr"]') as HTMLImageElement || iframeDoc.querySelector('img[alt*="QR"]') as HTMLImageElement;
+      if (qrInIframe) {
+        let attempts = 0;
+        while ((!qrInIframe.complete || qrInIframe.naturalWidth === 0) && attempts < 30) {
+          await new Promise((res) => setTimeout(res, 100));
+          attempts++;
+        }
+        if (!qrInIframe.complete || qrInIframe.naturalWidth === 0) {
+          if (document.body.contains(iframe)) document.body.removeChild(iframe);
+          throw new Error('Unable to prepare the uploaded QR Code for printing.');
+        }
+      }
+
       setShareSuccess('Opening print dialog...');
 
       setTimeout(() => {
-        window.print();
-        document.title = originalTitle;
-        setShareSuccess(null);
-        setIsPreparingPrint(false);
-      }, 250);
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.error('Print iframe invocation error:', e);
+        }
+
+        const cleanup = () => {
+          try {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          } catch (e) {}
+          setShareSuccess(null);
+          setIsPreparingPrint(false);
+        };
+
+        if (iframe.contentWindow) {
+          iframe.contentWindow.addEventListener('afterprint', cleanup);
+        }
+        setTimeout(cleanup, 20000);
+      }, 300);
 
     } catch (err: any) {
       console.error('Print preparation error:', err);
@@ -379,68 +572,36 @@ export default function DocumentPrintView({
     }
   };
 
-  // Real PDF download helper using html2canvas and jsPDF
+  // Deterministic PDF download flow capturing DocumentTemplateRenderer directly
   const handleDownloadPDF = async () => {
     if (isGeneratingPdf) return;
 
     setIsGeneratingPdf(true);
-    setShareSuccess('Preparing document canvas...');
+    setShareSuccess('Preparing PDF document...');
 
     try {
       const element = printRef.current;
       if (!element) {
-        throw new Error('Print preview element not found.');
+        throw new Error('Print preview document element not found.');
       }
 
-      // Confirm quotation data exists and company settings are loaded
       if (!data) {
         throw new Error('Document data is empty.');
       }
-      if (!settings) {
-        throw new Error('Company settings are not loaded.');
-      }
 
-      // Helper to convert remote image URL to data URL for PDF export to avoid CORS tainting
-      const urlToDataUrl = async (url: string): Promise<string> => {
-        if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => {
-            try {
-              const canvas = document.createElement('canvas');
-              canvas.width = img.naturalWidth || img.width || 200;
-              canvas.height = img.naturalHeight || img.height || 200;
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.drawImage(img, 0, 0);
-                const dataUrl = canvas.toDataURL('image/png');
-                resolve(dataUrl);
-                return;
-              }
-            } catch (e) {
-              console.warn('Canvas drawImage tainted or failed for URL:', url, e);
-            }
-            resolve(url);
-          };
-          img.onerror = () => {
-            fetch(url, { mode: 'cors' })
-              .then(res => res.blob())
-              .then(blob => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = () => resolve(url);
-                reader.readAsDataURL(blob);
-              })
-              .catch(() => resolve(url));
-          };
-          img.src = url;
-        });
-      };
+      // 1. Clone exact working Preview DOM
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.width = '100%';
+      clone.style.maxWidth = 'none';
+      clone.style.transform = 'none';
+      clone.style.zoom = '1';
+      clone.style.boxShadow = 'none';
+      clone.style.margin = '0';
+      clone.style.padding = '0';
 
-      // Convert remote images (logo, QR, signature) to data URLs in the PDF container
-      const imgElements = Array.from(element.querySelectorAll('img')) as HTMLImageElement[];
-      for (const img of imgElements) {
+      // 2. Convert ALL remote images in clone to Base64 Data URLs
+      const cloneImgs = Array.from(clone.querySelectorAll('img')) as HTMLImageElement[];
+      for (const img of cloneImgs) {
         if (img.src && !img.src.startsWith('data:') && !img.src.startsWith('blob:')) {
           const dataUrl = await urlToDataUrl(img.src);
           if (dataUrl && dataUrl.startsWith('data:')) {
@@ -449,70 +610,51 @@ export default function DocumentPrintView({
         }
       }
 
-      // Wait for fonts and all images (including QR and signature) to be fully loaded
+      // Render into an offscreen A4 container
+      const offscreenContainer = document.createElement('div');
+      offscreenContainer.style.position = 'fixed';
+      offscreenContainer.style.left = '-9999px';
+      offscreenContainer.style.top = '-9999px';
+      offscreenContainer.style.width = '210mm';
+      offscreenContainer.style.backgroundColor = '#ffffff';
+      offscreenContainer.style.transform = 'none';
+      offscreenContainer.style.zoom = '1';
+      offscreenContainer.style.overflow = 'visible';
+      offscreenContainer.style.zIndex = '-9999';
+
+      offscreenContainer.appendChild(clone);
+      document.body.appendChild(offscreenContainer);
+
+      // Wait for fonts and all document images inside offscreen container
       await document.fonts.ready;
-      await waitForDocumentImages(element);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await waitForDocumentImages(clone);
 
-      // DEV-only debug verification values reporting
-      const activeCompanyId = (settings?.company as any)?.id || 'default';
-      const savedQrPath = settings?.bank?.qrCodeUrl ? 'settings.bank.qrCodeUrl' : (settings?.company?.companyQrCodeUrl ? 'company.companyQrCodeUrl' : 'none');
-      const resolvedQr = getCompanyQrCodeUrl(settings?.company, settings);
-      const qrImg = element.querySelector('img[alt*="QR"], img[alt*="Company QR Code"]') as HTMLImageElement;
-      const qrNaturalWidth = qrImg ? qrImg.naturalWidth : 0;
-      const bankSource = settings?.bank ? 'settings.bank' : 'none';
-      
-      const bankBlock = element.querySelector('#bank-details-section') || element.querySelector('.bank-details') || element;
-      const hasBankBlock = !!bankBlock;
-      const docText = element.innerText || '';
-      const hasBankName = docText.includes(settings?.bank?.bankName || 'HDFC');
-      const hasAccountNumber = docText.includes(settings?.bank?.accountNumber || '5020');
-      const hasIfsc = docText.includes(settings?.bank?.ifsc || 'HDFC0');
-
-      console.log('--- DEV-ONLY DEBUG VERIFICATION ---');
-      console.log('Preview renderer component: DocumentTemplateRenderer');
-      console.log('PDF renderer component: DocumentTemplateRenderer');
-      console.log('Same renderer?: YES');
-      console.log('activeCompanyId:', activeCompanyId);
-      console.log('Saved QR field path:', savedQrPath);
-      console.log('Saved QR URL:', resolvedQr ? 'FOUND' : 'MISSING');
-      console.log('Resolved QR URL:', resolvedQr ? 'FOUND' : 'MISSING');
-      console.log('PDF QR source:', qrImg?.src?.startsWith('data:') ? 'DATA URL' : 'REMOTE URL');
-      console.log('QR exists in PDF DOM:', !!qrImg);
-      console.log('QR complete:', qrImg ? qrImg.complete : false);
-      console.log('QR naturalWidth:', qrNaturalWidth);
-      console.log('Bank settings source:', bankSource);
-      console.log('Bank block exists in PDF DOM:', hasBankBlock);
-      console.log('Bank name exists:', hasBankName ? 'YES' : 'NO');
-      console.log('Account number exists:', hasAccountNumber ? 'YES' : 'NO');
-      console.log('IFSC exists:', hasIfsc ? 'YES' : 'NO');
-      console.log('Renderer received payment details: YES');
-      console.log('PDF generated only after assets loaded: YES');
-      console.log('Downloaded PDF QR: PASS');
-      console.log('Downloaded PDF bank details: PASS');
-
-      // Verify that the element is rendered and has positive dimensions
-      const targetElement = element.querySelector('#printed-document-root') || element;
-      const rect = targetElement.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        throw new Error(`Render element has zero dimensions (width: ${rect.width}px, height: ${rect.height}px).`);
+      // Check QR image inside clone
+      const qrInClone = clone.querySelector('img[data-pdf-asset="qr"]') as HTMLImageElement || clone.querySelector('img[alt*="QR"]') as HTMLImageElement;
+      if (qrInClone) {
+        let attempts = 0;
+        while ((!qrInClone.complete || qrInClone.naturalWidth === 0) && attempts < 30) {
+          await new Promise((res) => setTimeout(res, 100));
+          attempts++;
+        }
+        if (!qrInClone.complete || qrInClone.naturalWidth === 0) {
+          document.body.removeChild(offscreenContainer);
+          throw new Error('Unable to prepare the uploaded QR Code for export.');
+        }
       }
 
-      setShareSuccess('Rendering PDF bytes...');
+      await new Promise((resolve) => setTimeout(resolve, 150));
 
-      // Render the element to a canvas
-      const canvas = await html2canvas(targetElement as HTMLElement, {
-        scale: 2, // High resolution for professional print
-        useCORS: true, 
-        logging: false,
+      const canvas = await html2canvas(clone, {
+        scale: 2, // High DPI capture for crisp text & graphics
+        useCORS: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
-        allowTaint: true,
+        logging: false,
         imageTimeout: 15000,
-        windowWidth: (targetElement as HTMLElement).scrollWidth || 820,
-        windowHeight: (targetElement as HTMLElement).scrollHeight || 1200,
-        onclone: (clonedDoc, clonedElement) => {
-          // Robust color sanitization: html2canvas fails on modern CSS (oklch, color-mix, etc.)
-          // 1. Sanitize all <style> tags in cloned document
+        windowWidth: 794, // 210mm at 96 DPI
+        onclone: (clonedDoc) => {
+          // Robust color sanitization for html2canvas compatibility
           try {
             const styleTags = clonedDoc.querySelectorAll('style');
             styleTags.forEach((styleTag) => {
@@ -520,12 +662,6 @@ export default function DocumentPrintView({
                 styleTag.textContent = replaceModernColorsInString(styleTag.textContent);
               }
             });
-          } catch (e) {
-            // ignore
-          }
-
-          // 2. Sanitize inline style attributes on all elements
-          try {
             const allElements = clonedDoc.querySelectorAll('*');
             allElements.forEach((el) => {
               const htmlEl = el as HTMLElement;
@@ -539,68 +675,13 @@ export default function DocumentPrintView({
           } catch (e) {
             // ignore
           }
-
-          // 3. Traverse clonedDoc.styleSheets rules if available
-          try {
-            Array.from(clonedDoc.styleSheets).forEach((sheet) => {
-              try {
-                const rules = sheet.cssRules || sheet.rules;
-                if (rules) {
-                  Array.from(rules).forEach((rule: any) => {
-                    if (rule.style && rule.style.cssText) {
-                      if (
-                        rule.style.cssText.includes('oklch') ||
-                        rule.style.cssText.includes('oklab') ||
-                        rule.style.cssText.includes('color-mix')
-                      ) {
-                        rule.style.cssText = replaceModernColorsInString(rule.style.cssText);
-                      }
-                    }
-                  });
-                }
-              } catch (e) {
-                // Cross-origin sheets ignored
-              }
-            });
-          } catch (e) {
-            // ignore
-          }
-
-          // 4. Patch getComputedStyle on clonedDoc defaultView
-          if (clonedDoc.defaultView) {
-            const originalGetComputedStyle = clonedDoc.defaultView.getComputedStyle;
-            clonedDoc.defaultView.getComputedStyle = function(elt: Element, pseudoElt?: string | null) {
-              const style = originalGetComputedStyle.call(this, elt, pseudoElt);
-
-              return new Proxy(style, {
-                get(target, prop, receiver) {
-                  const val = Reflect.get(target, prop, receiver);
-
-                  if (typeof val === 'function') {
-                    if (prop === 'getPropertyValue') {
-                      return function(...args: any[]) {
-                        const res = val.apply(target, args);
-                        return typeof res === 'string' ? replaceModernColorsInString(res) : res;
-                      };
-                    }
-                    return function(...args: any[]) {
-                      return val.apply(target, args);
-                    };
-                  }
-
-                  if (typeof prop === 'string') {
-                    return typeof val === 'string' ? replaceModernColorsInString(val) : val;
-                  }
-
-                  return val;
-                }
-              });
-            };
-          }
         }
       });
 
-      // Determine paper size from active template/settings
+      // Cleanup offscreen element
+      document.body.removeChild(offscreenContainer);
+
+      // Determine paper size from settings
       const paperSize = settings.print.paperSize || 'A4';
 
       let orientation: 'portrait' | 'landscape' = 'portrait';
@@ -650,65 +731,30 @@ export default function DocumentPrintView({
       const imgWidth = pdfWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      // Pass the canvas directly to jsPDF instead of base64 to avoid truncation/corruption
-      // If short document/invoice is within 15% of page height, fit to 1 page cleanly to avoid orphan page fragments
-      let finalImgHeight = imgHeight;
-      if (paperSize === '80mm' || finalImgHeight <= pdfHeight * 1.15) {
-        if (finalImgHeight > pdfHeight && finalImgHeight <= pdfHeight * 1.15) {
+      if (paperSize === '80mm' || imgHeight <= pdfHeight * 1.12) {
+        let finalImgHeight = imgHeight;
+        if (finalImgHeight > pdfHeight && finalImgHeight <= pdfHeight * 1.12) {
           finalImgHeight = pdfHeight;
         }
         pdf.addImage(canvas, 'JPEG', 0, 0, imgWidth, finalImgHeight, undefined, 'FAST');
       } else {
         let position = 0;
-        pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, finalImgHeight, undefined, 'FAST');
-        let heightLeft = finalImgHeight - pdfHeight;
+        pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+        let heightLeft = imgHeight - pdfHeight;
 
         while (heightLeft > 0) {
           position = position - pdfHeight;
           pdf.addPage(format, orientation);
-          pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, finalImgHeight, undefined, 'FAST');
+          pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
           heightLeft -= pdfHeight;
         }
       }
 
-      // Obtain output as PDF Blob
       const pdfBlob = pdf.output('blob');
-
-      // ----------------------------------------------------
-      // VALIDATE GENERATED PDF BYTES
-      // ----------------------------------------------------
-      if (!pdfBlob) {
-        throw new Error('PDF output is null or undefined.');
-      }
-      if (pdfBlob.size < 1000) {
-        throw new Error(`PDF output size is too small (${pdfBlob.size} bytes).`);
-      }
-      if (pdfBlob.type !== 'application/pdf') {
-        throw new Error(`PDF output content type is invalid (${pdfBlob.type}).`);
+      if (!pdfBlob || pdfBlob.size < 100) {
+        throw new Error('PDF output is empty or invalid.');
       }
 
-      // Check first five bytes are "%PDF-"
-      const header = await pdfBlob.slice(0, 5).text();
-      if (header !== '%PDF-') {
-        console.error('PDF validation failed', {
-          type: pdfBlob.type,
-          size: pdfBlob.size,
-          header
-        });
-        throw new Error(`PDF signature is corrupt or invalid. Found header: "${header}"`);
-      }
-
-      // Log success details in development
-      console.log("PDF validation success", {
-        type: pdfBlob.type,
-        size: pdfBlob.size,
-        header,
-        templateId: activeTemplate,
-        paperFormat: paperSize,
-        dimensions: { width: rect.width, height: rect.height }
-      });
-
-      // Determine file name
       let docNum = '';
       if (documentType === 'invoice') docNum = data.invoiceNumber || '';
       else if (documentType === 'quotation') docNum = data.quotationNumber || '';
@@ -716,9 +762,9 @@ export default function DocumentPrintView({
       else if (documentType === 'purchase') docNum = data.purchaseNumber || '';
       else if (documentType === 'report') docNum = data.reportNumber || '';
       else if (documentType === 'party_ledger') docNum = data.partyName || '';
-      else docNum = data.id || 'DOC';
+      else docNum = data.documentNumber || data.id || 'DOC';
 
-      const fileName = `${documentType}_${docNum}.pdf`;
+      const fileName = `${documentType.toUpperCase()}_${docNum || 'export'}.pdf`;
 
       // Check if running in Capacitor native (Android/iOS)
       let isCapacitorNative = false;
@@ -726,21 +772,18 @@ export default function DocumentPrintView({
         const { Capacitor } = await import('@capacitor/core');
         isCapacitorNative = Capacitor.isNativePlatform();
       } catch (e) {
-        // Not capacitor or failed check
+        // Not native
       }
 
       if (isCapacitorNative) {
-        setShareSuccess('Saving PDF to device...');
         try {
           const { Filesystem, Directory } = await import('@capacitor/filesystem');
           const { Share } = await import('@capacitor/share');
 
-          // Convert blob to base64
           const reader = new FileReader();
           const base64Data = await new Promise<string>((resolve, reject) => {
             reader.onloadend = () => {
               const res = reader.result as string;
-              // Remove data url prefix e.g. "data:application/pdf;base64,"
               const base64 = res.includes(',') ? res.split(',')[1] : res;
               resolve(base64);
             };
@@ -748,7 +791,6 @@ export default function DocumentPrintView({
             reader.readAsDataURL(pdfBlob);
           });
 
-          // Write file to Cache or Documents directory
           const savedFile = await Filesystem.writeFile({
             path: fileName,
             data: base64Data,
@@ -756,8 +798,6 @@ export default function DocumentPrintView({
           });
 
           setShareSuccess('PDF saved successfully!');
-
-          // Offer native share/open
           await Share.share({
             title: `Export ${fileName}`,
             text: `Generated PDF document ${fileName} from Spark-VY ERP.`,
@@ -765,45 +805,31 @@ export default function DocumentPrintView({
             dialogTitle: 'Open or Share PDF'
           });
         } catch (nativeErr: any) {
-          console.error('Capacitor native PDF save/share error:', nativeErr);
-          // Fallback to web anchor if native write/share fails
-          const objectUrl = URL.createObjectURL(pdfBlob);
+          console.error('Capacitor native error:', nativeErr);
+          const blobUrl = URL.createObjectURL(pdfBlob);
           const anchor = document.createElement('a');
-          anchor.href = objectUrl;
+          anchor.href = blobUrl;
           anchor.download = fileName;
           document.body.appendChild(anchor);
           anchor.click();
           anchor.remove();
-          setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
         }
       } else {
-        // Desktop / Web browser download
-        const objectUrl = URL.createObjectURL(pdfBlob);
+        const blobUrl = URL.createObjectURL(pdfBlob);
         const anchor = document.createElement('a');
-        anchor.href = objectUrl;
+        anchor.href = blobUrl;
         anchor.download = fileName;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
-
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
       }
 
       setShareSuccess('PDF generated & downloaded!');
     } catch (err: any) {
-      console.error('PDF generation error:', err);
-      // Log details of failure
-      const element = printRef.current;
-      const targetElement = element?.querySelector('#printed-document-root') || element;
-      const rect = targetElement?.getBoundingClientRect() || { width: 0, height: 0 };
-      console.error('PDF generation details:', {
-        message: err.message,
-        templateId: activeTemplate,
-        paperFormat: settings.print.paperSize || 'A4',
-        renderWidth: rect.width,
-        renderHeight: rect.height
-      });
-      alert(`PDF generation failed. ${err.message || 'The generated file is invalid.'}`);
+      console.error('PDF download error:', err);
+      alert(`Unable to generate PDF download. ${err.message || ''}`);
       setShareSuccess(null);
     } finally {
       setIsGeneratingPdf(false);
@@ -1058,7 +1084,7 @@ export default function DocumentPrintView({
           {/* Paper Sheet container */}
           <div
             ref={printRef}
-            id="printable-document-sheet"
+            id="document-print-root"
             className="w-full max-w-3xl font-sans print:max-w-full"
           >
             <DocumentTemplateRenderer

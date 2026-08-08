@@ -887,7 +887,7 @@ export default function DocumentTemplateRenderer({
             {/* Notes / Bank details on left */}
             <div className="flex-1 space-y-3 text-[11px] w-full">
               {showBankDetails && (
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1.5">
+                <div id="bank-details-section" className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1.5">
                   <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest pb-1 border-b border-slate-150">Remittance Settlement Bank:</h5>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-slate-600 font-medium">
                     <p>Bank: <strong className="text-slate-800">{settings.bank?.bankName || 'HDFC Bank'}</strong></p>
@@ -996,6 +996,7 @@ export default function DocumentTemplateRenderer({
                   <img
                     src={companyQrCodeUrl}
                     alt="Company QR Code"
+                    data-pdf-asset="qr"
                     referrerPolicy="no-referrer"
                     crossOrigin="anonymous"
                     className="max-h-full max-w-full object-contain"

@@ -1,13 +1,22 @@
 import { CompanyDetails } from '../types';
 
+function resolveUrlString(val: any): string {
+  if (!val) return '';
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'object') {
+    return (val.url || val.downloadURL || val.downloadUrl || val.src || val.path || '').toString().trim();
+  }
+  return '';
+}
+
 /**
  * Resolves the primary Company Logo URL.
  * Checks companyLogoUrl first, then logoUrl.
  */
 export function getCompanyLogoUrl(company?: Partial<CompanyDetails> | null): string {
   if (!company) return '';
-  const url = company.companyLogoUrl || company.logoUrl || '';
-  return url;
+  const compAny = company as any;
+  return resolveUrlString(compAny.companyLogoUrl) || resolveUrlString(compAny.logoUrl);
 }
 
 /**
@@ -16,24 +25,33 @@ export function getCompanyLogoUrl(company?: Partial<CompanyDetails> | null): str
  */
 export function getCompanySignatureUrl(company?: Partial<CompanyDetails> | null): string {
   if (!company) return '';
-  return company.companySignatureUrl || company.signatureUrl || company.authorizedSignatureUrl || '';
+  const compAny = company as any;
+  return resolveUrlString(compAny.companySignatureUrl) || resolveUrlString(compAny.signatureUrl) || resolveUrlString(compAny.authorizedSignatureUrl);
 }
 
 /**
  * Resolves the Company QR Code URL.
  */
 export function getCompanyQrCodeUrl(company?: Partial<CompanyDetails> | null, settings?: any | null): string {
-  const compAny = company as any;
-  if (compAny) {
-    const url = compAny.companyQrCodeUrl || compAny.qrCodeUrl || compAny.qrUrl || compAny.paymentQrUrl || compAny.qr || '';
+  if (company) {
+    const compAny = company as any;
+    const url = resolveUrlString(compAny.companyQrCodeUrl) ||
+                resolveUrlString(compAny.qrCodeUrl) ||
+                resolveUrlString(compAny.qrUrl) ||
+                resolveUrlString(compAny.paymentQrUrl) ||
+                resolveUrlString(compAny.qr);
     if (url) return url;
   }
-  if (settings && settings.bank && settings.bank.qrCodeUrl) {
-    return settings.bank.qrCodeUrl;
+  if (settings && settings.bank) {
+    const url = resolveUrlString(settings.bank.qrCodeUrl) || resolveUrlString((settings.bank as any).qr);
+    if (url) return url;
   }
   if (settings && settings.company) {
     const sCompAny = settings.company as any;
-    const url = sCompAny.companyQrCodeUrl || sCompAny.qrCodeUrl || sCompAny.qrUrl || sCompAny.paymentQrUrl || '';
+    const url = resolveUrlString(sCompAny.companyQrCodeUrl) ||
+                resolveUrlString(sCompAny.qrCodeUrl) ||
+                resolveUrlString(sCompAny.qrUrl) ||
+                resolveUrlString(sCompAny.paymentQrUrl);
     if (url) return url;
   }
   return '';

@@ -27,9 +27,9 @@ export function CompanyBrandingProvider({
   const company = (settings?.company || {}) as Partial<CompanyDetails>;
   const companyLogoUrl = getCompanyLogoUrl(company);
   const companySignatureUrl = getCompanySignatureUrl(company);
-  const companyQrCodeUrl = getCompanyQrCodeUrl(company);
+  const companyQrCodeUrl = getCompanyQrCodeUrl(company, settings);
   const companyQrCodeType = getCompanyQrCodeType(company);
-  const showQrCodeOnDocuments = getShowQrCodeOnDocuments(company);
+  const showQrCodeOnDocuments = getShowQrCodeOnDocuments(company, settings);
   const companyName = getCompanyName(company);
   const brandingUpdatedAt = company.brandingUpdatedAt;
 
