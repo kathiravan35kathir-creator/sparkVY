@@ -24,6 +24,7 @@ export interface WhatsAppDocumentData {
   documentId: string;
   documentNumber: string;
   partyId?: string;
+  supplierId?: string;
   partyName: string;
   savedPhone?: string;
   pdfFileName?: string;
@@ -39,6 +40,7 @@ export interface WhatsAppShareModalProps {
   documentData: WhatsAppDocumentData;
   settings: AppSettings;
   party?: Party | null;
+  parties?: Party[];
   currentUser?: any;
   onEditParty?: (partyId: string, updates: Partial<Party>) => void;
   onAddAuditLog?: (log: any) => void;
@@ -75,6 +77,7 @@ export default function WhatsAppShareModal({
   documentData,
   settings,
   party,
+  parties,
   currentUser,
   onEditParty,
   onAddAuditLog,
@@ -112,21 +115,58 @@ export default function WhatsAppShareModal({
   // Filter country codes in search
   const [countrySearch, setCountrySearch] = useState('');
 
-  // Collect all saved contact options from party and documentData
+  // Resolve Party from prop or parties array using documentData references
+  const resolvedParty = useMemo(() => {
+    if (party) return party;
+    if (parties && documentData.partyId) {
+      const found = parties.find(p => p.id === documentData.partyId);
+      if (found) return found;
+    }
+    if (parties && documentData.supplierId) {
+      const foundSup = parties.find(p => p.id === documentData.supplierId);
+      if (foundSup) return foundSup;
+    }
+    if (parties && documentData.partyName) {
+      const foundName = parties.find(p => p.name.trim().toLowerCase() === documentData.partyName.trim().toLowerCase());
+      if (foundName) return foundName;
+    }
+    return null;
+  }, [party, parties, documentData.partyId, documentData.supplierId, documentData.partyName]);
+
+  // Clean saved phone number across all possible party fields
+  const savedPhoneClean = useMemo(() => {
+    const p = resolvedParty;
+    if (p) {
+      const num =
+        p.whatsappNumber ||
+        p.primaryPhone ||
+        p.phone ||
+        p.mobileNumber ||
+        p.mobile ||
+        p.contactNumber ||
+        p.phoneNumber ||
+        '';
+      if (num && num.trim()) return num.trim();
+    }
+    return documentData.savedPhone || '';
+  }, [resolvedParty, documentData.savedPhone]);
+
+  // Collect all saved contact options from resolved party and documentData
   const savedContactOptions = useMemo(() => {
     const list: Array<{ id: string; label: string; number: string; type: string }> = [];
+    const partyObj = resolvedParty;
 
-    const primary = documentData.savedPhone || party?.phone || '';
+    const primary = savedPhoneClean;
     if (primary && primary.trim()) {
       list.push({
         id: 'primary',
-        label: 'Primary Mobile Number',
+        label: partyObj ? 'Primary Mobile / WhatsApp Number' : 'Saved Mobile Number',
         number: primary.trim(),
         type: 'Primary'
       });
     }
 
-    const alt = party?.alternatePhone || '';
+    const alt = partyObj?.alternatePhone || '';
     if (alt && alt.trim() && alt.trim() !== primary.trim()) {
       list.push({
         id: 'alternate',
@@ -136,8 +176,8 @@ export default function WhatsAppShareModal({
       });
     }
 
-    if (party?.alternateWhatsAppNumbers && Array.isArray(party.alternateWhatsAppNumbers)) {
-      party.alternateWhatsAppNumbers.forEach((item, idx) => {
+    if (partyObj?.alternateWhatsAppNumbers && Array.isArray(partyObj.alternateWhatsAppNumbers)) {
+      partyObj.alternateWhatsAppNumbers.forEach((item, idx) => {
         if (item.number && item.number.trim() && item.number.trim() !== primary.trim() && item.number.trim() !== alt.trim()) {
           list.push({
             id: `alt_wa_${item.id || idx}`,
@@ -150,9 +190,33 @@ export default function WhatsAppShareModal({
     }
 
     return list;
-  }, [party, documentData.savedPhone]);
+  }, [resolvedParty, savedPhoneClean]);
 
   const [selectedContactId, setSelectedContactId] = useState<string>('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setStep('prepare');
+      setIsPreparing(true);
+      setPrepError(null);
+      setUseAlternate(false);
+      setRawMobileNumber('');
+      setConfirmMobileNumber('');
+      setCustomRecipientName('');
+      setReasonForNumber('');
+      setPhoneInputError('');
+      setSaveToProfile(false);
+      setSaveOption('alternate');
+      setShowReplaceWarning(false);
+      setIsSending(false);
+      setSendResultMsg('');
+      if (savedContactOptions.length > 0) {
+        setSelectedContactId(savedContactOptions[0].id);
+      } else {
+        setSelectedContactId('');
+      }
+    }
+  }, [isOpen, savedContactOptions]);
 
   useEffect(() => {
     if (savedContactOptions.length > 0 && !selectedContactId) {

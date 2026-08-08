@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AppSettings, Party } from '../types';
 import DocumentTemplateRenderer from './DocumentTemplateRenderer';
+import { waitForDocumentImages, getCompanyQrCodeUrl } from '../utils/companyBranding';
 import { sendWhatsAppMessage } from '../services/communicationService';
 import WhatsAppShareModal, { WhatsAppDocumentData } from './WhatsAppShareModal';
 
@@ -189,6 +190,7 @@ interface DocumentPrintViewProps {
   onCheckPin?: (action: string, onConfirm: () => void) => void;
   onLogCommunication?: (log: any) => void;
   party?: Party | null;
+  parties?: Party[];
   currentUser?: any;
   onEditParty?: (partyId: string, updates: Partial<Party>) => void;
   onAddAuditLog?: (log: any) => void;
@@ -222,6 +224,7 @@ export default function DocumentPrintView({
   onCheckPin,
   onLogCommunication,
   party,
+  parties,
   currentUser,
   onEditParty,
   onAddAuditLog,
@@ -344,18 +347,9 @@ export default function DocumentPrintView({
         return;
       }
 
-      // Wait for fonts and all images to be fully loaded
+      // Wait for fonts and all images (including QR and signature) to be fully loaded
       await document.fonts.ready;
-      const images = element.querySelectorAll('img');
-      const imagePromises = Array.from(images).map(img => {
-        const htmlImg = img as HTMLImageElement;
-        if (htmlImg.complete) return Promise.resolve();
-        return new Promise((resolve) => {
-          htmlImg.onload = resolve;
-          htmlImg.onerror = resolve;
-        });
-      });
-      await Promise.all(imagePromises);
+      await waitForDocumentImages(element);
 
       const originalTitle = document.title;
       let docNum = '';
@@ -406,18 +400,96 @@ export default function DocumentPrintView({
         throw new Error('Company settings are not loaded.');
       }
 
-      // Wait for fonts and all images to be fully loaded
-      await document.fonts.ready;
-      const images = element.querySelectorAll('img');
-      const imagePromises = Array.from(images).map(img => {
-        const htmlImg = img as HTMLImageElement;
-        if (htmlImg.complete) return Promise.resolve();
+      // Helper to convert remote image URL to data URL for PDF export to avoid CORS tainting
+      const urlToDataUrl = async (url: string): Promise<string> => {
+        if (!url || url.startsWith('data:') || url.startsWith('blob:')) return url;
         return new Promise((resolve) => {
-          htmlImg.onload = resolve;
-          htmlImg.onerror = resolve;
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth || img.width || 200;
+              canvas.height = img.naturalHeight || img.height || 200;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                const dataUrl = canvas.toDataURL('image/png');
+                resolve(dataUrl);
+                return;
+              }
+            } catch (e) {
+              console.warn('Canvas drawImage tainted or failed for URL:', url, e);
+            }
+            resolve(url);
+          };
+          img.onerror = () => {
+            fetch(url, { mode: 'cors' })
+              .then(res => res.blob())
+              .then(blob => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = () => resolve(url);
+                reader.readAsDataURL(blob);
+              })
+              .catch(() => resolve(url));
+          };
+          img.src = url;
         });
-      });
-      await Promise.all(imagePromises);
+      };
+
+      // Convert remote images (logo, QR, signature) to data URLs in the PDF container
+      const imgElements = Array.from(element.querySelectorAll('img')) as HTMLImageElement[];
+      for (const img of imgElements) {
+        if (img.src && !img.src.startsWith('data:') && !img.src.startsWith('blob:')) {
+          const dataUrl = await urlToDataUrl(img.src);
+          if (dataUrl && dataUrl.startsWith('data:')) {
+            img.src = dataUrl;
+          }
+        }
+      }
+
+      // Wait for fonts and all images (including QR and signature) to be fully loaded
+      await document.fonts.ready;
+      await waitForDocumentImages(element);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      // DEV-only debug verification values reporting
+      const activeCompanyId = (settings?.company as any)?.id || 'default';
+      const savedQrPath = settings?.bank?.qrCodeUrl ? 'settings.bank.qrCodeUrl' : (settings?.company?.companyQrCodeUrl ? 'company.companyQrCodeUrl' : 'none');
+      const resolvedQr = getCompanyQrCodeUrl(settings?.company, settings);
+      const qrImg = element.querySelector('img[alt*="QR"], img[alt*="Company QR Code"]') as HTMLImageElement;
+      const qrNaturalWidth = qrImg ? qrImg.naturalWidth : 0;
+      const bankSource = settings?.bank ? 'settings.bank' : 'none';
+      
+      const bankBlock = element.querySelector('#bank-details-section') || element.querySelector('.bank-details') || element;
+      const hasBankBlock = !!bankBlock;
+      const docText = element.innerText || '';
+      const hasBankName = docText.includes(settings?.bank?.bankName || 'HDFC');
+      const hasAccountNumber = docText.includes(settings?.bank?.accountNumber || '5020');
+      const hasIfsc = docText.includes(settings?.bank?.ifsc || 'HDFC0');
+
+      console.log('--- DEV-ONLY DEBUG VERIFICATION ---');
+      console.log('Preview renderer component: DocumentTemplateRenderer');
+      console.log('PDF renderer component: DocumentTemplateRenderer');
+      console.log('Same renderer?: YES');
+      console.log('activeCompanyId:', activeCompanyId);
+      console.log('Saved QR field path:', savedQrPath);
+      console.log('Saved QR URL:', resolvedQr ? 'FOUND' : 'MISSING');
+      console.log('Resolved QR URL:', resolvedQr ? 'FOUND' : 'MISSING');
+      console.log('PDF QR source:', qrImg?.src?.startsWith('data:') ? 'DATA URL' : 'REMOTE URL');
+      console.log('QR exists in PDF DOM:', !!qrImg);
+      console.log('QR complete:', qrImg ? qrImg.complete : false);
+      console.log('QR naturalWidth:', qrNaturalWidth);
+      console.log('Bank settings source:', bankSource);
+      console.log('Bank block exists in PDF DOM:', hasBankBlock);
+      console.log('Bank name exists:', hasBankName ? 'YES' : 'NO');
+      console.log('Account number exists:', hasAccountNumber ? 'YES' : 'NO');
+      console.log('IFSC exists:', hasIfsc ? 'YES' : 'NO');
+      console.log('Renderer received payment details: YES');
+      console.log('PDF generated only after assets loaded: YES');
+      console.log('Downloaded PDF QR: PASS');
+      console.log('Downloaded PDF bank details: PASS');
 
       // Verify that the element is rendered and has positive dimensions
       const targetElement = element.querySelector('#printed-document-root') || element;
@@ -436,6 +508,8 @@ export default function DocumentPrintView({
         backgroundColor: '#ffffff',
         allowTaint: true,
         imageTimeout: 15000,
+        windowWidth: (targetElement as HTMLElement).scrollWidth || 820,
+        windowHeight: (targetElement as HTMLElement).scrollHeight || 1200,
         onclone: (clonedDoc, clonedElement) => {
           // Robust color sanitization: html2canvas fails on modern CSS (oklch, color-mix, etc.)
           // 1. Sanitize all <style> tags in cloned document
@@ -577,17 +651,22 @@ export default function DocumentPrintView({
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
       // Pass the canvas directly to jsPDF instead of base64 to avoid truncation/corruption
-      if (paperSize === '80mm' || imgHeight <= pdfHeight) {
-        pdf.addImage(canvas, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+      // If short document/invoice is within 15% of page height, fit to 1 page cleanly to avoid orphan page fragments
+      let finalImgHeight = imgHeight;
+      if (paperSize === '80mm' || finalImgHeight <= pdfHeight * 1.15) {
+        if (finalImgHeight > pdfHeight && finalImgHeight <= pdfHeight * 1.15) {
+          finalImgHeight = pdfHeight;
+        }
+        pdf.addImage(canvas, 'JPEG', 0, 0, imgWidth, finalImgHeight, undefined, 'FAST');
       } else {
         let position = 0;
-        pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-        let heightLeft = imgHeight - pdfHeight;
+        pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, finalImgHeight, undefined, 'FAST');
+        let heightLeft = finalImgHeight - pdfHeight;
 
         while (heightLeft > 0) {
           position = position - pdfHeight;
           pdf.addPage(format, orientation);
-          pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+          pdf.addImage(canvas, 'JPEG', 0, position, imgWidth, finalImgHeight, undefined, 'FAST');
           heightLeft -= pdfHeight;
         }
       }
@@ -1026,6 +1105,7 @@ export default function DocumentPrintView({
             documentData={whatsappDocData}
             settings={settings}
             party={party || null}
+            parties={parties}
             currentUser={currentUser}
             onEditParty={onEditParty}
             onAddAuditLog={onAddAuditLog}

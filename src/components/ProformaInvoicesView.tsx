@@ -1142,6 +1142,7 @@ export default function ProformaInvoicesView({
           documentType="proforma_invoice"
           data={viewingProforma}
           settings={settings}
+          parties={parties}
           onClose={() => setViewingProforma(null)}
         />
       )}

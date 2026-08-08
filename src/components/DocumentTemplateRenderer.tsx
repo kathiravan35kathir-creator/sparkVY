@@ -134,7 +134,18 @@ export default function DocumentTemplateRenderer({
   // Normalize types from other calling views
   const normType: any = documentType;
 
-  const docData = data || getDemoData(normType, company);
+  let rawDocData = data || getDemoData(normType, company);
+  if (normType === 'proforma_invoice' || normType === 'proforma') {
+    rawDocData = {
+      ...rawDocData,
+      invoiceNumber: rawDocData.proformaNumber || rawDocData.invoiceNumber,
+      date: rawDocData.date || rawDocData.proformaDate || rawDocData.invoiceDate,
+      expiryDate: rawDocData.validUntil || rawDocData.expiryDate || rawDocData.dueDate,
+      partyAddress: rawDocData.billingAddress || rawDocData.partyAddress,
+      partyGst: rawDocData.partyGstNumber || rawDocData.partyGst,
+    };
+  }
+  const docData = rawDocData;
 
   // Read template ID from the correct settings key
   const defaultTemplateMap: any = {
@@ -142,6 +153,8 @@ export default function DocumentTemplateRenderer({
     quotation: settings.print.quotationTemplate || 'corporate_blue',
     receipt: settings.print.receiptTemplate || 'receipt_pro',
     purchase: settings.print.purchaseTemplate || 'tally_classic',
+    proforma_invoice: settings.print.invoiceTemplate || 'tally_modern',
+    proforma: settings.print.invoiceTemplate || 'tally_modern',
     transaction_list: 'professional_list'
   };
 
@@ -185,9 +198,11 @@ export default function DocumentTemplateRenderer({
   const showLogo = customizationOverride?.showLogo !== undefined ? customizationOverride.showLogo : (printSettings.showLogo !== false);
   const companyLogoUrl = getCompanyLogoUrl(company);
   const companySignatureUrl = getCompanySignatureUrl(company);
-  const companyQrCodeUrl = getCompanyQrCodeUrl(company);
+  const companyQrCodeUrl = getCompanyQrCodeUrl(company, settings);
   const companyQrCodeType = getCompanyQrCodeType(company);
-  const showQrCode = customizationOverride?.showQrCodeOnDocuments !== undefined ? customizationOverride.showQrCodeOnDocuments : (company.showQrCodeOnDocuments ?? true);
+  const showQrCode = customizationOverride?.showQrCodeOnDocuments !== undefined 
+    ? customizationOverride.showQrCodeOnDocuments 
+    : getShowQrCodeOnDocuments(company, settings);
   const companyName = getCompanyName(company);
   const showTerms = customizationOverride?.showTerms !== undefined ? customizationOverride.showTerms : printSettings.showTerms;
   const showNotes = customizationOverride?.showNotes !== undefined ? customizationOverride.showNotes : printSettings.showNotes;
@@ -461,7 +476,7 @@ export default function DocumentTemplateRenderer({
                         <td className={`${tablePadding} text-right font-mono ${isCr ? 'text-emerald-600 font-bold' : 'text-slate-300'}`}>
                           {isCr ? formatCurrency(row[5], settings) : '—'}
                         </td>
-                        <td className={`${tablePadding} text-right font-mono font-bold text-slate-900 bg-slate-50/30`}>
+                        <td className={`${tablePadding} text-right font-mono font-bold text-slate-900 bg-slate-50`}>
                           {formatCurrency(row[6], settings)}
                         </td>
                       </tr>
@@ -541,7 +556,7 @@ export default function DocumentTemplateRenderer({
           </div>
         </div>
       )}
-      {normType === 'proforma_invoice' && (
+      {(normType === 'proforma_invoice' || normType === 'proforma') && (
         <div className="absolute inset-0 pointer-events-none select-none z-0 overflow-hidden flex items-center justify-center text-slate-900">
           <div
             style={{
@@ -828,7 +843,7 @@ export default function DocumentTemplateRenderer({
         {/* =========================================================================
             TABLE OF ITEMS (INVOICES / QUOTATIONS / PURCHASES)
             ========================================================================= */}
-        {['invoice', 'quotation', 'purchase'].includes(normType) && docData.items && (
+        {['invoice', 'quotation', 'purchase', 'proforma_invoice', 'proforma'].includes(normType) && docData.items && (
           <div className="border border-slate-200 rounded-lg overflow-hidden mb-5">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -867,7 +882,7 @@ export default function DocumentTemplateRenderer({
         {/* =========================================================================
             TOTAL CALCULATIONS CONTAINER (INVOICES / QUOTATIONS / PURCHASES)
             ========================================================================= */}
-        {['invoice', 'quotation', 'purchase'].includes(normType) && (
+        {['invoice', 'quotation', 'purchase', 'proforma_invoice', 'proforma'].includes(normType) && (
           <div className="flex flex-col sm:flex-row justify-between items-start gap-5 mb-5 pt-3 border-t border-slate-200">
             {/* Notes / Bank details on left */}
             <div className="flex-1 space-y-3 text-[11px] w-full">
@@ -879,14 +894,23 @@ export default function DocumentTemplateRenderer({
                     <p>Account Holder: <strong className="text-slate-800">{settings.bank?.accountHolderName || company.companyName}</strong></p>
                     <p>A/C Number: <strong className="text-slate-800 font-mono">{settings.bank?.accountNumber || '50200049123849'}</strong></p>
                     <p>IFSC: <strong className="text-slate-800 font-mono">{settings.bank?.ifsc || 'HDFC0000140'}</strong></p>
+                    {settings.bank?.branch && (
+                      <p>Branch: <strong className="text-slate-800">{settings.bank.branch}</strong></p>
+                    )}
+                    {settings.bank?.accountType && (
+                      <p>Account Type: <strong className="text-slate-800">{settings.bank.accountType}</strong></p>
+                    )}
+                    {settings.bank?.upiId && (
+                      <p>UPI ID: <strong className="text-slate-800 font-mono">{settings.bank.upiId}</strong></p>
+                    )}
                   </div>
                 </div>
               )}
 
               {showNotes && docData.notes && (
-                <div>
+                <div style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                   <h5 className="font-black text-slate-700 uppercase tracking-wide text-[9px] mb-1">Ledger Notes:</h5>
-                  <p className="text-slate-500 italic bg-slate-50/50 p-2 rounded border border-slate-150 leading-relaxed whitespace-pre-line">
+                  <p className="text-slate-600 italic bg-slate-50 p-2.5 rounded border border-slate-200 leading-relaxed whitespace-pre-line text-[10px]">
                     {docData.notes}
                   </p>
                 </div>
@@ -962,7 +986,7 @@ export default function DocumentTemplateRenderer({
       {/* =========================================================================
           QR CODES & SECURITY DIGITAL SIGNATURE FOOTERS
           ========================================================================= */}
-      <div className="border-t border-slate-200 pt-4 mt-6">
+      <div className="border-t border-slate-200 pt-4 mt-6" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
           {/* UPI/Company QR Payment Block */}
           <div className="sm:col-span-4 text-center sm:text-left">
@@ -973,6 +997,7 @@ export default function DocumentTemplateRenderer({
                     src={companyQrCodeUrl}
                     alt="Company QR Code"
                     referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
                     className="max-h-full max-w-full object-contain"
                   />
                 </div>

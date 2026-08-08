@@ -966,6 +966,7 @@ export default function QuotationsView({
           documentType="quotation"
           data={printingQuotation}
           settings={settings}
+          parties={parties}
           onClose={() => setPrintingQuotation(null)}
           onCheckPin={onCheckPin}
           onLogCommunication={onLogCommunication}

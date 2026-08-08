@@ -918,6 +918,7 @@ export default function SalesView({
           documentType="invoice"
           data={printingInvoice}
           settings={settings}
+          parties={parties}
           onClose={() => setPrintingInvoice(null)}
           onCheckPin={onCheckPin}
           onLogCommunication={onLogCommunication}

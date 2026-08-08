@@ -2414,9 +2414,16 @@ export default function SettingsView({
                   </div>
                   {/* MINIATURE HIGH-FIDELITY LAYOUT THUMBNAIL GALLERY */}
                   <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">
-                      Design Blueprints Gallery
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">
+                        Design Blueprints Gallery
+                      </label>
+                      {activeDocType === 'invoice' && (
+                        <span className="text-[11px] text-blue-600 font-semibold italic">
+                          Invoice templates are also used for Proforma Invoices.
+                        </span>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-6 gap-4 font-sans">
                       {(() => {
                         const listMap: any = {
